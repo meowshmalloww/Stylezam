@@ -1,20 +1,124 @@
-# Stylezam
+<p align="center">
+  <img src="./App/Resources/Assets.xcassets/BrandMark.imageset/BrandMark.png" width="112" alt="Stylezam app icon">
+</p>
 
-Stylezam is a native iPhone product-discovery app for fashion: capture an item, retrieve source-backed product matches, compare observed offers, save the result, and optionally send a real person photo through YouCam AI Clothes v3 for virtual try-on.
+<h1 align="center">Stylezam</h1>
 
-This repository contains a functional first version, not a simulated demo:
+<p align="center">
+  <strong>Find what they’re wearing.</strong><br>
+  Native fashion discovery for iPhone—search a photo or a few words, compare source-backed matches, and try the look on.
+</p>
 
-- Native SwiftUI app using iOS Liquid Glass controls and the approved cobalt/black/white editorial system.
-- Camera, Photos, clipboard, text, Share extension, Screenshot Shortcut, Control Center, and Action Button entry points.
-- A tappable multi-item Look Stack that submits a real region-focused follow-up search.
-- An iOS 27 ScreenCaptureKit path that uses Apple’s full-display picker when compiled with Xcode 27.
-- Live Activities and Dynamic Island search progress.
-- FastAPI backend with persistent SQLite jobs and sanitized local media.
-- Real adapters for SerpApi Shopping/Lens, eBay Browse text/image search, Ollama vision, optional Grounding DINO + SAM2 + CLIP, and YouCam AI Clothes v3.
-- Source-evidence labels and direct merchant URLs; no generated listings or affiliate redirects.
-- Backend-enforced calendar-month provider caps and deletion endpoints.
+<p align="center">
+  <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6.0-FA7343?style=flat-square&logo=swift&logoColor=white">
+  <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-0A57FF?style=flat-square&logo=apple&logoColor=white">
+  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-111111?style=flat-square">
+</p>
 
-## Quick start
+<p align="center">
+  <a href="./docs/SETUP.md"><strong>Get started</strong></a> ·
+  <a href="./docs/ARCHITECTURE.md">Architecture</a> ·
+  <a href="./docs/PROVIDERS.md">Providers</a> ·
+  <a href="./docs/PRIVACY.md">Privacy</a>
+</p>
+
+<br>
+
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="./Artifacts/VisualQA/home-brand-redesign.png" alt="Stylezam home screen" width="390">
+    </td>
+    <td width="50%" align="center">
+      <img src="./Artifacts/VisualQA/capture-brand-redesign.png" alt="Stylezam photo and text search screen" width="390">
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Discover</strong> from a photo or a few words</sub></td>
+    <td align="center"><sub><strong>Search</strong> with camera, Photos, paste, or text</sub></td>
+  </tr>
+</table>
+
+## Fashion search without invented answers
+
+Stylezam turns a fashion moment into evidence you can inspect. It analyzes the item, searches real product sources, removes duplicate listings, and ranks the remaining matches by visual, textual, and upstream evidence. Every result keeps its merchant link and an honest confidence label.
+
+| Capture anywhere | Understand the look | Find real products | Try it on |
+| --- | --- | --- | --- |
+| Camera, Photos, clipboard, text, Share sheet, Shortcut, Control Center, and Action Button | Whole-look detection, selectable item regions, structured visual attributes, and optional local segmentation | SerpApi Shopping/Lens and eBay Browse with evidence-aware ranking and direct merchant URLs | User-initiated YouCam AI Clothes v3 previews, clearly presented as visualization—not fit prediction |
+
+No generated listings. No invented prices. No affiliate redirects disguised as matches.
+
+## From moment to match
+
+1. **Capture** — start with a photo, screenshot, shared image, or description.
+2. **Choose** — search the full look or select a detected jacket, bag, shoe, or other region.
+3. **Retrieve** — query configured image and text search providers under backend-enforced monthly caps.
+4. **Compare** — review deduplicated offers, evidence tiers, observed prices, and source links.
+5. **Keep or try** — save the result locally or create an optional virtual try-on.
+
+Search progress follows you through a Live Activity and Dynamic Island. Live screen capture is intentionally not a permanent tab: iOS 27 uses Apple’s system picker, while iOS 26 supports a Screenshot Shortcut and the normal capture routes.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    subgraph Phone["iPhone"]
+        Input["Photo · text · Share · Shortcut · Control"]
+        App["SwiftUI app"]
+        Activity["Live Activity + Dynamic Island"]
+        Library["Local saved looks"]
+    end
+
+    subgraph Service["Stylezam API"]
+        Jobs["Persistent jobs"]
+        Vision["Understand + segment"]
+        Search["Multi-provider retrieval"]
+        Rank["Evidence-aware ranking"]
+        Store["SQLite + sanitized media"]
+        Limits["Monthly call caps"]
+    end
+
+    subgraph Providers["Optional providers"]
+        Serp["SerpApi"]
+        Ebay["eBay Browse"]
+        Local["Ollama · DINO · SAM2 · CLIP"]
+        YouCam["YouCam Clothes v3"]
+    end
+
+    Input --> App --> Jobs
+    Jobs --> Activity
+    Jobs --> Vision --> Search --> Rank --> Store
+    Limits --> Search
+    Vision --> Local
+    Search --> Serp
+    Search --> Ebay
+    Jobs --> YouCam
+    App <--> Library
+```
+
+The iOS client is native SwiftUI. The FastAPI service owns provider credentials, durable job state, media sanitation, quota enforcement, and result normalization. See the full [architecture and search lifecycle](./docs/ARCHITECTURE.md).
+
+## Provider stack
+
+Stylezam is useful with a small stack and expands without changing the app:
+
+| Capability | Recommended provider | Role |
+| --- | --- | --- |
+| Shopping + visual retrieval | SerpApi | Google Shopping and Lens results through a fixed monthly plan |
+| Secondary text/image retrieval | eBay Browse | Real marketplace listings and Base64 image search |
+| Local image understanding | Ollama with `gemma3:4b` | Factual structured attributes without per-call billing |
+| Local detection and reranking | Grounding DINO, SAM2, CLIP | Optional object regions, masks, and visual similarity |
+| Virtual try-on | YouCam AI Clothes v3 | On-demand clothing visualization from a person photo |
+
+Every external route has a configurable calendar-month cap. Missing providers are reported as unavailable; the app never fills the result screen with sample products. Review configuration and limits in [Providers](./docs/PROVIDERS.md).
+
+## Run it locally
+
+You need macOS with Xcode 26 or later and Python 3.9 or later.
+
+### 1. Start the API
 
 ```bash
 ./scripts/bootstrap_backend.sh
@@ -22,50 +126,43 @@ cp backend/.env.example backend/.env
 ./scripts/run_backend.sh
 ```
 
-In another terminal:
+The API starts at `http://127.0.0.1:8000`. Add at least one retrieval provider to `backend/.env` for product results. Interactive OpenAPI documentation is available at `/docs`.
+
+### 2. Open the iPhone app
 
 ```bash
 ./scripts/generate_project.sh
 open Stylezam.xcodeproj
 ```
 
-The default app URL is `http://127.0.0.1:8000`, which works in iOS Simulator. A physical iPhone needs an HTTPS deployment/tunnel or a backend address reachable from the phone.
-
-Without provider credentials the service still starts, reports its capabilities, accepts jobs, and fails those jobs with a truthful configuration error. It never fills the UI with sample products.
-
-For a public backend, deploy the included Docker service and persistent disk with `render.yaml`. Set `STYLEZAM_PUBLIC_BASE_URL` to the service's HTTPS origin, set a strong `STYLEZAM_API_TOKEN`, and enter the same token in the iPhone Settings screen. The API token is optional for local development and stored in the iPhone Keychain when present.
-
-## Configure a useful first stack
-
-The recommended initial search stack is:
-
-1. SerpApi for fixed-monthly Shopping and Google Lens retrieval.
-2. eBay Browse as a second source for text and Base64 image search.
-3. Ollama `gemma3:4b` for local, factual image understanding.
-4. YouCam AI Clothes v3 only for user-initiated try-on.
-
-Copy `backend/.env.example` to `backend/.env`, add only the providers you want, and keep the local monthly caps at or below your account budgets. See [Provider limits](docs/PROVIDERS.md) and [Setup](docs/SETUP.md).
+The simulator can reach the default loopback API. A physical iPhone needs an HTTPS deployment, a development tunnel, or a backend address reachable from the phone. Follow the [device and signing checklist](./docs/SETUP.md) before running on hardware.
 
 ## Project map
 
-- `App/` — iPhone app, features, networking, and design system.
-- `Extensions/Widgets/` — Control Widget and Live Activity/Dynamic Island UI.
-- `Extensions/Share/` — image/text Share extension.
-- `Shared/` — app-group keys, App Intent, and Activity attributes.
-- `backend/` — FastAPI service, providers, ranking, persistence, and tests.
-- `render.yaml` + `backend/Dockerfile` — a single-instance HTTPS deployment with persistent SQLite/media storage.
-- `design-concepts/stylezam-ios-v2-liquid-glass/` — approved screen references.
-- `docs/` — architecture, UI direction, provider, privacy, setup, and iOS 27 notes.
-- `project.yml` — XcodeGen source of truth. Regenerate after target/file changes.
+```text
+App/                    iPhone features, networking, and design system
+Extensions/Share/       image and text Share extension
+Extensions/Widgets/     Control Widget, Live Activity, and Dynamic Island
+Shared/                 app-group data, App Intents, and activity attributes
+backend/                FastAPI service, providers, persistence, and tests
+docs/                   architecture, setup, privacy, UI, and provider notes
+design-concepts/        product direction and app-icon explorations
+project.yml             XcodeGen source of truth
+render.yaml             production deployment blueprint
+```
 
-## Verification
+## Verify the complete project
 
 ```bash
 ./scripts/check.sh
 ```
 
-The backend API also exposes interactive OpenAPI documentation at `http://127.0.0.1:8000/docs` while it is running. See the research-backed [UI direction](docs/UI_DIRECTION.md) for the implemented visual hierarchy.
+This runs the backend test suite, regenerates the Xcode project, and builds all three iOS targets for the simulator with code signing disabled.
 
-## Before TestFlight
+## Current release boundary
 
-Replace the placeholder bundle IDs and app-group ID, choose your Apple development team, provision the App Group and `screen-capture` background mode, use a production HTTPS backend, configure provider privacy disclosures, and validate the iOS 27 path with Xcode 27 on a physical iPhone. The exact checklist is in [Setup](docs/SETUP.md).
+This repository is a functional first version, not a production App Store release. Before TestFlight, replace the placeholder signing identifiers, configure the App Group and development team, deploy an authenticated HTTPS backend, complete provider privacy disclosures, and test camera, Share, Control Center, Dynamic Island, deletion, product links, and YouCam on physical devices. The iOS 27 screen-capture path also requires Xcode 27 and device validation.
+
+## License
+
+Stylezam is available under the [Apache License 2.0](./LICENSE).
