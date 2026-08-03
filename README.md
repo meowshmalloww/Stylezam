@@ -28,7 +28,7 @@
 <table>
   <tr>
     <td width="33%" align="center">
-      <img src="./Artifacts/VisualQA/home-native-redesign.png" alt="Stylezam photo-first home screen" width="300">
+      <img src="./Artifacts/VisualQA/home-native-redesign.png" alt="Stylezam editorial home screen" width="300">
     </td>
     <td width="33%" align="center">
       <img src="./Artifacts/VisualQA/search-native-redesign.png" alt="Stylezam product search screen" width="300">
@@ -38,13 +38,13 @@
     </td>
   </tr>
   <tr>
-    <td align="center"><sub><strong>Home</strong> starts with one original photo-first capture surface</sub></td>
-    <td align="center"><sub><strong>Search</strong> combines a query with an optional reference image</sub></td>
-    <td align="center"><sub><strong>Library</strong> keeps recent searches, saved products, and try-ons local</sub></td>
+    <td align="center"><sub><strong>Home</strong> brings recent searches, saved pieces, and useful shortcuts together</sub></td>
+    <td align="center"><sub><strong>Search</strong> combines words with an optional image reference</sub></td>
+    <td align="center"><sub><strong>Library</strong> presents recent searches, saved products, and try-ons as media collections</sub></td>
   </tr>
 </table>
 
-The interface is deliberately content-first. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
+The interface is deliberately content-first. Capture is a central native tab-bar action while Home remains a quiet editorial overview. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
 
 ## Fashion search without invented answers
 

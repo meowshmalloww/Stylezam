@@ -13,6 +13,28 @@ enum StylezamDesign {
     static let hairline = Color.primary.opacity(0.14)
 }
 
+enum StylezamRelativeTime {
+    static func string(since date: Date, relativeTo now: Date = .now) -> String {
+        let elapsedMinutes = max(1, Int(now.timeIntervalSince(date) / 60))
+        if elapsedMinutes < 1_440 {
+            return "\(elapsedMinutes) min"
+        }
+
+        let days = elapsedMinutes / 1_440
+        if days < 7 {
+            return days == 1 ? "1 day" : "\(days) days"
+        }
+
+        let weeks = days / 7
+        if weeks < 5 {
+            return weeks == 1 ? "1 week" : "\(weeks) weeks"
+        }
+
+        let months = max(1, days / 30)
+        return months == 1 ? "1 month" : "\(months) months"
+    }
+}
+
 struct BrandMarkView: View {
     var size: CGFloat = 46
     var cornerRadius: CGFloat? = nil

@@ -27,7 +27,8 @@ struct SearchView: View {
             }
         }
         .background(StylezamDesign.canvas)
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(model.activeSearch == nil ? "Search" : "")
+        .navigationBarTitleDisplayMode(model.activeSearch == nil ? .large : .inline)
         .toolbar {
             if model.activeSearch != nil {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -78,18 +79,20 @@ struct SearchView: View {
 
     private var searchLanding: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 26) {
-                PageTitle(
-                    title: "Search",
-                    subtitle: "Search clothing across the web with words, a reference image, or both."
-                )
-                .padding(.top, 18)
+            VStack(alignment: .leading, spacing: 30) {
+                Text("Search products across the web. Add an image when shape, color, or styling matters.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 8)
 
                 searchComposer
 
                 if let message = model.lastError {
                     InlineErrorView(message: message)
                 }
+
+                recentQuerySection
 
                 HStack(alignment: .top, spacing: 11) {
                     Image(systemName: "checkmark.shield")
@@ -106,10 +109,13 @@ struct SearchView: View {
     }
 
     private var searchComposer: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("What are you looking for?")
+                .font(.title2.weight(.semibold))
+
+            HStack(spacing: 11) {
                 Image(systemName: "magnifyingglass")
-                    .font(.title3)
+                    .font(.body.weight(.medium))
                     .foregroundStyle(.secondary)
                 TextField(
                     "Brand, color, style, or product",
@@ -118,8 +124,8 @@ struct SearchView: View {
                 )
                 .focused($isTextSearchFocused)
                 .submitLabel(.search)
-                .lineLimit(2...4)
-                .font(.system(size: 23, weight: .medium))
+                .lineLimit(1)
+                .font(.body)
                 .onSubmit { submitUniversalSearch() }
 
                 if !textQuery.isEmpty {
@@ -132,87 +138,37 @@ struct SearchView: View {
                     .accessibilityLabel("Clear text")
                 }
             }
-
-            Rectangle()
-                .fill(isTextSearchFocused ? Color.primary : StylezamDesign.hairline)
-                .frame(height: isTextSearchFocused ? 1.5 : 1)
-
-            if let referenceImageData {
-                HStack(spacing: 12) {
-                    DataImage(data: referenceImageData)
-                        .frame(width: 72, height: 86)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Reference image")
-                            .font(.subheadline.weight(.semibold))
-                        Text("Stylezam will combine visual details with your search text.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Button {
-                        self.referenceImageData = nil
-                        referenceItem = nil
-                    } label: {
-                        Image(systemName: "xmark")
-                            .frame(width: 34, height: 34)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Remove reference image")
+            .padding(.horizontal, 15)
+            .frame(height: 54)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+            )
+            .overlay {
+                if isTextSearchFocused {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(StylezamDesign.cobalt.opacity(0.55), lineWidth: 1)
                 }
-                .padding(.vertical, 2)
             }
 
-            HStack(spacing: 10) {
-                Menu {
-                    Button {
-                        isReferencePickerPresented = true
-                    } label: {
-                        Label("Photos", systemImage: "photo.on.rectangle")
-                    }
-                    Button {
-                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                            isReferenceCameraPresented = true
-                        } else {
-                            referenceMessage = "Camera is not available on this device."
-                        }
-                    } label: {
-                        Label("Camera", systemImage: "camera")
-                    }
-                    Button {
-                        pasteReferenceImage()
-                    } label: {
-                        Label("Paste image", systemImage: "doc.on.clipboard")
-                    }
-                } label: {
-                    Label(
-                        referenceImageData == nil ? "Reference" : "Replace",
-                        systemImage: "photo.badge.plus"
-                    )
-                    .font(.subheadline.weight(.semibold))
-                    .frame(height: 48)
-                    .padding(.horizontal, 14)
-                }
-                .buttonStyle(.glass)
+            referenceControl
 
-                Spacer()
-
-                Button {
-                    submitUniversalSearch()
-                } label: {
-                    HStack(spacing: 8) {
-                        Text("Search")
-                        Image(systemName: "arrow.right")
-                    }
-                    .fontWeight(.semibold)
-                    .frame(height: 48)
-                    .padding(.horizontal, 18)
+            Button {
+                submitUniversalSearch()
+            } label: {
+                HStack(spacing: 8) {
+                    Text("Search products")
+                    Spacer()
+                    Image(systemName: "arrow.right")
                 }
-                .buttonStyle(.glassProminent)
-                .tint(StylezamDesign.cobalt)
-                .disabled(!canSubmitLandingSearch)
+                .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .padding(.horizontal, 18)
             }
+            .buttonStyle(.glassProminent)
+            .tint(StylezamDesign.cobalt)
+            .disabled(!canSubmitLandingSearch)
 
             if let referenceMessage {
                 Text(referenceMessage)
@@ -221,6 +177,129 @@ struct SearchView: View {
             }
         }
         .animation(StylezamMotion.quickSpring, value: isTextSearchFocused)
+    }
+
+    private var referenceControl: some View {
+        HStack(spacing: 13) {
+            Menu {
+                Button {
+                    isReferencePickerPresented = true
+                } label: {
+                    Label("Choose from Photos", systemImage: "photo.on.rectangle")
+                }
+                Button {
+                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                        isReferenceCameraPresented = true
+                    } else {
+                        referenceMessage = "Camera is not available on this device."
+                    }
+                } label: {
+                    Label("Take a photo", systemImage: "camera")
+                }
+                Button {
+                    pasteReferenceImage()
+                } label: {
+                    Label("Paste image", systemImage: "doc.on.clipboard")
+                }
+            } label: {
+                Group {
+                    if let referenceImageData {
+                        DataImage(data: referenceImageData)
+                    } else {
+                        Color(uiColor: .secondarySystemBackground)
+                            .overlay {
+                                ReferenceImageAddGlyph()
+                                    .frame(width: 32, height: 32)
+                            }
+                    }
+                }
+                .frame(width: 72, height: 72)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(
+                            StylezamDesign.hairline,
+                            style: StrokeStyle(lineWidth: 1, dash: referenceImageData == nil ? [5, 4] : [])
+                        )
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(referenceImageData == nil ? "Add reference image" : "Replace reference image")
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(referenceImageData == nil ? "Add an image" : "Image added")
+                    .font(.headline)
+                Text("Optional · helps match color, shape, and styling")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+
+            if referenceImageData != nil {
+                Button {
+                    self.referenceImageData = nil
+                    referenceItem = nil
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel("Remove reference image")
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private var recentQuerySection: some View {
+        let captures = recentTextCaptures
+        if !captures.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("Recent searches")
+                    .font(.title3.weight(.semibold))
+                    .padding(.bottom, 8)
+
+                ForEach(Array(captures.enumerated()), id: \.element.id) { index, capture in
+                    Button {
+                        textQuery = capture.query ?? ""
+                        isTextSearchFocused = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "clock.arrow.circlepath")
+                                .foregroundStyle(.secondary)
+                            Text(capture.query ?? "")
+                                .font(.subheadline.weight(.medium))
+                                .lineLimit(1)
+                            Spacer()
+                            Text(StylezamRelativeTime.string(since: capture.createdAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .foregroundStyle(.primary)
+                        .padding(.vertical, 13)
+                    }
+                    .buttonStyle(.plain)
+
+                    if index < captures.count - 1 {
+                        EditorialRule().padding(.leading, 29)
+                    }
+                }
+            }
+        }
+    }
+
+    private var recentTextCaptures: [SavedCapture] {
+        var seen = Set<String>()
+        return model.library.captures.filter { capture in
+            guard let query = capture.query?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !query.isEmpty
+            else { return false }
+            return seen.insert(query.lowercased()).inserted
+        }
+        .prefix(4)
+        .map { $0 }
     }
 
     private var canSubmitLandingSearch: Bool {
@@ -657,5 +736,21 @@ private struct ProductResultCard: View {
                 .foregroundStyle(.primary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+private struct ReferenceImageAddGlyph: View {
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Image(systemName: "photo")
+                .font(.system(size: 25, weight: .regular))
+                .foregroundStyle(.primary)
+            Image(systemName: "plus")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 17, height: 17)
+                .background(StylezamDesign.cobalt, in: Circle())
+                .offset(x: 5, y: 5)
+        }
     }
 }

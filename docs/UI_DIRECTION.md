@@ -26,21 +26,21 @@ The commerce hierarchy takes cues from current editorial fashion apps rather tha
 
 These are references for hierarchy and restraint, not screens copied into the app.
 
-The final Home interaction uses its own camera-derived language: an orthogonal viewfinder surface with corner marks, a clear camera label, and one subordinate Photos action. It intentionally avoids the radial music-recognition layout associated with Shazam.
+Capture is a central native tab-bar action rather than Home’s visual identity. This keeps the camera immediately available from anywhere while allowing Home to work as a useful editorial overview instead of imitating a camera app or music-recognition screen.
 
 ## Implemented screen system
 
 ### Home
 
-A compact brand header appears once. The page then presents one rectangular camera viewfinder with only Choose from Photos as a subordinate control; typed search stays in its own tab. There is no radial scan button, connection dot, Settings shortcut, text-search card, provider copy, gradient, or continuously animated decoration.
+A compact brand header appears once above a restrained editorial banner, direct Photos and Search shortcuts, a horizontal Recent shelf, and saved-piece previews when the user has them. The artwork is static, geometric, and subordinate to the content. Home contains no viewfinder, radial scan button, connection dot, Settings shortcut, provider copy, gradient, or continuously animated decoration.
 
 ### Capture
 
-Camera, Photos, and Paste Image share one photo-only sheet. A real selected image becomes the primary canvas and a single primary action starts the backend job. Text does not appear in this photo-first route.
+The center Camera item in the native tab bar opens the photo-only capture sheet without replacing the user’s current content tab. Camera, Photos, and Paste Image share that sheet. A real selected image becomes the primary canvas and a single primary action starts the backend job. Text does not appear in this photo-first route.
 
 ### Search and Look Stack
 
-The landing page is one universal composer: product text plus an optional reference image from Photos, Camera, or Paste. It contains no “describe an item” instruction and no duplicate photo-search card. Search progress uses the native determinate linear indicator and real backend phases, without gradient fill, phase dots, or glass content panels. The toolbar uses the system compose action for a new search instead of a floating plus. When vision returns multiple boxes, the original capture becomes a tappable Look Stack. Selecting a box submits another real search using that normalized region. Results use a two-column grid with explicit evidence tiers.
+The landing page is one universal composer: product text plus an optional image from Photos, Camera, or Paste. The image input is a dedicated vector add-image tile rather than a text-heavy “Reference” control. It contains no “describe an item” instruction and no duplicate photo-search card. Search progress uses the native determinate linear indicator and real backend phases, without gradient fill, phase dots, or glass content panels. The toolbar uses the system compose action for a new search instead of a floating plus. When vision returns multiple boxes, the original capture becomes a tappable Look Stack. Selecting a box submits another real search using that normalized region. Results use a two-column grid with explicit evidence tiers.
 
 ### Product evidence
 
@@ -52,7 +52,7 @@ Try-on is a full-screen visual stage with glass controls. The result is called a
 
 ### Archive and Setup
 
-Library has three explicit collections: Recent, Saved, and Try-ons. It stays empty until the user performs real actions, and completed try-ons are copied into durable local storage automatically.
+Library has three explicit collections—Recent, Saved, and Try-ons—presented as a native category bar and two-column media grids. Relative dates use minutes, days, weeks, and months only, avoiding noisy second-level updates and year labels. It stays empty until the user performs real actions, and completed try-ons are copied into durable local storage automatically.
 
 Consumer Settings is a native grouped list linking to Capture & Controls, Notifications, and Privacy. Screenshot Shortcut, Control Center/Action Button, Share, and consent-based iOS 27 live screen have their own tutorial page. Backend address, service token, OpenAI/Fireworks/Qwen state, local DINO/SAM2/CLIP state, and optional YouCam state live only in Developer Debug. Retrieval-provider infrastructure is not presented as an iPhone preference.
 

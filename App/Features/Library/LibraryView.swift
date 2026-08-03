@@ -8,27 +8,38 @@ struct LibraryView: View {
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 22) {
-                sectionPicker
+            LazyVStack(alignment: .leading, spacing: 24) {
+                Text("Search history, products, and appearance previews saved on this iPhone.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 8)
+
+                categoryBar
 
                 if let loadError = model.library.loadError {
                     InlineErrorView(message: loadError)
                 }
 
-                switch section {
-                case .recent:
-                    recentSearches
-                case .saved:
-                    savedProducts
-                case .tryOns:
-                    tryOnHistory
+                Group {
+                    switch section {
+                    case .recent:
+                        recentSearches
+                    case .saved:
+                        savedProducts
+                    case .tryOns:
+                        tryOnHistory
+                    }
                 }
+                .id(section)
+                .transition(.opacity)
             }
             .padding(.horizontal, StylezamDesign.pageInset)
-            .padding(.bottom, 110)
+            .padding(.bottom, 112)
         }
         .background(StylezamDesign.canvas)
+        .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.large)
         .navigationDestination(for: ProductResultDTO.self) { product in
             ProductDetailView(product: product)
                 .navigationTransition(.zoom(sourceID: product.id, in: productTransition))
@@ -37,59 +48,81 @@ struct LibraryView: View {
             TryOnArchiveDetail(tryOn: tryOn)
                 .environment(model)
         }
-        .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
-        .animation(StylezamMotion.quickSpring, value: section)
-    }
-
-    private var sectionPicker: some View {
-        Picker("Library section", selection: $section) {
-            ForEach(LibrarySection.allCases) { item in
-                Text(item.title).tag(item)
-            }
-        }
-        .pickerStyle(.segmented)
+        .animation(.easeInOut(duration: 0.2), value: section)
         .sensoryFeedback(.selection, trigger: section)
     }
 
+    private var categoryBar: some View {
+        HStack(spacing: 0) {
+            ForEach(LibrarySection.allCases) { item in
+                Button {
+                    section = item
+                } label: {
+                    VStack(spacing: 10) {
+                        HStack(spacing: 6) {
+                            Text(item.title)
+                                .font(.subheadline.weight(item == section ? .semibold : .regular))
+                            Text(count(for: item), format: .number)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                        Rectangle()
+                            .fill(item == section ? Color.primary : Color.clear)
+                            .frame(height: 2)
+                    }
+                    .foregroundStyle(item == section ? .primary : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            EditorialRule()
+        }
+        .accessibilityElement(children: .contain)
+    }
+
+    private func count(for item: LibrarySection) -> Int {
+        switch item {
+        case .recent: model.library.captures.count
+        case .saved: model.library.products.count
+        case .tryOns: model.library.tryOns.count
+        }
+    }
+
     private var recentSearches: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
-                title: "Recent",
-                detail: model.library.captures.isEmpty
-                    ? "Empty"
-                    : model.library.captures.count == 1
-                        ? "1 search"
-                        : "\(model.library.captures.count) searches"
+                title: "Search history",
+                detail: countLabel(model.library.captures.count, singular: "search")
             )
 
             if model.library.captures.isEmpty {
                 emptyState(
                     icon: "clock.arrow.circlepath",
                     title: "No searches yet",
-                    message: "Photo, text, shared, and live-screen searches will appear here."
+                    message: "Camera, photo, text, shared, and screen searches will appear here."
                 )
             } else {
-                LazyVStack(spacing: 0) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12),
+                    ],
+                    alignment: .leading,
+                    spacing: 24
+                ) {
                     ForEach(model.library.captures) { capture in
                         Button {
-                            model.resumeSearch(
-                                id: capture.searchID,
-                                imageData: model.library.imageURL(for: capture).flatMap {
-                                    try? Data(contentsOf: $0, options: .mappedIfSafe)
-                                }
-                            )
+                            resume(capture)
                         } label: {
-                            RecentSearchRow(
+                            RecentSearchTile(
                                 capture: capture,
                                 imageURL: model.library.imageURL(for: capture)
                             )
                         }
                         .buttonStyle(.plain)
-                        .overlay(alignment: .bottom) {
-                            EditorialRule()
-                                .padding(.leading, 77)
-                        }
                         .contextMenu {
                             Button("Delete search", role: .destructive) {
                                 model.deleteCapture(capture)
@@ -99,18 +132,13 @@ struct LibraryView: View {
                 }
             }
         }
-        .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
     private var savedProducts: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
-                title: "Saved",
-                detail: model.library.products.isEmpty
-                    ? "Empty"
-                    : model.library.products.count == 1
-                        ? "1 product"
-                        : "\(model.library.products.count) products"
+                title: "Saved pieces",
+                detail: countLabel(model.library.products.count, singular: "product")
             )
 
             if model.library.products.isEmpty {
@@ -143,18 +171,13 @@ struct LibraryView: View {
                 }
             }
         }
-        .transition(.opacity)
     }
 
     private var tryOnHistory: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
-                title: "Try-ons",
-                detail: model.library.tryOns.isEmpty
-                    ? "Empty"
-                    : model.library.tryOns.count == 1
-                        ? "1 preview"
-                        : "\(model.library.tryOns.count) previews"
+                title: "Appearance previews",
+                detail: countLabel(model.library.tryOns.count, singular: "preview")
             )
 
             if model.library.tryOns.isEmpty {
@@ -170,7 +193,7 @@ struct LibraryView: View {
                         GridItem(.flexible(), spacing: 12),
                     ],
                     alignment: .leading,
-                    spacing: 22
+                    spacing: 24
                 ) {
                     ForEach(model.library.tryOns) { tryOn in
                         Button {
@@ -181,7 +204,7 @@ struct LibraryView: View {
                                     .frame(maxWidth: .infinity)
                                     .aspectRatio(0.78, contentMode: .fit)
                                     .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                 Text(tryOn.product.title)
                                     .font(.subheadline.weight(.semibold))
                                     .lineLimit(2)
@@ -201,7 +224,6 @@ struct LibraryView: View {
                 }
             }
         }
-        .transition(.move(edge: .trailing).combined(with: .opacity))
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
@@ -211,7 +233,23 @@ struct LibraryView: View {
             description: Text(message)
         )
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, 32)
+    }
+
+    private func countLabel(_ count: Int, singular: String) -> String {
+        if count == 1 {
+            return "1 \(singular)"
+        }
+        return singular == "search" ? "\(count) searches" : "\(count) \(singular)s"
+    }
+
+    private func resume(_ capture: SavedCapture) {
+        model.resumeSearch(
+            id: capture.searchID,
+            imageData: model.library.imageURL(for: capture).flatMap {
+                try? Data(contentsOf: $0, options: .mappedIfSafe)
+            }
+        )
     }
 }
 
@@ -231,6 +269,51 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
     }
 }
 
+private struct RecentSearchTile: View {
+    let capture: SavedCapture
+    let imageURL: URL?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Group {
+                if let imageURL {
+                    LocalFileImage(url: imageURL)
+                } else {
+                    Color(uiColor: .secondarySystemBackground)
+                        .overlay {
+                            VStack(spacing: 12) {
+                                Image(systemName: "text.magnifyingglass")
+                                    .font(.system(size: 34, weight: .light))
+                                Text("TEXT SEARCH")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .tracking(1.1)
+                            }
+                            .foregroundStyle(.secondary)
+                        }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .aspectRatio(0.95, contentMode: .fit)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            Text(capture.query ?? capture.origin.libraryLabel)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(2)
+                .foregroundStyle(.primary)
+
+            HStack(spacing: 5) {
+                Text(capture.origin.libraryLabel)
+                Text("·")
+                Text(StylezamRelativeTime.string(since: capture.createdAt))
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .contentShape(Rectangle())
+    }
+}
+
 private struct SavedProductCard: View {
     let saved: SavedProduct
 
@@ -241,11 +324,11 @@ private struct SavedProductCard: View {
                 .aspectRatio(0.78, contentMode: .fit)
                 .padding(8)
                 .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 
             Text((saved.product.brand ?? saved.product.merchant).uppercased())
-                .font(.caption2.weight(.bold))
-                .tracking(1)
+                .font(.caption2.weight(.semibold))
+                .tracking(0.8)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Text(saved.product.title)
@@ -256,50 +339,6 @@ private struct SavedProductCard: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
-    }
-}
-
-private struct RecentSearchRow: View {
-    let capture: SavedCapture
-    let imageURL: URL?
-
-    var body: some View {
-        HStack(spacing: 13) {
-            Group {
-                if let imageURL {
-                    LocalFileImage(url: imageURL)
-                } else {
-                    StylezamDesign.cobalt
-                        .overlay {
-                            Image(systemName: "magnifyingglass")
-                                .font(.title3.weight(.semibold))
-                                .foregroundStyle(.white)
-                        }
-                }
-            }
-            .frame(width: 64, height: 76)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(capture.query ?? capture.origin.libraryLabel)
-                    .font(.headline)
-                    .lineLimit(2)
-                HStack(spacing: 6) {
-                    Text(capture.origin.libraryLabel)
-                    Text("·")
-                    Text(capture.createdAt, style: .relative)
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 6)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.bold))
-                .foregroundStyle(.tertiary)
-        }
-        .foregroundStyle(.primary)
-        .padding(.vertical, 10)
     }
 }
 

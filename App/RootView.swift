@@ -3,6 +3,7 @@ import SwiftUI
 struct RootView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.scenePhase) private var scenePhase
+    @State private var lastContentTab: AppTab = .home
 
     var body: some View {
         @Bindable var model = model
@@ -18,6 +19,10 @@ struct RootView: View {
             }
             .tag(AppTab.search)
             .tabItem { Label("Search", systemImage: "magnifyingglass") }
+
+            Color.clear
+                .tag(AppTab.camera)
+                .tabItem { Label("Camera", systemImage: "camera.fill") }
 
             NavigationStack {
                 LibraryView()
@@ -41,6 +46,14 @@ struct RootView: View {
         .onOpenURL { model.handleURL($0) }
         .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenSearch)) { note in
             model.handlePendingNotification(searchID: note.object as? String)
+        }
+        .onChange(of: model.selectedTab) { oldValue, newValue in
+            if newValue == .camera {
+                model.selectedTab = oldValue == .camera ? lastContentTab : oldValue
+                model.presentCapture(.camera)
+            } else {
+                lastContentTab = newValue
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

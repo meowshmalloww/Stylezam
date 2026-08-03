@@ -3,6 +3,7 @@ import Foundation
 enum AppTab: Hashable {
     case home
     case search
+    case camera
     case library
     case settings
 }
