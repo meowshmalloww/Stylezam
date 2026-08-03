@@ -17,7 +17,9 @@ def settings_for(tmp_path: Path) -> Settings:
         serpapi_api_key=None,
         ebay_client_id=None,
         ebay_client_secret=None,
-        ollama_enabled=False,
+        openai_api_key=None,
+        fireworks_api_key=None,
+        qwen_api_key=None,
         local_vision_enabled=False,
         youcam_api_key=None,
     )

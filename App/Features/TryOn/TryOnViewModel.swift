@@ -84,9 +84,19 @@ final class TryOnViewModel {
     private func poll(id: String) async {
         do {
             let client = try settings.client()
+            var pollDelay = 2.0
             while !Task.isCancelled {
                 let update = try await client.tryOn(id: id)
-                job = update
+                let changed = job?.status != update.status
+                    || job?.phase != update.phase
+                    || job?.progress != update.progress
+                    || job?.errorMessage != update.errorMessage
+                if changed {
+                    job = update
+                    pollDelay = 2.0
+                } else {
+                    pollDelay = min(pollDelay * 1.35, 4.5)
+                }
                 if update.status == .failed {
                     errorMessage = update.errorMessage ?? "The try-on could not finish."
                     return
@@ -95,7 +105,7 @@ final class TryOnViewModel {
                     await cacheCompletedResult(update)
                     return
                 }
-                try await Task.sleep(for: .seconds(2.5))
+                try await Task.sleep(for: .seconds(pollDelay))
             }
         } catch is CancellationError {
             return
@@ -127,10 +137,10 @@ final class TryOnViewModel {
             try data.write(to: destination, options: .atomic)
             resultImageData = data
             resultFileURL = destination
-            completionMessage = "Preview saved locally. Removing server copies…"
+            completionMessage = "Preview saved to Library. Removing server copies…"
             await deleteRemoteJobIfNeeded()
             if remoteJobWasDeleted {
-                completionMessage = "Preview is local; Stylezam’s server upload and generated copy were removed."
+                completionMessage = "Preview is in Library; Stylezam’s server upload and generated copy were removed."
             }
         } catch {
             errorMessage = "The preview finished, but its image could not be saved locally: \(error.localizedDescription)"

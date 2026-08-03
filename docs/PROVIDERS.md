@@ -1,54 +1,72 @@
 # Providers and hard limits
 
-Checked against official vendor information on 2026-08-03. Vendor plans and policies can change; follow the linked source before purchasing.
+Checked against official vendor information on 2026-08-03. Vendor pricing, quotas, models, and retention can change; confirm the linked source before deployment.
 
-## Recommended search stack
+## Provider roles
 
-| Layer | Provider | Why it is here | Vendor limit model | Stylezam default hard stop |
-|---|---|---|---|---|
-| Product text + image retrieval | SerpApi Shopping/Lens | Broad structured shopping results and Lens visual matches | Fixed searches per month; a free monthly allocation is available | 250 API calls per UTC calendar month |
-| Second retrieval source | eBay Browse | Real listings, keyword search, and Base64 image search | Default application call quota | 5,000 API calls per UTC calendar month |
-| Image understanding | Ollama `gemma3:4b` | Local factual attributes and visible text | Local hardware; no API call bill | No external cap needed |
-| Segmentation/reranking | Grounding DINO + SAM2 + CLIP | Local object isolation and visual comparison | Local hardware; no API call bill | No external cap needed |
-| Virtual try-on | YouCam AI Clothes v3 | Fashion-specific asynchronous try-on | Pre-purchased units; feature costs vary | 20 submitted jobs per UTC calendar month |
+Stylezam keeps product retrieval and image understanding separate. A vision model extracts factual garment attributes; it does not manufacture shopping results. SerpApi and eBay remain backend-managed retrieval infrastructure, while OpenAI, Fireworks, and Qwen are interchangeable backend-only image-understanding routes.
 
-SerpApi currently advertises a free 250-search monthly plan and fixed monthly tiers. Only successful searches count according to its pricing FAQ. If avoiding variable charges is important, leave automatic early renewal disabled in the provider account and keep Stylezam’s cap at or below the plan allocation: [SerpApi plans and pricing](https://serpapi.com/pricing).
+| Layer | Provider | Role | Stylezam default hard stop |
+|---|---|---|---|
+| Product text + image retrieval | SerpApi Shopping/Lens | Structured shopping and visual-search records | 250 calls per UTC month |
+| Secondary retrieval | eBay Browse | Keyword and Base64 image search against real listings | 5,000 calls per UTC month |
+| Image understanding | OpenAI Responses API | Structured visual attributes from image input | 100 calls per UTC month |
+| Image understanding fallback | Fireworks AI | OpenAI-compatible multimodal chat with JSON Schema output | 100 calls per UTC month |
+| Image understanding fallback | Qwen Model Studio | OpenAI-compatible visual chat completion | 100 calls per UTC month |
+| Segmentation/reranking | Grounding DINO + SAM2 + CLIP | Optional GPU-backed detection, masking, and similarity | Local inference |
+| Virtual try-on | YouCam AI Clothes v3 | Optional asynchronous appearance preview | 20 jobs per UTC month |
 
-eBay documents keyword and image retrieval in Browse API and currently lists a default 5,000-call-per-day Browse API quota. Buy APIs require an additional license, so approval—not cost—is the main external constraint: [Browse API overview](https://developer.ebay.com/api-docs/buy/static/api-browse.html), [API call limits](https://developer.ebay.com/develop/get-started/api-call-limits).
+OpenAI’s current model catalog says the latest GPT-5.6 family accepts image input and supports structured outputs. Stylezam defaults to the cost-sensitive `gpt-5.6-luna` route and uses the Responses API: [OpenAI model catalog](https://developers.openai.com/api/docs/models), [model comparison](https://developers.openai.com/api/docs/models/compare).
 
-Perfect Corp documents AI Clothes v3 as a file-upload, task-create, task-poll flow. Its unit system is prepaid and different operations can deduct different unit amounts; therefore Stylezam’s cap counts submitted try-on jobs, not vendor units. Set the cap conservatively after checking the feature cost in the YouCam dashboard: [AI Clothes v3 documentation](https://docs.perfectcorp.com/reference/ai_clothes/section/overview), [YouCam API FAQ](https://docs.perfectcorp.com/develop/faq).
+Fireworks documents image URL and Base64 data-URL inputs through its OpenAI-compatible Chat Completions endpoint. It also supports JSON Schema response formatting. Stylezam defaults to the documented vision example model `accounts/fireworks/models/kimi-k2p5`: [Fireworks vision models](https://docs.fireworks.ai/guides/querying-vision-language-models), [structured outputs](https://docs.fireworks.ai/structured-responses/structured-response-formatting).
 
-The published Clothes v3 OpenAPI operations currently contain no early-delete call. Perfect Corp’s June 2026 API terms state that user submissions are automatically deleted after one day and generated content after 30 days. Stylezam therefore removes its own server copies promptly but documents the provider retention instead of pretending to delete data it cannot address: [YouCam API terms](https://www.perfectcorp.com/perfectbeauty/youcam/terms-of-service-api).
+Qwen Model Studio documents OpenAI-compatible Chat Completions with mixed text and `image_url` content, including Base64 data URLs. The base URL depends on the account’s region; the repository defaults to the US endpoint and `qwen3.7-plus`: [Qwen vision models](https://www.alibabacloud.com/help/en/model-studio/vision-model), [OpenAI-compatible Chat Completions](https://www.alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions).
 
-Ollama accepts images through its local API. The implemented adapter uses structured output and defaults to `gemma3:4b`: [Ollama vision documentation](https://docs.ollama.com/capabilities/vision).
+These Stylezam caps are local safety limits, not claims about vendor billing. Set them at or below the maximum number of calls you intend to permit. A cap prevents more Stylezam requests after it is reached; it does not change a provider account’s plan or protect calls made outside Stylezam.
 
-## Configure caps
+## Vision fallback order
+
+For an image search, Stylezam tries configured providers in this order:
+
+1. OpenAI
+2. Fireworks AI
+3. Qwen
+
+Each attempted request atomically claims one call from that provider’s separate cap. If a configured provider fails or has reached its cap, the pipeline records a warning and continues to the next configured route. Local Grounding DINO/SAM2 detection can run before hosted understanding, and its detected boxes are merged into the successful provider’s structured attributes.
+
+## Configure credentials and caps
 
 ```dotenv
+STYLEZAM_OPENAI_API_KEY=
+STYLEZAM_OPENAI_VISION_MODEL=gpt-5.6-luna
+STYLEZAM_OPENAI_MONTHLY_CAP=100
+
+STYLEZAM_FIREWORKS_API_KEY=
+STYLEZAM_FIREWORKS_VISION_MODEL=accounts/fireworks/models/kimi-k2p5
+STYLEZAM_FIREWORKS_MONTHLY_CAP=100
+
+STYLEZAM_QWEN_API_KEY=
+STYLEZAM_QWEN_VISION_MODEL=qwen3.7-plus
+STYLEZAM_QWEN_MONTHLY_CAP=100
+
+STYLEZAM_SERPAPI_API_KEY=
 STYLEZAM_SERPAPI_MONTHLY_CAP=250
+STYLEZAM_EBAY_CLIENT_ID=
+STYLEZAM_EBAY_CLIENT_SECRET=
 STYLEZAM_EBAY_MONTHLY_CAP=5000
+
+STYLEZAM_YOUCAM_API_KEY=
 STYLEZAM_YOUCAM_MONTHLY_CAP=20
 ```
 
-The ledger lives in `backend/.data/stylezam.sqlite3`. Claims are atomic, so simultaneous jobs cannot exceed the configured local cap. Periods reset naturally on the first request in a new UTC calendar month. Set a cap to `0` to block that provider entirely even if credentials are present.
+All keys stay on the backend. Never put them in the Xcode project, an `.xcconfig` committed to source control, or the iPhone app bundle. The iPhone Developer Debug page edits only the Stylezam backend address and optional service token; it reads provider capability status without receiving provider secrets.
 
-For a combined text-and-image request, Stylezam may call both SerpApi Shopping and Lens, consuming two SerpApi calls. eBay keyword and image routes are counted separately for the same reason. A YouCam job claims its local slot before the person photo is uploaded.
+The usage ledger lives in `backend/.data/stylezam.sqlite3`. Claims are atomic, periods reset on the first request in a new UTC calendar month, and a cap of `0` blocks that route even when credentials are present.
 
-The Settings screen reads live usage from `GET /v1/capabilities`. Reaching a cap produces `monthly_cap_reached`; Stylezam does not fall through to invented results.
+## Retrieval and try-on notes
 
-## Credential variables
+SerpApi currently advertises fixed monthly search tiers, and eBay documents Browse keyword and image retrieval. These providers remain deployment infrastructure, so their names and credentials are intentionally absent from consumer Settings: [SerpApi pricing](https://serpapi.com/pricing), [eBay Browse overview](https://developer.ebay.com/api-docs/buy/static/api-browse.html).
 
-```dotenv
-STYLEZAM_SERPAPI_API_KEY=
-STYLEZAM_EBAY_CLIENT_ID=
-STYLEZAM_EBAY_CLIENT_SECRET=
-STYLEZAM_YOUCAM_API_KEY=
-```
+SerpApi Lens must fetch the search image from an HTTPS URL. Set `STYLEZAM_PUBLIC_BASE_URL` to the public origin of the backend. eBay image search sends Base64 image content and does not need public ingress.
 
-All keys stay on the backend. Never put them in the Xcode project, an `.xcconfig` committed to source control, or the iPhone app bundle.
-
-## Public image ingress
-
-SerpApi Lens must fetch the search image from an HTTPS URL. Set `STYLEZAM_PUBLIC_BASE_URL` to the public origin of the backend. eBay image search sends a Base64 image in the API request and does not need public ingress. Text search works without a public media URL.
-
-Use a protected production deployment. A temporary HTTPS tunnel is appropriate only for development because anyone with the generated media URL can fetch that image while the tunnel and file exist.
+Perfect Corp documents AI Clothes v3 as upload, task-create, and task-poll operations. Stylezam keeps YouCam optional and reports it only in Developer Debug until enabled. The local cap counts submitted jobs rather than provider units: [AI Clothes v3 documentation](https://docs.perfectcorp.com/reference/ai_clothes/section/overview), [YouCam API FAQ](https://docs.perfectcorp.com/develop/faq).

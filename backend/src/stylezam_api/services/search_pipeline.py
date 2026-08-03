@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 from PIL import Image
 
@@ -13,7 +13,7 @@ from ..errors import ProviderConfigurationError, ProviderUpstreamError, Stylezam
 from ..providers.base import ProviderProduct
 from ..providers.ebay import EbayProvider
 from ..providers.local_vision import CLIPReranker, LocalGarmentVision
-from ..providers.ollama import OllamaVisionAnalyzer
+from ..providers.vision import CompatibleChatVisionAnalyzer, OpenAIResponsesVisionAnalyzer
 from ..providers.serpapi import SerpAPIProvider
 from ..schemas import BoundingBox, VisualAttributes
 from ..storage import MediaStorage, StoredMedia
@@ -29,7 +29,9 @@ class SearchPipeline:
         storage: MediaStorage,
         serpapi: SerpAPIProvider,
         ebay: EbayProvider,
-        ollama: OllamaVisionAnalyzer,
+        vision_analyzers: Sequence[
+            Union[OpenAIResponsesVisionAnalyzer, CompatibleChatVisionAnalyzer]
+        ],
         local_vision: LocalGarmentVision,
         clip: CLIPReranker,
     ) -> None:
@@ -38,7 +40,7 @@ class SearchPipeline:
         self.storage = storage
         self.serpapi = serpapi
         self.ebay = ebay
-        self.ollama = ollama
+        self.vision_analyzers = list(vision_analyzers)
         self.local_vision = local_vision
         self.clip = clip
 
@@ -79,16 +81,15 @@ class SearchPipeline:
             except StylezamError as exc:
                 warnings.append("Garment segmentation was skipped: %s" % exc.message)
 
-        if image_path and self.ollama.configured:
-            try:
-                ollama_analysis = await self.ollama.analyze(
-                    retrieval_image or image_path, user_query or None
-                )
+        if image_path:
+            provider_analysis, provider_warnings = await self._understand_image(
+                retrieval_image or image_path, user_query or None
+            )
+            warnings.extend(provider_warnings)
+            if provider_analysis:
                 if analysis and analysis.detected_items:
-                    ollama_analysis.detected_items = analysis.detected_items
-                analysis = ollama_analysis
-            except StylezamError as exc:
-                warnings.append("Image understanding was skipped: %s" % exc.message)
+                    provider_analysis.detected_items = analysis.detected_items
+                analysis = provider_analysis
 
         if analysis:
             self.database.update_search(
@@ -220,6 +221,28 @@ class SearchPipeline:
 
     def _claim(self, provider: str, cap: int) -> bool:
         return self.database.claim_provider_call(provider, cap)
+
+    async def _understand_image(
+        self, image_path: Path, user_query: Optional[str]
+    ) -> Tuple[Optional[VisualAttributes], List[str]]:
+        warnings: List[str] = []
+        caps = {
+            "openai": self.settings.openai_monthly_cap,
+            "fireworks": self.settings.fireworks_monthly_cap,
+            "qwen": self.settings.qwen_monthly_cap,
+        }
+        for analyzer in self.vision_analyzers:
+            if not analyzer.configured:
+                continue
+            cap = caps[analyzer.id]
+            if not self._claim("%s-vision" % analyzer.id, cap):
+                warnings.append("%s image-understanding monthly cap reached." % analyzer.name)
+                continue
+            try:
+                return await analyzer.analyze(image_path, user_query), warnings
+            except StylezamError as exc:
+                warnings.append("%s was skipped: %s" % (analyzer.name, exc.message))
+        return None, warnings
 
     def _public_url_for_path(self, path: Path) -> Optional[str]:
         if not self.settings.public_base_url:

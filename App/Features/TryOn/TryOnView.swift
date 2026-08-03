@@ -46,7 +46,6 @@ struct TryOnView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Close") { dismiss() }
-                        .buttonStyle(.glass)
                 }
                 ToolbarItem(placement: .principal) {
                     VStack(spacing: 1) {
@@ -64,7 +63,6 @@ struct TryOnView: View {
                         ShareLink(item: resultFileURL) {
                             Image(systemName: "square.and.arrow.up")
                         }
-                        .buttonStyle(.glass)
                     }
                 }
             }
@@ -85,13 +83,28 @@ struct TryOnView: View {
             guard let item else { return }
             Task {
                 if let data = try? await item.loadTransferable(type: Data.self),
-                   let normalized = ImageEncoding.normalizedJPEG(from: data)
+                   let normalized = await ImageEncoding.normalizedJPEGAsync(from: data)
                 {
                     await viewModel.replacePersonImage(with: normalized)
                     saveMessage = nil
                 } else {
                     viewModel.errorMessage = "That photo could not be read."
                 }
+            }
+        }
+        .onChange(of: viewModel.resultFileURL) { _, resultURL in
+            guard resultURL != nil,
+                  let jobID = viewModel.job?.id,
+                  let data = viewModel.resultImageData
+            else { return }
+            do {
+                try model.library.addTryOn(
+                    jobID: jobID,
+                    product: product,
+                    imageData: data
+                )
+            } catch {
+                saveMessage = "The preview is ready, but Library could not save it: \(error.localizedDescription)"
             }
         }
         .onDisappear {
@@ -123,13 +136,17 @@ struct TryOnView: View {
     private var emptyStage: some View {
         ZStack {
             Color.black
-            LivingCobaltBackdrop(intensity: 0.72)
-                .opacity(0.78)
+            ProductImage(url: productImageURL, contentMode: .fill)
+                .blur(radius: 42)
+                .scaleEffect(1.16)
+                .opacity(0.34)
+            Color.black.opacity(0.58)
             VStack(spacing: 18) {
-                OrbitingBrandMark(size: 148)
+                Image(systemName: "figure.stand")
+                    .font(.system(size: 48, weight: .regular))
                 Text("See the piece on you")
-                    .font(.system(size: 34, weight: .semibold, design: .serif))
-                    .tracking(-0.7)
+                    .font(.system(size: 34, weight: .semibold))
+                    .tracking(-1)
                 Text("Choose a clear, front-facing photo. Nothing is uploaded until you ask Stylezam to generate the preview.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.7))
@@ -234,9 +251,13 @@ struct TryOnView: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                 Spacer()
-                ProgressView()
+                Text(progress, format: .percent.precision(.fractionLength(0)))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
             }
-            AnimatedProgressCapsule(progress: progress)
+            ProgressView(value: progress)
+                .progressViewStyle(.linear)
+                .tint(.primary)
         }
     }
 

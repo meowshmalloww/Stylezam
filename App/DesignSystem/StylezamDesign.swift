@@ -5,12 +5,12 @@ enum StylezamDesign {
     static let cobaltDeep = Color(red: 0.035, green: 0.16, blue: 0.62)
     static let ink = Color.black
     static let paper = Color(uiColor: .systemBackground)
-    static let canvas = Color(uiColor: .systemGroupedBackground)
+    static let canvas = Color(uiColor: .systemBackground)
     static let secondaryPaper = Color(uiColor: .secondarySystemBackground)
     static let pageInset: CGFloat = 20
-    static let cardRadius: CGFloat = 28
-    static let compactRadius: CGFloat = 20
-    static let hairline = Color.primary.opacity(0.12)
+    static let cardRadius: CGFloat = 20
+    static let compactRadius: CGFloat = 14
+    static let hairline = Color.primary.opacity(0.14)
 }
 
 struct BrandMarkView: View {
@@ -38,7 +38,7 @@ struct StylezamWordmark: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("Stylezam")
-                .font(.system(.headline, design: .rounded, weight: .bold))
+                .font(.system(.headline, design: .default, weight: .semibold))
             Text("FIND THE LOOK")
                 .font(.system(size: 8, weight: .semibold))
                 .tracking(1.25)
@@ -56,8 +56,8 @@ struct PageTitle: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
-                .font(.system(size: 43, weight: .semibold, design: .serif))
-                .tracking(-1.1)
+                .font(.system(size: 42, weight: .semibold, design: .default))
+                .tracking(-1.25)
                 .foregroundStyle(color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
@@ -78,8 +78,8 @@ struct EditorialTitle: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: size, weight: .semibold, design: .serif))
-            .tracking(-1.1)
+            .font(.system(size: size, weight: .semibold, design: .default))
+            .tracking(-1.25)
             .foregroundStyle(color)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isHeader)
@@ -106,7 +106,6 @@ struct EditorialSectionHeader: View {
         HStack(alignment: .firstTextBaseline) {
             Text(title)
                 .font(.title2.weight(.semibold))
-                .fontDesign(.serif)
             Spacer()
             if let detail {
                 Text(detail.uppercased())
@@ -123,22 +122,6 @@ struct EditorialRule: View {
         Rectangle()
             .fill(StylezamDesign.hairline)
             .frame(height: 1)
-    }
-}
-
-struct GlassIconButton: View {
-    let systemImage: String
-    let accessibilityLabel: String
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(width: 48, height: 48)
-        }
-        .buttonStyle(.glass)
-        .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -163,95 +146,6 @@ struct CobaltActionButton: View {
         .buttonStyle(.glassProminent)
         .tint(StylezamDesign.cobalt)
         .disabled(!isEnabled)
-    }
-}
-
-struct StatusPill: View {
-    let text: String
-    var tint: Color = StylezamDesign.cobalt
-
-    var body: some View {
-        Text(text)
-            .font(.caption2.weight(.bold))
-            .tracking(0.4)
-            .textCase(.uppercase)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 7)
-            .foregroundStyle(tint)
-            .background(tint.opacity(0.11), in: Capsule())
-    }
-}
-
-struct GlassPanel<Content: View>: View {
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        content
-            .padding(18)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: StylezamDesign.cardRadius))
-    }
-}
-
-struct SurfaceCard<Content: View>: View {
-    var padding: CGFloat = 18
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        content
-            .padding(padding)
-            .background(
-                StylezamDesign.paper,
-                in: RoundedRectangle(cornerRadius: StylezamDesign.cardRadius, style: .continuous)
-            )
-            .overlay {
-                RoundedRectangle(cornerRadius: StylezamDesign.cardRadius, style: .continuous)
-                    .stroke(StylezamDesign.hairline, lineWidth: 0.5)
-            }
-    }
-}
-
-struct ServiceBadge: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var isPulsing = false
-
-    let connected: Bool
-    var connectedText = "Connected"
-    var disconnectedText = "Setup needed"
-
-    var body: some View {
-        HStack(spacing: 7) {
-            Circle()
-                .fill(connected ? Color.green : Color.orange)
-                .frame(width: 7, height: 7)
-                .overlay {
-                    if connected {
-                        Circle()
-                            .stroke(Color.green.opacity(0.45), lineWidth: 1)
-                            .scaleEffect(isPulsing && !reduceMotion ? 2.1 : 1)
-                            .opacity(isPulsing && !reduceMotion ? 0 : 0.7)
-                    }
-                }
-            Text(connected ? connectedText : disconnectedText)
-                .font(.caption.weight(.semibold))
-        }
-        .padding(.horizontal, 11)
-        .frame(height: 30)
-        .glassEffect(.regular, in: Capsule())
-        .onAppear {
-            guard connected, !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 1.35).repeatForever(autoreverses: false)) {
-                isPulsing = true
-            }
-        }
-        .onChange(of: connected) { _, value in
-            guard value, !reduceMotion else {
-                isPulsing = false
-                return
-            }
-            withAnimation(.easeOut(duration: 1.35).repeatForever(autoreverses: false)) {
-                isPulsing = true
-            }
-        }
     }
 }
 

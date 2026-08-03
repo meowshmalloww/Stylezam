@@ -109,8 +109,8 @@ struct ProductDetailView: View {
                 EditorialKicker(text: brand)
             }
             Text(product.title)
-                .font(.system(size: 33, weight: .semibold, design: .serif))
-                .tracking(-0.7)
+                .font(.system(size: 33, weight: .semibold))
+                .tracking(-1)
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(alignment: .firstTextBaseline) {
@@ -129,16 +129,24 @@ struct ProductDetailView: View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(title: "Match evidence", detail: "Not identity proof")
 
-            HStack(alignment: .center, spacing: 16) {
+            EditorialRule()
+
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(product.matchTier.label.uppercased())
-                        .font(.system(size: 24, weight: .semibold, design: .serif))
+                    Text(product.matchTier.label)
+                        .font(.title2.weight(.semibold))
                     Text("match tier")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                EvidenceScoreRing(score: product.confidencePercent)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(product.confidencePercent, format: .number)
+                        .font(.title2.monospacedDigit().weight(.semibold))
+                    Text("evidence score")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             EditorialRule()
@@ -148,8 +156,6 @@ struct ProductDetailView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(18)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: StylezamDesign.cardRadius))
     }
 
     private var offers: some View {

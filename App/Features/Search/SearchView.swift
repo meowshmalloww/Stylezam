@@ -1,8 +1,15 @@
+import PhotosUI
 import SwiftUI
+import UIKit
 
 struct SearchView: View {
     @Environment(AppModel.self) private var model
     @State private var textQuery = ""
+    @State private var referenceImageData: Data?
+    @State private var referenceItem: PhotosPickerItem?
+    @State private var isReferencePickerPresented = false
+    @State private var isReferenceCameraPresented = false
+    @State private var referenceMessage: String?
     @State private var filter: ResultFilter = .closest
     @FocusState private var isTextSearchFocused: Bool
     @Namespace private var productTransition
@@ -24,165 +31,235 @@ struct SearchView: View {
         .toolbar {
             if model.activeSearch != nil {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
+                    Button("New", systemImage: "square.and.pencil") {
                         Task { await model.cancelActiveSearchAndReset() }
-                    } label: {
-                        Image(systemName: "plus")
                     }
-                    .buttonStyle(.glass)
                     .accessibilityLabel("New search")
                 }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            textSearchBar
-                .padding(.horizontal, 12)
-                .padding(.bottom, 6)
+            if model.activeSearch != nil {
+                textSearchBar
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+            }
         }
         .onChange(of: model.activeSearch?.id, initial: true) { _, _ in
             textQuery = model.activeSearch?.query ?? ""
             filter = .closest
         }
+        .photosPicker(
+            isPresented: $isReferencePickerPresented,
+            selection: $referenceItem,
+            matching: .images
+        )
+        .fullScreenCover(isPresented: $isReferenceCameraPresented) {
+            CameraPicker { data in
+                referenceImageData = data
+                referenceMessage = nil
+            }
+            .ignoresSafeArea()
+        }
+        .onChange(of: referenceItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let data = try? await item.loadTransferable(type: Data.self),
+                   let normalized = await ImageEncoding.normalizedJPEGAsync(from: data)
+                {
+                    referenceImageData = normalized
+                    referenceMessage = nil
+                } else {
+                    referenceMessage = "That reference image could not be read."
+                }
+            }
+        }
     }
 
     private var searchLanding: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 26) {
                 PageTitle(
-                    title: "What are you looking for?",
-                    subtitle: "Start with a photo for visual matching, or describe the piece in your own words below."
+                    title: "Search",
+                    subtitle: "Search clothing across the web with words, a reference image, or both."
                 )
                 .padding(.top, 18)
-                .motionReveal()
 
-                searchStage
-                    .motionReveal(delay: 0.06, distance: 24)
-
-                sourceStatus
-                    .motionReveal(delay: 0.13)
+                searchComposer
 
                 if let message = model.lastError {
                     InlineErrorView(message: message)
                 }
 
-                Label(
-                    "Stylezam only shows products returned by configured sources. It never invents listings or prices.",
-                    systemImage: "checkmark.shield"
-                )
+                HStack(alignment: .top, spacing: 11) {
+                    Image(systemName: "checkmark.shield")
+                        .foregroundStyle(StylezamDesign.cobalt)
+                    Text("Results come from configured product sources. Stylezam does not invent listings or prices.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(.bottom, 110)
+                }
+                .padding(.horizontal, 3)
+                .padding(.bottom, 30)
             }
             .padding(.horizontal, StylezamDesign.pageInset)
         }
     }
 
-    private var searchStage: some View {
-        Button {
-            model.isCapturePresented = true
-        } label: {
-            ZStack(alignment: .bottomLeading) {
-                LivingCobaltBackdrop()
-                OrbitingBrandMark(size: 205, markOpacity: 0.88)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .offset(x: 30, y: -26)
+    private var searchComposer: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Image(systemName: "magnifyingglass")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+                TextField(
+                    "Brand, color, style, or product",
+                    text: $textQuery,
+                    axis: .vertical
+                )
+                .focused($isTextSearchFocused)
+                .submitLabel(.search)
+                .lineLimit(2...4)
+                .font(.system(size: 23, weight: .medium))
+                .onSubmit { submitUniversalSearch() }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Photo search", systemImage: "photo.on.rectangle")
-                        .font(.caption.weight(.semibold))
-                        .textCase(.uppercase)
-                        .tracking(1)
-                    Text("Choose a look")
-                        .font(.system(size: 31, weight: .semibold, design: .serif))
-                    Text("Use a full outfit or crop. You can focus on a detected item after Stylezam reads the photo.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.74))
-                        .frame(maxWidth: 285, alignment: .leading)
-                    HStack {
-                        Text("Add a photo")
-                            .font(.headline)
-                        MotionArrow(color: .white)
+                if !textQuery.isEmpty {
+                    Button {
+                        textQuery = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
                     }
-                    .padding(.top, 8)
+                    .accessibilityLabel("Clear text")
                 }
-                .foregroundStyle(.white)
-                .padding(22)
+            }
+
+            Rectangle()
+                .fill(isTextSearchFocused ? Color.primary : StylezamDesign.hairline)
+                .frame(height: isTextSearchFocused ? 1.5 : 1)
+
+            if let referenceImageData {
+                HStack(spacing: 12) {
+                    DataImage(data: referenceImageData)
+                        .frame(width: 72, height: 86)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Reference image")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Stylezam will combine visual details with your search text.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        self.referenceImageData = nil
+                        referenceItem = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Remove reference image")
+                }
+                .padding(.vertical, 2)
+            }
+
+            HStack(spacing: 10) {
+                Menu {
+                    Button {
+                        isReferencePickerPresented = true
+                    } label: {
+                        Label("Photos", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            isReferenceCameraPresented = true
+                        } else {
+                            referenceMessage = "Camera is not available on this device."
+                        }
+                    } label: {
+                        Label("Camera", systemImage: "camera")
+                    }
+                    Button {
+                        pasteReferenceImage()
+                    } label: {
+                        Label("Paste image", systemImage: "doc.on.clipboard")
+                    }
+                } label: {
+                    Label(
+                        referenceImageData == nil ? "Reference" : "Replace",
+                        systemImage: "photo.badge.plus"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(height: 48)
+                    .padding(.horizontal, 14)
+                }
+                .buttonStyle(.glass)
+
+                Spacer()
+
+                Button {
+                    submitUniversalSearch()
+                } label: {
+                    HStack(spacing: 8) {
+                        Text("Search")
+                        Image(systemName: "arrow.right")
+                    }
+                    .fontWeight(.semibold)
+                    .frame(height: 48)
+                    .padding(.horizontal, 18)
+                }
+                .buttonStyle(.glassProminent)
+                .tint(StylezamDesign.cobalt)
+                .disabled(!canSubmitLandingSearch)
+            }
+
+            if let referenceMessage {
+                Text(referenceMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
-        .buttonStyle(TactileButtonStyle())
-        .frame(height: 340)
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-        .shadow(color: StylezamDesign.cobalt.opacity(0.22), radius: 28, y: 16)
+        .animation(StylezamMotion.quickSpring, value: isTextSearchFocused)
     }
 
-    private var sourceStatus: some View {
-        SurfaceCard {
-            HStack(spacing: 14) {
-                Image(systemName: model.capabilities?.imageSearch == true ? "checkmark" : "exclamationmark")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        model.capabilities?.imageSearch == true ? StylezamDesign.cobalt : Color.orange,
-                        in: Circle()
-                    )
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(model.capabilities?.imageSearch == true ? "Image search is ready" : "Connect a product source")
-                        .font(.headline)
-                    Text(
-                        model.capabilities?.imageSearch == true
-                            ? "Your backend can accept photos and retrieve visual product matches."
-                            : "Open Settings to configure a backend with eBay image search or SerpApi Lens ingress."
-                    )
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                if model.capabilities?.imageSearch != true {
-                    Button {
-                        model.selectedTab = .you
-                    } label: {
-                        Image(systemName: "chevron.right")
-                    }
-                    .buttonStyle(.glass)
-                }
-            }
-        }
-        .motionScrollDepth()
+    private var canSubmitLandingSearch: Bool {
+        referenceImageData != nil
+            || !textQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func progressView(_ job: SearchJobDTO) -> some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                VStack(alignment: .leading, spacing: 6) {
-                    EditorialKicker(text: "Live search", color: StylezamDesign.cobalt)
-                    EditorialTitle(text: progressTitle(job), size: 48)
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("SEARCH IN PROGRESS")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1.2)
+                        .foregroundStyle(.secondary)
+                    EditorialTitle(text: progressTitle(job), size: 42)
                 }
                 .padding(.top, 18)
                 .motionReveal()
 
                 if model.activeSearchImageData != nil || job.inputImageURL != nil {
-                    ZStack {
-                        LookStackCanvas(
-                            imageData: model.activeSearchImageData,
-                            remoteURL: job.inputImageURL,
-                            items: job.selectedRegion == nil ? (job.analysis?.detectedItems ?? []) : [],
-                            selectedRegion: job.selectedRegion
-                        )
-                        SearchActivityOverlay(job: job)
-                    }
+                    LookStackCanvas(
+                        imageData: model.activeSearchImageData,
+                        remoteURL: job.inputImageURL,
+                        items: job.selectedRegion == nil ? (job.analysis?.detectedItems ?? []) : [],
+                        selectedRegion: job.selectedRegion
+                    )
                     .motionReveal(delay: 0.05, distance: 22)
                 } else if let query = job.query {
-                    ZStack(alignment: .bottomLeading) {
-                        LivingCobaltBackdrop(intensity: 0.7)
-                        Text("“\(query)”")
-                            .font(.system(size: 34, weight: .semibold, design: .serif))
-                            .padding(24)
-                            .foregroundStyle(.white)
+                    HStack(alignment: .top, spacing: 14) {
+                        Image(systemName: "text.magnifyingglass")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                        Text(query)
+                            .font(.title2.weight(.medium))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .frame(maxWidth: .infinity, minHeight: 230, alignment: .bottomLeading)
-                    .clipShape(RoundedRectangle(cornerRadius: 30))
-                    .overlay { SearchActivityOverlay(job: job) }
+                    .padding(20)
+                    .background(StylezamDesign.secondaryPaper, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .motionReveal(delay: 0.05, distance: 22)
                 }
 
@@ -205,24 +282,25 @@ struct SearchView: View {
     }
 
     private func searchProgressPanel(_ job: SearchJobDTO) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Text(job.phase.title)
-                    .font(.title3.weight(.bold))
+                    .font(.headline)
                 Spacer()
                 Text(job.progress, format: .percent.precision(.fractionLength(0)))
                     .font(.subheadline.monospacedDigit().weight(.semibold))
                     .foregroundStyle(.secondary)
             }
-            AnimatedProgressCapsule(progress: job.progress)
+            ProgressView(value: job.progress)
+                .progressViewStyle(.linear)
+                .tint(.primary)
+                .animation(.easeInOut(duration: 0.35), value: job.progress)
 
-            HStack(spacing: 0) {
-                phaseMarker("READ", complete: job.progress >= 0.12, active: job.phase == .understanding)
-                phaseLine(complete: job.progress >= 0.43)
-                phaseMarker("SOURCE", complete: job.progress >= 0.43, active: job.phase == .retrieving)
-                phaseLine(complete: job.progress >= 0.78)
-                phaseMarker("RANK", complete: job.progress >= 0.78, active: job.phase == .reranking)
-            }
+            EditorialRule()
+
+            phaseRow("Understand the item", complete: job.progress >= 0.43, active: job.phase == .understanding || job.phase == .queued)
+            phaseRow("Search product sources", complete: job.progress >= 0.78, active: job.phase == .retrieving)
+            phaseRow("Check and rank evidence", complete: job.status == .completed, active: job.phase == .reranking)
 
             if let query = job.query {
                 Text(query)
@@ -230,37 +308,24 @@ struct SearchView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(18)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24))
+        .padding(.vertical, 4)
     }
 
-    private func phaseMarker(_ label: String, complete: Bool, active: Bool) -> some View {
-        VStack(spacing: 6) {
-            ZStack {
-                if active {
-                    Circle()
-                        .fill(StylezamDesign.cobalt.opacity(0.16))
-                        .frame(width: 24, height: 24)
-                        .symbolEffect(.pulse)
-                }
-                Circle()
-                    .fill(complete ? StylezamDesign.cobalt : Color.secondary.opacity(0.25))
-                    .frame(width: 8, height: 8)
-            }
-            .frame(height: 12)
+    private func phaseRow(_ label: String, complete: Bool, active: Bool) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: complete ? "checkmark" : active ? "circle.fill" : "circle")
+                .font(complete ? .caption.weight(.bold) : .system(size: 7, weight: .semibold))
+                .foregroundStyle(complete || active ? Color.primary : Color.secondary)
+                .frame(width: 16)
             Text(label)
-                .font(.system(size: 9, weight: .bold))
-                .tracking(0.8)
-                .foregroundStyle(complete ? .primary : .secondary)
+                .font(.subheadline)
+                .foregroundStyle(active || complete ? .primary : .secondary)
+            Spacer()
+            if active {
+                ProgressView()
+                    .controlSize(.small)
+            }
         }
-    }
-
-    private func phaseLine(complete: Bool) -> some View {
-        Rectangle()
-            .fill(complete ? StylezamDesign.cobalt : Color.secondary.opacity(0.2))
-            .frame(maxWidth: .infinity)
-            .frame(height: 1)
-            .offset(y: -7)
     }
 
     private func resultsView(_ job: SearchJobDTO) -> some View {
@@ -396,7 +461,7 @@ struct SearchView: View {
                 .fontWidth(.condensed)
             Text("Try fewer descriptive words, select a tighter item box, or configure another real retrieval source.")
                 .foregroundStyle(.secondary)
-            Button("Capture another look") { model.isCapturePresented = true }
+            Button("Capture another look") { model.presentCapture(.camera) }
                 .fontWeight(.semibold)
                 .padding(.top, 4)
         }
@@ -404,23 +469,12 @@ struct SearchView: View {
     }
 
     private var filterBar: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 10) {
-                ForEach(ResultFilter.allCases) { item in
-                    Button(item.title) { filter = item }
-                        .buttonStyle(
-                            .glass(
-                                item == filter
-                                    ? .regular.tint(StylezamDesign.cobalt)
-                                    : .regular
-                            )
-                        )
-                        .foregroundStyle(item == filter ? StylezamDesign.cobalt : .primary)
-                }
+        Picker("Filter results", selection: $filter) {
+            ForEach(ResultFilter.allCases) { item in
+                Text(item.title).tag(item)
             }
-            .padding(.vertical, 4)
         }
-        .scrollIndicators(.hidden)
+        .pickerStyle(.segmented)
     }
 
     private var filteredResults: [ProductResultDTO] {
@@ -438,7 +492,7 @@ struct SearchView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .font(.headline)
-            TextField("Describe or refine an item", text: $textQuery)
+            TextField("Search products", text: $textQuery)
                 .focused($isTextSearchFocused)
                 .submitLabel(.search)
                 .onSubmit { submitTextSearch() }
@@ -467,13 +521,6 @@ struct SearchView: View {
         .padding(.trailing, 8)
         .frame(height: 58)
         .glassEffect(.regular, in: Capsule())
-        .scaleEffect(isTextSearchFocused ? 1.015 : 1)
-        .shadow(
-            color: StylezamDesign.cobalt.opacity(isTextSearchFocused ? 0.18 : 0.06),
-            radius: isTextSearchFocused ? 18 : 8,
-            y: 6
-        )
-        .animation(StylezamMotion.quickSpring, value: isTextSearchFocused)
     }
 
     private func submitTextSearch() {
@@ -484,6 +531,37 @@ struct SearchView: View {
                 SearchInput(query: query, imageData: nil, origin: .text)
             )
         }
+    }
+
+    private func submitUniversalSearch() {
+        let query = textQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard referenceImageData != nil || !query.isEmpty else { return }
+        let image = referenceImageData
+        Task {
+            let identifier = await model.startSearch(
+                SearchInput(
+                    query: query.isEmpty ? nil : query,
+                    imageData: image,
+                    origin: image == nil ? .text : .photoLibrary
+                )
+            )
+            if identifier != nil {
+                referenceImageData = nil
+                referenceItem = nil
+                referenceMessage = nil
+            }
+        }
+    }
+
+    private func pasteReferenceImage() {
+        guard let image = UIPasteboard.general.image,
+              let data = ImageEncoding.normalizedJPEG(from: image)
+        else {
+            referenceMessage = "The clipboard does not contain an image."
+            return
+        }
+        referenceImageData = data
+        referenceMessage = nil
     }
 
     private func progressTitle(_ job: SearchJobDTO) -> String {
@@ -538,36 +616,38 @@ private struct ProductResultCard: View {
                     .frame(maxWidth: .infinity)
                     .aspectRatio(0.79, contentMode: .fit)
                     .background(Color(uiColor: .secondarySystemBackground))
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
 
-                VStack {
-                    Button {
-                        model.library.toggleSaved(product)
-                    } label: {
-                        Image(
-                            systemName: model.library.isSaved(product)
-                                ? "bookmark.fill"
-                                : "bookmark"
-                        )
-                        .font(.headline)
-                        .frame(width: 42, height: 42)
-                        .symbolEffect(.bounce, value: model.library.isSaved(product))
-                    }
-                    .buttonStyle(.glass)
-                    .accessibilityLabel(
-                        model.library.isSaved(product) ? "Remove bookmark" : "Bookmark"
+                Button {
+                    model.library.toggleSaved(product)
+                } label: {
+                    Image(
+                        systemName: model.library.isSaved(product)
+                            ? "bookmark.fill"
+                            : "bookmark"
                     )
-                    Spacer()
-                    StatusPill(text: product.matchTier.label)
+                    .font(.headline)
+                    .frame(width: 40, height: 40)
+                    .symbolEffect(.bounce, value: model.library.isSaved(product))
                 }
                 .padding(8)
+                .buttonStyle(.glass)
+                .accessibilityLabel(
+                    model.library.isSaved(product) ? "Remove bookmark" : "Bookmark"
+                )
             }
 
-            Text((product.brand ?? product.merchant).uppercased())
-                .font(.caption2.weight(.bold))
-                .tracking(1.1)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(alignment: .firstTextBaseline) {
+                Text((product.brand ?? product.merchant).uppercased())
+                    .font(.caption2.weight(.semibold))
+                    .tracking(0.8)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(product.matchTier.label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
             Text(product.title)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(2)
@@ -577,52 +657,5 @@ private struct ProductResultCard: View {
                 .foregroundStyle(.primary)
         }
         .contentShape(Rectangle())
-    }
-}
-
-private struct SearchActivityOverlay: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var pulse = false
-
-    let job: SearchJobDTO
-
-    var body: some View {
-        VStack {
-            HStack(spacing: 7) {
-                ZStack {
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 7, height: 7)
-                    Circle()
-                        .stroke(.white.opacity(0.5), lineWidth: 1)
-                        .frame(width: 7, height: 7)
-                        .scaleEffect(pulse && !reduceMotion ? 2.5 : 1)
-                        .opacity(pulse && !reduceMotion ? 0 : 0.8)
-                }
-                Text(job.phase.title.uppercased())
-                    .font(.system(size: 9, weight: .bold))
-                    .tracking(1)
-                Spacer()
-                Text(job.progress, format: .percent.precision(.fractionLength(0)))
-                    .font(.caption.monospacedDigit().weight(.bold))
-                    .contentTransition(.numericText(value: job.progress))
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 12)
-            .frame(height: 34)
-            .glassEffect(.regular.tint(.black.opacity(0.2)), in: Capsule())
-
-            Spacer()
-
-            AnimatedProgressCapsule(progress: job.progress)
-        }
-        .padding(14)
-        .allowsHitTesting(false)
-        .onAppear {
-            guard !reduceMotion else { return }
-            withAnimation(.easeOut(duration: 1.1).repeatForever(autoreverses: false)) {
-                pulse = true
-            }
-        }
     }
 }

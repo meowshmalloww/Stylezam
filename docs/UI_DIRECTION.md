@@ -6,12 +6,13 @@ Research checked on 2026-08-03. This is the implementation rationale for the fir
 
 Stylezam uses an editorial fashion layer for content and an iOS-native Liquid Glass layer for actions. The visual system is intentionally narrow:
 
-- Cobalt, black, white, and semantic system colors only.
-- Editorial serif display type for short page statements; normal system type for controls, details, and evidence.
+- Cobalt is a small brand accent; content uses black, white, and semantic system colors.
+- San Francisco system type carries the entire hierarchy, with restrained tracking only for small editorial labels.
 - Large real capture/product imagery with restrained labels.
-- Liquid Glass on navigation, capture controls, filters, progress, and action bars—not as a translucent surface behind every piece of content.
+- Liquid Glass only on navigation, floating composers, and media action bars—not in the content layer.
 - Two product columns on iPhone, preserving useful image scale and readable names.
-- Empty states use the Stylezam brand mark and direct copy; they never impersonate products, merchants, or search results.
+- Empty states use native `ContentUnavailableView` and direct copy; they never impersonate products, merchants, or search results.
+- Idle pages perform no continuous animation. Motion is short, native, and tied to touch, navigation, or real job-state changes.
 
 ## Research translated into UI decisions
 
@@ -25,19 +26,21 @@ The commerce hierarchy takes cues from current editorial fashion apps rather tha
 
 These are references for hierarchy and restraint, not screens copied into the app.
 
+The final Home interaction uses its own camera-derived language: an orthogonal viewfinder surface with corner marks, a clear camera label, and one subordinate Photos action. It intentionally avoids the radial music-recognition layout associated with Shazam.
+
 ## Implemented screen system
 
 ### Home
 
-A compact brand header leads into the product promise: “Find what they’re wearing.” If a real capture exists it becomes the hero; otherwise the final cobalt-and-white Stylezam mark anchors a restrained brand composition without fake fashion photography.
+A compact brand header appears once. The page then presents one rectangular camera viewfinder with only Choose from Photos as a subordinate control; typed search stays in its own tab. There is no radial scan button, connection dot, Settings shortcut, text-search card, provider copy, gradient, or continuously animated decoration.
 
 ### Capture
 
-Camera, Photos, Paste, image-plus-words, and words-only search share one full-height sheet. A real selected image becomes the primary canvas and text remains an optional refinement. A single primary action starts the real backend job.
+Camera, Photos, and Paste Image share one photo-only sheet. A real selected image becomes the primary canvas and a single primary action starts the backend job. Text does not appear in this photo-first route.
 
 ### Search and Look Stack
 
-Search progress reflects backend phases rather than a fixed animation. When local vision returns multiple boxes, the original capture becomes a tappable Look Stack. Selecting a box submits another real search using that normalized region. Results use a two-column grid with explicit evidence tiers.
+The landing page is one universal composer: product text plus an optional reference image from Photos, Camera, or Paste. It contains no “describe an item” instruction and no duplicate photo-search card. Search progress uses the native determinate linear indicator and real backend phases, without gradient fill, phase dots, or glass content panels. The toolbar uses the system compose action for a new search instead of a floating plus. When vision returns multiple boxes, the original capture becomes a tappable Look Stack. Selecting a box submits another real search using that normalized region. Results use a two-column grid with explicit evidence tiers.
 
 ### Product evidence
 
@@ -49,7 +52,9 @@ Try-on is a full-screen visual stage with glass controls. The result is called a
 
 ### Archive and Setup
 
-The archive stays empty until the user creates real searches or bookmarks. Setup prioritizes the reliable two-action Screenshot Shortcut, then Control Center/Action Button, Share, and the consent-based iOS 27 live-screen option.
+Library has three explicit collections: Recent, Saved, and Try-ons. It stays empty until the user performs real actions, and completed try-ons are copied into durable local storage automatically.
+
+Consumer Settings is a native grouped list linking to Capture & Controls, Notifications, and Privacy. Screenshot Shortcut, Control Center/Action Button, Share, and consent-based iOS 27 live screen have their own tutorial page. Backend address, service token, OpenAI/Fireworks/Qwen state, local DINO/SAM2/CLIP state, and optional YouCam state live only in Developer Debug. Retrieval-provider infrastructure is not presented as an iPhone preference.
 
 ## Accessibility and platform behavior
 
