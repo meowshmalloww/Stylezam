@@ -2,283 +2,194 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
-
-    private var latestCapture: SavedCapture? {
-        model.library.captures.first
-    }
+    @State private var feedbackEvent = 0
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 28) {
-                header
-                    .motionReveal()
-                hero
-                    .motionReveal(delay: 0.06, distance: 24)
-                recentCaptures
-                    .motionReveal(delay: 0.13)
-                accessSection
-                    .motionReveal(delay: 0.18)
+            VStack(alignment: .leading, spacing: 0) {
+                brandHeader
+                    .padding(.bottom, 32)
+
+                Text("Find the piece.")
+                    .font(.system(size: 44, weight: .semibold))
+                    .tracking(-1.65)
+                    .accessibilityAddTraits(.isHeader)
+
+                Text("Start with what you see. Stylezam identifies the clothing and searches real product sources.")
+                    .font(.body)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 11)
+                    .padding(.bottom, 28)
+
+                capturePortal
+
+                Button {
+                    model.presentCapture(.photos)
+                } label: {
+                    Label("Choose from Photos", systemImage: "photo.on.rectangle")
+                        .font(.body.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 54)
+                }
+                .buttonStyle(.glass)
+                .padding(.top, 12)
+
+                latestSearch
+                    .padding(.top, 32)
             }
             .padding(.horizontal, StylezamDesign.pageInset)
-            .padding(.bottom, 110)
+            .padding(.top, 8)
+            .padding(.bottom, 86)
         }
         .background(StylezamDesign.canvas)
         .toolbar(.hidden, for: .navigationBar)
+        .sensoryFeedback(.impact(weight: .medium), trigger: feedbackEvent)
     }
 
-    private var header: some View {
-        HStack(spacing: 11) {
-            BrandMarkView(size: 42)
+    private var brandHeader: some View {
+        HStack(spacing: 10) {
+            BrandMarkView(size: 36)
             StylezamWordmark()
             Spacer()
-            ServiceBadge(
-                connected: model.capabilities != nil,
-                connectedText: "Online",
-                disconnectedText: "Offline"
-            )
-            GlassIconButton(systemImage: "gearshape", accessibilityLabel: "Settings") {
-                model.selectedTab = .you
-            }
         }
-        .padding(.top, 8)
     }
 
-    private var hero: some View {
-        ZStack(alignment: .bottomLeading) {
-            heroArtwork
+    private var capturePortal: some View {
+        Button {
+            feedbackEvent += 1
+            model.presentCapture(.camera)
+        } label: {
+            ZStack {
+                Color(uiColor: .secondarySystemBackground)
 
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.02), location: 0),
-                    .init(color: StylezamDesign.cobaltDeep.opacity(0.38), location: 0.34),
-                    .init(color: .black.opacity(0.9), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
+                ViewfinderCorners()
+                    .stroke(.primary.opacity(0.72), style: StrokeStyle(lineWidth: 1.5, lineCap: .square))
+                    .padding(20)
 
-            VStack(alignment: .leading, spacing: 18) {
-                if latestCapture != nil {
-                    StatusPill(text: "Continue your latest search", tint: .white)
+                VStack(spacing: 13) {
+                    Image(systemName: "camera.viewfinder")
+                        .font(.system(size: 39, weight: .regular))
+                    Text("Open camera")
+                        .font(.title3.weight(.semibold))
+                    Text("Photo search")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                PageTitle(
-                    title: "Find what they’re wearing.",
-                    subtitle: "Start with a photo or a few words. Stylezam checks real product sources and shows how strong each match is.",
-                    color: .white
-                )
-
-                GlassEffectContainer(spacing: 10) {
-                    VStack(spacing: 10) {
-                        Button {
-                            model.isCapturePresented = true
-                        } label: {
-                            HStack(spacing: 11) {
-                                Image(systemName: "photo.badge.plus")
-                                Text("Search a photo")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                                MotionArrow()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                            .padding(.horizontal, 17)
-                        }
-                        .buttonStyle(.glassProminent)
-                        .tint(.white)
-                        .foregroundStyle(.black)
-
-                        Button {
-                            model.selectedTab = .search
-                        } label: {
-                            HStack(spacing: 11) {
-                                Image(systemName: "text.magnifyingglass")
-                                Text("Search with words")
-                                    .fontWeight(.semibold)
-                                Spacer()
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 48)
-                            .padding(.horizontal, 17)
-                        }
-                        .buttonStyle(.glass)
-                        .foregroundStyle(.white)
-                    }
+                HStack {
+                    Text("VISUAL SEARCH")
+                        .font(.system(size: 10, weight: .semibold))
+                        .tracking(1.25)
+                    Spacer()
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.semibold))
                 }
+                .padding(20)
+                .frame(maxHeight: .infinity, alignment: .bottom)
             }
-            .padding(22)
+            .foregroundStyle(.primary)
+            .frame(maxWidth: .infinity)
+            .aspectRatio(1.32, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(StylezamDesign.hairline, lineWidth: 0.5)
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 520)
-        .clipShape(RoundedRectangle(cornerRadius: 34, style: .continuous))
-        .shadow(color: StylezamDesign.cobalt.opacity(0.2), radius: 30, y: 18)
-        .overlay {
-            RoundedRectangle(cornerRadius: 34, style: .continuous)
-                .stroke(.white.opacity(0.14), lineWidth: 0.5)
-        }
+        .buttonStyle(QuietPressButtonStyle())
+        .accessibilityLabel("Open camera to find clothing")
     }
 
     @ViewBuilder
-    private var heroArtwork: some View {
-        if let latestCapture,
-           let imageURL = model.library.imageURL(for: latestCapture)
-        {
-            LocalFileImage(url: imageURL)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .clipped()
-        } else {
-            ZStack {
-                LivingCobaltBackdrop()
-                OrbitingBrandMark(size: 210, markOpacity: 0.84)
-                    .offset(x: 96, y: -132)
-            }
-        }
-    }
+    private var latestSearch: some View {
+        if let latest = model.library.captures.first {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("RECENT")
+                    .font(.system(size: 10, weight: .semibold))
+                    .tracking(1.2)
+                    .foregroundStyle(.secondary)
+                EditorialRule()
+                Button {
+                    model.resumeSearch(
+                        id: latest.searchID,
+                        imageData: model.library.imageURL(for: latest).flatMap {
+                            try? Data(contentsOf: $0, options: .mappedIfSafe)
+                        }
+                    )
+                } label: {
+                    HStack(spacing: 13) {
+                        Group {
+                            if let imageURL = model.library.imageURL(for: latest) {
+                                LocalFileImage(url: imageURL)
+                            } else {
+                                Color(uiColor: .secondarySystemBackground)
+                                    .overlay {
+                                        Image(systemName: "magnifyingglass")
+                                            .foregroundStyle(.secondary)
+                                    }
+                            }
+                        }
+                        .frame(width: 52, height: 62)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-    private var recentCaptures: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Recent searches")
-                    .font(.title2.weight(.semibold))
-                    .fontDesign(.serif)
-                Spacer()
-                if !model.library.captures.isEmpty {
-                    Button("See all") { model.selectedTab = .looks }
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-
-            if model.library.captures.isEmpty {
-                SurfaceCard {
-                    HStack(spacing: 15) {
-                        BrandMarkView(size: 56)
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("Your first find starts here")
+                            Text(latest.query ?? "Photo search")
                                 .font(.headline)
-                            Text("Photos and descriptions you search will appear here—never invented examples.")
-                                .font(.subheadline)
+                                .lineLimit(1)
+                            Text(latest.createdAt, style: .relative)
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(.primary)
                 }
-            } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(spacing: 13) {
-                        ForEach(model.library.captures.prefix(8)) { capture in
-                            Button {
-                                model.resumeSearch(
-                                    id: capture.searchID,
-                                    imageData: model.library.imageURL(for: capture).flatMap {
-                                        try? Data(contentsOf: $0)
-                                    }
-                                )
-                            } label: {
-                                captureTile(capture)
-                            }
-                            .buttonStyle(.plain)
-                            .motionScrollDepth()
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
+                .buttonStyle(.plain)
             }
-        }
-    }
-
-    private func captureTile(_ capture: SavedCapture) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Group {
-                if let url = model.library.imageURL(for: capture) {
-                    LocalFileImage(url: url)
-                } else {
-                    LinearGradient(
-                        colors: [StylezamDesign.cobalt, StylezamDesign.cobaltDeep],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    .overlay {
-                        Image(systemName: "text.magnifyingglass")
-                            .font(.title)
-                            .foregroundStyle(.white)
-                    }
-                }
-            }
-            .frame(width: 150, height: 184)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-            Text(capture.query ?? capture.origin.displayName)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-                .frame(width: 150, alignment: .leading)
-            Text(capture.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var accessSection: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("Find it from anywhere")
-                .font(.title2.weight(.semibold))
-                .fontDesign(.serif)
-
-            SurfaceCard {
-                VStack(spacing: 0) {
-                    accessRow(
-                        icon: "square.and.arrow.up",
-                        title: "Share to Stylezam",
-                        detail: "Send an image or description from another app."
-                    )
-                    EditorialRule()
-                    accessRow(
-                        icon: "switch.2",
-                        title: "Control Center",
-                        detail: "Open capture from a control or the Action Button."
-                    )
-                    EditorialRule()
-                    accessRow(
-                        icon: "lock.shield",
-                        title: "Private by default",
-                        detail: "Nothing is uploaded until you start a search."
-                    )
-                }
-            }
-            .motionScrollDepth()
-        }
-    }
-
-    private func accessRow(icon: String, title: String, detail: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(StylezamDesign.cobalt)
-                .frame(width: 38, height: 38)
-                .background(StylezamDesign.cobalt.opacity(0.1), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.headline)
-                Text(detail)
-                    .font(.subheadline)
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                EditorialRule()
+                Text("Searches, saved products, and try-ons appear in Library.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Spacer(minLength: 0)
         }
-        .padding(.vertical, 13)
     }
 }
 
-private extension CaptureOrigin {
-    var displayName: String {
-        switch self {
-        case .camera: "Camera capture"
-        case .photoLibrary: "Photo"
-        case .text: "Text search"
-        case .clipboard: "Clipboard"
-        case .shareExtension: "Shared look"
-        case .screenCapture: "Screen capture"
-        }
+private struct ViewfinderCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        let length = min(rect.width, rect.height) * 0.12
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+        path.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
+        return path
+    }
+}
+
+private struct QuietPressButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.76 : 1)
+            .scaleEffect(configuration.isPressed && !reduceMotion ? 0.99 : 1)
+            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
     }
 }

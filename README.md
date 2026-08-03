@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Find what they’re wearing.</strong><br>
-  Native fashion discovery for iPhone—search a photo or a few words, compare source-backed matches, and try the look on.
+  Native fashion discovery for iPhone—identify a look from a photo, search with words and references, compare source-backed matches, and try products on.
 </p>
 
 <p align="center">
@@ -27,18 +27,24 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
-      <img src="./Artifacts/VisualQA/home-brand-redesign.png" alt="Stylezam home screen" width="390">
+    <td width="33%" align="center">
+      <img src="./Artifacts/VisualQA/home-native-redesign.png" alt="Stylezam photo-first home screen" width="300">
     </td>
-    <td width="50%" align="center">
-      <img src="./Artifacts/VisualQA/capture-brand-redesign.png" alt="Stylezam photo and text search screen" width="390">
+    <td width="33%" align="center">
+      <img src="./Artifacts/VisualQA/search-native-redesign.png" alt="Stylezam product search screen" width="300">
+    </td>
+    <td width="33%" align="center">
+      <img src="./Artifacts/VisualQA/library-native-redesign.png" alt="Stylezam local library screen" width="300">
     </td>
   </tr>
   <tr>
-    <td align="center"><sub><strong>Discover</strong> from a photo or a few words</sub></td>
-    <td align="center"><sub><strong>Search</strong> with camera, Photos, paste, or text</sub></td>
+    <td align="center"><sub><strong>Home</strong> starts with one original photo-first capture surface</sub></td>
+    <td align="center"><sub><strong>Search</strong> combines a query with an optional reference image</sub></td>
+    <td align="center"><sub><strong>Library</strong> keeps recent searches, saved products, and try-ons local</sub></td>
   </tr>
 </table>
+
+The interface is deliberately content-first. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
 
 ## Fashion search without invented answers
 
@@ -46,13 +52,13 @@ Stylezam turns a fashion moment into evidence you can inspect. It analyzes the i
 
 | Capture anywhere | Understand the look | Find real products | Try it on |
 | --- | --- | --- | --- |
-| Camera, Photos, clipboard, text, Share sheet, Shortcut, Control Center, and Action Button | Whole-look detection, selectable item regions, structured visual attributes, and optional local segmentation | SerpApi Shopping/Lens and eBay Browse with evidence-aware ranking and direct merchant URLs | User-initiated YouCam AI Clothes v3 previews, clearly presented as visualization—not fit prediction |
+| Camera, Photos, clipboard image, text, Share sheet, Shortcut, Control Center, and Action Button | Whole-look detection, selectable item regions, hosted structured visual attributes, and optional local segmentation | Backend-managed retrieval with evidence-aware ranking and direct merchant URLs | User-initiated YouCam AI Clothes v3 previews, clearly presented as visualization—not fit prediction |
 
 No generated listings. No invented prices. No affiliate redirects disguised as matches.
 
 ## From moment to match
 
-1. **Capture** — start with a photo, screenshot, shared image, or description.
+1. **Capture or search** — start with a photo, screenshot, shared image, or typed product query.
 2. **Choose** — search the full look or select a detected jacket, bag, shoe, or other region.
 3. **Retrieve** — query configured image and text search providers under backend-enforced monthly caps.
 4. **Compare** — review deduplicated offers, evidence tiers, observed prices, and source links.
@@ -68,7 +74,7 @@ flowchart LR
         Input["Photo · text · Share · Shortcut · Control"]
         App["SwiftUI app"]
         Activity["Live Activity + Dynamic Island"]
-        Library["Local saved looks"]
+        Library["Recent · saved · try-ons"]
     end
 
     subgraph Service["Stylezam API"]
@@ -83,7 +89,8 @@ flowchart LR
     subgraph Providers["Optional providers"]
         Serp["SerpApi"]
         Ebay["eBay Browse"]
-        Local["Ollama · DINO · SAM2 · CLIP"]
+        Hosted["OpenAI · Fireworks · Qwen"]
+        Local["DINO · SAM2 · CLIP"]
         YouCam["YouCam Clothes v3"]
     end
 
@@ -91,6 +98,7 @@ flowchart LR
     Jobs --> Activity
     Jobs --> Vision --> Search --> Rank --> Store
     Limits --> Search
+    Vision --> Hosted
     Vision --> Local
     Search --> Serp
     Search --> Ebay
@@ -108,7 +116,7 @@ Stylezam is useful with a small stack and expands without changing the app:
 | --- | --- | --- |
 | Shopping + visual retrieval | SerpApi | Google Shopping and Lens results through a fixed monthly plan |
 | Secondary text/image retrieval | eBay Browse | Real marketplace listings and Base64 image search |
-| Local image understanding | Ollama with `gemma3:4b` | Factual structured attributes without per-call billing |
+| Hosted image understanding | OpenAI, Fireworks, or Qwen | Factual structured attributes with per-provider monthly hard stops |
 | Local detection and reranking | Grounding DINO, SAM2, CLIP | Optional object regions, masks, and visual similarity |
 | Virtual try-on | YouCam AI Clothes v3 | On-demand clothing visualization from a person photo |
 

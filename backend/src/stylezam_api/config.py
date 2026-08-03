@@ -36,9 +36,20 @@ class Settings(BaseSettings):
     ebay_marketplace_id: str = "EBAY_US"
     ebay_monthly_cap: int = 5000
 
-    ollama_enabled: bool = False
-    ollama_base_url: str = "http://127.0.0.1:11434"
-    ollama_vision_model: str = "gemma3:4b"
+    openai_api_key: Optional[SecretStr] = None
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_vision_model: str = "gpt-5.6-luna"
+    openai_monthly_cap: int = 100
+
+    fireworks_api_key: Optional[SecretStr] = None
+    fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
+    fireworks_vision_model: str = "accounts/fireworks/models/kimi-k2p5"
+    fireworks_monthly_cap: int = 100
+
+    qwen_api_key: Optional[SecretStr] = None
+    qwen_base_url: str = "https://dashscope-us.aliyuncs.com/compatible-mode/v1"
+    qwen_vision_model: str = "qwen3.7-plus"
+    qwen_monthly_cap: int = 100
 
     local_vision_enabled: bool = False
     grounding_dino_model: str = "IDEA-Research/grounding-dino-tiny"
@@ -52,6 +63,9 @@ class Settings(BaseSettings):
     @field_validator(
         "serpapi_monthly_cap",
         "ebay_monthly_cap",
+        "openai_monthly_cap",
+        "fireworks_monthly_cap",
+        "qwen_monthly_cap",
         "youcam_monthly_cap",
     )
     @classmethod

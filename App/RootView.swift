@@ -11,7 +11,7 @@ struct RootView: View {
                 HomeView()
             }
             .tag(AppTab.home)
-            .tabItem { Label("Discover", systemImage: "house") }
+            .tabItem { Label("Home", systemImage: "house") }
 
             NavigationStack {
                 SearchView()
@@ -22,20 +22,20 @@ struct RootView: View {
             NavigationStack {
                 LibraryView()
             }
-            .tag(AppTab.looks)
-            .tabItem { Label("Saved", systemImage: "bookmark") }
+            .tag(AppTab.library)
+            .tabItem { Label("Library", systemImage: "square.stack") }
 
             NavigationStack {
                 SettingsView()
             }
-            .tag(AppTab.you)
+            .tag(AppTab.settings)
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tint(StylezamDesign.cobalt)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sensoryFeedback(.selection, trigger: model.selectedTab)
         .sheet(isPresented: $model.isCapturePresented) {
-            CaptureSheet()
+            CaptureSheet(initialMode: model.captureLaunchMode)
                 .environment(model)
         }
         .onOpenURL { model.handleURL($0) }

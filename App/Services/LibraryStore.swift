@@ -9,6 +9,7 @@ final class LibraryStore {
 
     private let rootURL: URL
     private let capturesURL: URL
+    private let tryOnsURL: URL
     private let snapshotURL: URL
 
     init() {
@@ -19,10 +20,15 @@ final class LibraryStore {
         rootURL = (StylezamShared.containerURL ?? fallback)
             .appending(path: "Stylezam", directoryHint: .isDirectory)
         capturesURL = rootURL.appending(path: "Captures", directoryHint: .isDirectory)
+        tryOnsURL = rootURL.appending(path: "TryOns", directoryHint: .isDirectory)
         snapshotURL = rootURL.appending(path: "library.json")
         do {
             try FileManager.default.createDirectory(
                 at: capturesURL,
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.createDirectory(
+                at: tryOnsURL,
                 withIntermediateDirectories: true
             )
             try load()
@@ -33,6 +39,7 @@ final class LibraryStore {
 
     var captures: [SavedCapture] { snapshot.captures }
     var products: [SavedProduct] { snapshot.products }
+    var tryOns: [SavedTryOn] { snapshot.tryOns }
 
     @discardableResult
     func addCapture(input: SearchInput, searchID: String) throws -> SavedCapture {
@@ -62,6 +69,46 @@ final class LibraryStore {
     func imageURL(for capture: SavedCapture) -> URL? {
         guard let filename = capture.imageFilename else { return nil }
         return capturesURL.appending(path: filename)
+    }
+
+    func imageURL(for tryOn: SavedTryOn) -> URL {
+        tryOnsURL.appending(path: tryOn.imageFilename)
+    }
+
+    @discardableResult
+    func addTryOn(
+        jobID: String,
+        product: ProductResultDTO,
+        imageData: Data
+    ) throws -> SavedTryOn {
+        if let existing = snapshot.tryOns.first(where: { $0.id == jobID }) {
+            return existing
+        }
+        let filename = "\(jobID).jpg"
+        try imageData.write(
+            to: tryOnsURL.appending(path: filename),
+            options: .atomic
+        )
+        let tryOn = SavedTryOn(
+            id: jobID,
+            createdAt: .now,
+            imageFilename: filename,
+            product: product
+        )
+        snapshot.tryOns.insert(tryOn, at: 0)
+        snapshot.tryOns = Array(snapshot.tryOns.prefix(60))
+        try persist()
+        return tryOn
+    }
+
+    func deleteTryOn(_ tryOn: SavedTryOn) {
+        snapshot.tryOns.removeAll { $0.id == tryOn.id }
+        try? FileManager.default.removeItem(at: imageURL(for: tryOn))
+        do {
+            try persist()
+        } catch {
+            loadError = error.localizedDescription
+        }
     }
 
     func isSaved(_ product: ProductResultDTO) -> Bool {
@@ -127,6 +174,9 @@ final class LibraryStore {
                 try? FileManager.default.removeItem(at: imageURL)
             }
         }
+        for tryOn in snapshot.tryOns {
+            try? FileManager.default.removeItem(at: imageURL(for: tryOn))
+        }
         snapshot = LibrarySnapshot()
         try persist()
     }
@@ -152,7 +202,9 @@ final class LibraryStore {
 
     private func load() throws {
         guard FileManager.default.fileExists(atPath: snapshotURL.path) else { return }
-        snapshot = try JSONDecoder().decode(
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        snapshot = try decoder.decode(
             LibrarySnapshot.self,
             from: Data(contentsOf: snapshotURL)
         )

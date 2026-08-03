@@ -6,8 +6,12 @@ from .config import Settings
 from .database import Database
 from .providers.ebay import EbayProvider
 from .providers.local_vision import CLIPReranker, LocalGarmentVision
-from .providers.ollama import OllamaVisionAnalyzer
 from .providers.serpapi import SerpAPIProvider
+from .providers.vision import (
+    OpenAIResponsesVisionAnalyzer,
+    fireworks_analyzer,
+    qwen_analyzer,
+)
 from .providers.youcam import YouCamClothesProvider
 from .schemas import CapabilitiesResponse, ProviderCapability
 from .services.job_runner import JobRunner
@@ -29,7 +33,14 @@ class Container:
         )
         self.serpapi = SerpAPIProvider(settings, self.http)
         self.ebay = EbayProvider(settings, self.http)
-        self.ollama = OllamaVisionAnalyzer(settings, self.http)
+        self.openai_vision = OpenAIResponsesVisionAnalyzer(settings, self.http)
+        self.fireworks_vision = fireworks_analyzer(settings, self.http)
+        self.qwen_vision = qwen_analyzer(settings, self.http)
+        self.vision_analyzers = [
+            self.openai_vision,
+            self.fireworks_vision,
+            self.qwen_vision,
+        ]
         self.local_vision = LocalGarmentVision(settings, self.storage)
         self.clip = CLIPReranker(settings, self.http)
         self.youcam = YouCamClothesProvider(settings, self.http)
@@ -39,7 +50,7 @@ class Container:
             storage=self.storage,
             serpapi=self.serpapi,
             ebay=self.ebay,
-            ollama=self.ollama,
+            vision_analyzers=self.vision_analyzers,
             local_vision=self.local_vision,
             clip=self.clip,
         )
@@ -69,10 +80,13 @@ class Container:
         serpapi_usage = self.database.provider_usage("serpapi")
         ebay_usage = self.database.provider_usage("ebay")
         youcam_usage = self.database.provider_usage("youcam")
+        openai_usage = self.database.provider_usage("openai-vision")
+        fireworks_usage = self.database.provider_usage("fireworks-vision")
+        qwen_usage = self.database.provider_usage("qwen-vision")
         return CapabilitiesResponse(
             text_search=self.serpapi.configured or self.ebay.configured,
             image_search=image_search,
-            image_understanding=self.ollama.configured,
+            image_understanding=any(provider.configured for provider in self.vision_analyzers),
             garment_segmentation=self.local_vision.configured,
             visual_reranking=self.clip.configured,
             virtual_try_on=self.youcam.configured,
@@ -106,12 +120,31 @@ class Container:
                     detail="Keyword and Base64 image search; image support varies by marketplace.",
                 ),
                 ProviderCapability(
-                    id="ollama",
-                    name="Ollama Vision",
+                    id="openai-vision",
+                    name="OpenAI",
                     capability="image_understanding",
-                    configured=self.ollama.configured,
-                    monthly_limit_note="Local inference; no per-call bill.",
-                    detail="Extracts factual garment attributes and visible text.",
+                    configured=self.openai_vision.configured,
+                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
+                    % (openai_usage, self.settings.openai_monthly_cap),
+                    detail="Responses API image understanding with structured attributes.",
+                ),
+                ProviderCapability(
+                    id="fireworks-vision",
+                    name="Fireworks AI",
+                    capability="image_understanding",
+                    configured=self.fireworks_vision.configured,
+                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
+                    % (fireworks_usage, self.settings.fireworks_monthly_cap),
+                    detail="OpenAI-compatible multimodal inference with structured output.",
+                ),
+                ProviderCapability(
+                    id="qwen-vision",
+                    name="Qwen",
+                    capability="image_understanding",
+                    configured=self.qwen_vision.configured,
+                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
+                    % (qwen_usage, self.settings.qwen_monthly_cap),
+                    detail="OpenAI-compatible Qwen vision inference through Model Studio.",
                 ),
                 ProviderCapability(
                     id="grounded-sam2",

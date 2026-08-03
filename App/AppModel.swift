@@ -10,6 +10,7 @@ final class AppModel {
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
+    var captureLaunchMode: CaptureLaunchMode = .chooser
     var activeSearch: SearchJobDTO?
     var activeSearchImageData: Data?
     var activeSearchOrigin: CaptureOrigin = .text
@@ -54,6 +55,11 @@ final class AppModel {
             capabilities = nil
             serverMessage = error.localizedDescription
         }
+    }
+
+    func presentCapture(_ mode: CaptureLaunchMode = .chooser) {
+        captureLaunchMode = mode
+        isCapturePresented = true
     }
 
     @discardableResult
@@ -231,12 +237,12 @@ final class AppModel {
         guard url.scheme == "stylezam" else { return }
         switch url.host {
         case "capture":
-            isCapturePresented = true
+            presentCapture()
         case "import":
             if let pending = library.consumePendingShare() {
                 Task { await startSearch(pending) }
             } else {
-                isCapturePresented = true
+                presentCapture()
             }
         case "search":
             let identifier = url.pathComponents.dropFirst().first
@@ -263,7 +269,7 @@ final class AppModel {
                     )
                 }
             } else {
-                isCapturePresented = true
+                presentCapture()
             }
         }
         if let pending = library.consumePendingShare() {
@@ -282,10 +288,21 @@ final class AppModel {
     private func pollSearch(id: String) async {
         do {
             let client = try settings.client()
+            var pollDelay = 1.2
             while !Task.isCancelled {
                 let job = try await client.search(id: id)
-                activeSearch = job
-                await activityManager.update(with: job)
+                let changed = activeSearch?.status != job.status
+                    || activeSearch?.phase != job.phase
+                    || activeSearch?.progress != job.progress
+                    || activeSearch?.resultCount != job.resultCount
+                    || activeSearch?.errorMessage != job.errorMessage
+                if changed {
+                    activeSearch = job
+                    await activityManager.update(with: job)
+                    pollDelay = 1.2
+                } else {
+                    pollDelay = min(pollDelay * 1.4, 3.2)
+                }
                 if job.status == .completed {
                     let page = try await client.results(searchID: id)
                     searchResults = page.results
@@ -304,7 +321,7 @@ final class AppModel {
                     lastError = job.errorMessage ?? "The search could not finish."
                     return
                 }
-                try await Task.sleep(for: .seconds(1.4))
+                try await Task.sleep(for: .seconds(pollDelay))
             }
         } catch is CancellationError {
             return

@@ -5,10 +5,10 @@ Stylezam is designed around explicit capture actions and minimum provider disclo
 ## What stays on the iPhone
 
 - Bookmarked product records.
-- Capture history and normalized capture copies.
+- Search history and normalized capture copies.
+- Completed try-on previews in the local Library.
 - Backend URL and notification preference.
 - Up to 15 seconds of throttled iOS 27 live-screen frames, held in memory only and cleared when capture stops.
-- A completed appearance-preview file in the temporary directory until the system clears it or the user replaces it; the user can explicitly export it to Photos or another app.
 
 The local library uses the App Group container so the app can import Share-extension attachments. A pending shared file is deleted immediately after the main app consumes it.
 
@@ -25,7 +25,7 @@ Uploads are bounded at 10 MB, decoded as images, EXIF-transposed, converted to R
 
 - SerpApi Shopping receives the retrieval text. Lens receives a temporary/public Stylezam image URL and an optional text refinement.
 - eBay Browse receives the retrieval text and/or a Base64 copy of the search image.
-- Ollama receives the image locally at the configured Ollama host; keep that URL on a trusted network.
+- The first configured OpenAI, Fireworks, or Qwen image-understanding route receives a Base64 data URL of the selected image plus an optional text refinement. These routes are backend-only and protected by separate Stylezam monthly caps.
 - Grounding DINO, SAM2, and CLIP run in the backend process and make no inference API request, although model weights are downloaded from their configured repositories.
 - YouCam receives the person image plus a merchant product-image URL for an explicit virtual try-on job. Its current API terms say user submissions are retained for one day and AI-generated content for 30 days before automatic deletion. The published Clothes v3 operations do not include an early-delete endpoint.
 
@@ -36,9 +36,9 @@ Do not enable a provider until its terms, data-processing behavior, and user dis
 The development backend retains original search uploads so jobs survive restarts. Temporary selected/segmentation crops are deleted after each pipeline run. For try-on, the backend person photo is deleted after a successful or failed processing run; the copied result remains only until the iPhone downloads it and sends the delete request.
 
 - Deleting a capture locally also attempts `DELETE /v1/searches/{id}`.
-- Clear captures and bookmarks deletes the local library and requests deletion for its known backend searches.
+- Clear Library deletes local searches, saved products, and try-on previews, then requests deletion for its known backend searches.
 - `DELETE /v1/try-ons/{id}` removes the backend person image and locally copied result.
-- The iPhone automatically calls the try-on delete endpoint after it has atomically saved the completed preview as a local temporary file.
+- The iPhone automatically calls the try-on delete endpoint after it has atomically copied the completed preview into its local Library.
 
 Client-requested deletion is best-effort when the phone is offline. Provider-side YouCam deletion follows its published automatic retention because Clothes v3 currently exposes only file upload, task create, and task status operations. A production account system should still add authenticated server-side “delete all my data” and retention jobs before public launch.
 

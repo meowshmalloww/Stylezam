@@ -2,9 +2,6 @@ import SwiftUI
 import UIKit
 
 struct LookStackCanvas: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var dashPhase: CGFloat = 0
-
     let imageData: Data?
     let remoteURL: URL?
     let items: [DetectedItemDTO]
@@ -39,12 +36,6 @@ struct LookStackCanvas: View {
         .clipShape(RoundedRectangle(cornerRadius: 30))
         .accessibilityElement(children: .contain)
         .accessibilityLabel(items.isEmpty ? "Captured look" : "Captured look with \(items.count) detected items")
-        .onAppear {
-            guard !reduceMotion, !items.isEmpty else { return }
-            withAnimation(.linear(duration: 1.3).repeatForever(autoreverses: false)) {
-                dashPhase = 26
-            }
-        }
         .sensoryFeedback(.selection, trigger: selectedRegion)
     }
 
@@ -68,11 +59,7 @@ struct LookStackCanvas: View {
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(
                         isSelected ? StylezamDesign.cobalt : .white,
-                        style: StrokeStyle(
-                            lineWidth: isSelected ? 4 : 2,
-                            dash: [8, 5],
-                            dashPhase: reduceMotion ? 0 : dashPhase
-                        )
+                        style: StrokeStyle(lineWidth: isSelected ? 4 : 2, dash: [8, 5])
                     )
                     .shadow(color: .black.opacity(0.38), radius: 2, y: 1)
                 HStack(spacing: 6) {

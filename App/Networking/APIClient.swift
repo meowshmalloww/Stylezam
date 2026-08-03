@@ -85,7 +85,7 @@ struct APIClient: Sendable {
         return try await send(
             path: "v1/searches",
             method: "POST",
-            body: multipart.encodedBody,
+            body: multipart.finalizedBody(),
             contentType: multipart.contentType
         )
     }
@@ -119,7 +119,7 @@ struct APIClient: Sendable {
         return try await send(
             path: "v1/try-ons",
             method: "POST",
-            body: multipart.encodedBody,
+            body: multipart.finalizedBody(),
             contentType: multipart.contentType
         )
     }
@@ -136,6 +136,7 @@ struct APIClient: Sendable {
         let url = baseURL.appending(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = method
+        request.timeoutInterval = 30
         authorize(&request)
         let data: Data
         let response: URLResponse
@@ -173,6 +174,7 @@ struct APIClient: Sendable {
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.httpBody = body
+        request.timeoutInterval = method == "POST" ? 90 : 30
         authorize(&request)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let contentType {
@@ -214,11 +216,10 @@ struct APIClient: Sendable {
         decoder.dateDecodingStrategy = .custom { decoder in
             let container = try decoder.singleValueContainer()
             let value = try container.decode(String.self)
-            let fractional = ISO8601DateFormatter()
-            fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            let standard = ISO8601DateFormatter()
-            standard.formatOptions = [.withInternetDateTime]
-            if let date = fractional.date(from: value) ?? standard.date(from: value) {
+            if let date = try? Self.fractionalDateStyle.parse(value) {
+                return date
+            }
+            if let date = try? Self.standardDateStyle.parse(value) {
                 return date
             }
             throw DecodingError.dataCorruptedError(
@@ -228,6 +229,11 @@ struct APIClient: Sendable {
         }
         return decoder
     }
+
+    private static let fractionalDateStyle = Date.ISO8601FormatStyle(
+        includingFractionalSeconds: true
+    )
+    private static let standardDateStyle = Date.ISO8601FormatStyle()
 
     private func authorize(_ request: inout URLRequest) {
         guard let bearerToken, !bearerToken.isEmpty else { return }
@@ -243,10 +249,9 @@ private struct MultipartFormData {
         "multipart/form-data; boundary=\(boundary)"
     }
 
-    var encodedBody: Data {
-        var encoded = body
-        encoded.append(contentsOf: "--\(boundary)--\r\n".utf8)
-        return encoded
+    mutating func finalizedBody() -> Data {
+        append("--\(boundary)--\r\n")
+        return body
     }
 
     mutating func addField(name: String, value: String) {

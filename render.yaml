@@ -24,9 +24,19 @@ services:
         sync: false
       - key: STYLEZAM_EBAY_CLIENT_SECRET
         sync: false
+      - key: STYLEZAM_OPENAI_API_KEY
+        sync: false
+      - key: STYLEZAM_OPENAI_MONTHLY_CAP
+        value: "100"
+      - key: STYLEZAM_FIREWORKS_API_KEY
+        sync: false
+      - key: STYLEZAM_FIREWORKS_MONTHLY_CAP
+        value: "100"
+      - key: STYLEZAM_QWEN_API_KEY
+        sync: false
+      - key: STYLEZAM_QWEN_MONTHLY_CAP
+        value: "100"
       - key: STYLEZAM_YOUCAM_API_KEY
         sync: false
-      - key: STYLEZAM_OLLAMA_ENABLED
-        value: "false"
       - key: STYLEZAM_LOCAL_VISION_ENABLED
         value: "false"

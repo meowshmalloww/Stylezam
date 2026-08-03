@@ -6,7 +6,8 @@ struct CaptureSheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
-    @State private var query = ""
+    let initialMode: CaptureLaunchMode
+
     @State private var imageData: Data?
     @State private var origin: CaptureOrigin = .photoLibrary
     @State private var photoItem: PhotosPickerItem?
@@ -15,31 +16,20 @@ struct CaptureSheet: View {
     @State private var importMessage: String?
     @State private var isSubmitting = false
     @State private var feedbackEvent = 0
-
-    private var canSearch: Bool {
-        !isSubmitting && (
-            imageData != nil
-                || !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        )
-    }
+    @State private var didApplyInitialMode = false
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     PageTitle(
-                        title: "Search anything you see.",
-                        subtitle: "Choose a photo, take one now, or describe the item. Add both when you want a more specific result."
+                        title: "Add a photo",
+                        subtitle: "Use the whole outfit or a close crop. You can choose a detected item after the first pass."
                     )
                     .padding(.top, 10)
-                    .motionReveal()
 
                     captureCanvas
-                        .motionReveal(delay: 0.05, distance: 22)
                     sourceButtons
-                        .motionReveal(delay: 0.1)
-                    queryField
-                        .motionReveal(delay: 0.15)
 
                     if let message = importMessage ?? model.lastError {
                         Label(message, systemImage: "info.circle")
@@ -48,50 +38,43 @@ struct CaptureSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Button {
-                        submit()
-                    } label: {
-                        HStack(spacing: 10) {
-                            if isSubmitting {
-                                ProgressView()
-                                    .tint(.white)
-                            } else {
-                                Image(systemName: imageData == nil ? "text.magnifyingglass" : "sparkle.magnifyingglass")
-                            }
-                            Text(isSubmitting ? "Starting search…" : primaryTitle)
-                                .fontWeight(.semibold)
-                            Spacer()
-                            if !isSubmitting {
-                                Image(systemName: "arrow.right")
-                            }
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .padding(.horizontal, 18)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(StylezamDesign.cobalt)
-                    .disabled(!canSearch)
-                    .padding(.bottom, 28)
-                    .animation(StylezamMotion.quickSpring, value: canSearch)
-                    .motionReveal(delay: 0.2)
                 }
                 .padding(.horizontal, StylezamDesign.pageInset)
+                .padding(.bottom, 104)
             }
             .background(StylezamDesign.canvas)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    HStack(spacing: 9) {
-                        BrandMarkView(size: 34)
-                        Text("New search")
-                            .font(.headline)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Button {
+                    submit()
+                } label: {
+                    HStack(spacing: 10) {
+                        if isSubmitting {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "magnifyingglass")
+                        }
+                        Text(isSubmitting ? "Starting…" : "Find products")
+                            .fontWeight(.semibold)
+                        Spacer()
+                        if !isSubmitting {
+                            Image(systemName: "arrow.right")
+                        }
                     }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 56)
+                    .padding(.horizontal, 18)
                 }
+                .buttonStyle(.glassProminent)
+                .tint(StylezamDesign.cobalt)
+                .disabled(imageData == nil || isSubmitting)
+                .padding(.horizontal, StylezamDesign.pageInset)
+                .padding(.vertical, 8)
+            }
+            .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: {
                         Image(systemName: "xmark")
                     }
-                    .buttonStyle(.glass)
                     .accessibilityLabel("Close")
                 }
             }
@@ -115,7 +98,7 @@ struct CaptureSheet: View {
             guard let newValue else { return }
             Task {
                 if let loaded = try? await newValue.loadTransferable(type: Data.self),
-                   let normalized = ImageEncoding.normalizedJPEG(from: loaded)
+                   let normalized = await ImageEncoding.normalizedJPEGAsync(from: loaded)
                 {
                     imageData = normalized
                     origin = .photoLibrary
@@ -126,14 +109,22 @@ struct CaptureSheet: View {
                 }
             }
         }
+        .task {
+            guard !didApplyInitialMode else { return }
+            didApplyInitialMode = true
+            await Task.yield()
+            switch initialMode {
+            case .chooser:
+                break
+            case .camera:
+                openCamera()
+            case .photos:
+                isPhotoPickerPresented = true
+            }
+        }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .sensoryFeedback(.success, trigger: feedbackEvent)
-    }
-
-    private var primaryTitle: String {
-        if imageData != nil { return "Find this look" }
-        return "Search these words"
     }
 
     private var captureCanvas: some View {
@@ -141,29 +132,41 @@ struct CaptureSheet: View {
             if let imageData {
                 DataImage(data: imageData)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 350)
+                    .frame(height: 390)
                     .clipped()
 
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.5)],
+                    colors: [.clear, .black.opacity(0.48)],
                     startPoint: .center,
                     endPoint: .bottom
                 )
 
-                HStack {
-                    Text(origin.captureLabel)
-                        .font(.caption.weight(.semibold))
-                    Spacer()
-                    Label("Ready", systemImage: "checkmark.circle.fill")
-                        .font(.caption.weight(.semibold))
-                }
-                .foregroundStyle(.white)
-                .padding(17)
-                .frame(maxHeight: .infinity, alignment: .bottom)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                Label(origin.captureLabel, systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                    .padding(17)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                emptyCanvas
-                    .transition(.scale(scale: 0.94).combined(with: .opacity))
+                ZStack {
+                    Color(uiColor: .secondarySystemBackground)
+                    CaptureFrameCorners()
+                        .stroke(.primary.opacity(0.6), lineWidth: 1.5)
+                        .padding(22)
+                    VStack(spacing: 15) {
+                        Image(systemName: "photo")
+                            .font(.system(size: 42, weight: .regular))
+                            .foregroundStyle(.secondary)
+                        Text("Add a fashion photo")
+                            .font(.title3.weight(.semibold))
+                        Text("Camera, Photos, or clipboard")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(24)
+                }
+                .frame(height: 350)
+                .transition(.scale(scale: 0.96).combined(with: .opacity))
             }
 
             if imageData != nil {
@@ -181,52 +184,22 @@ struct CaptureSheet: View {
             }
         }
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 30, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(StylezamDesign.hairline, lineWidth: 0.5)
         }
         .animation(StylezamMotion.softSpring, value: imageData != nil)
     }
 
-    private var emptyCanvas: some View {
-        ZStack {
-            LivingCobaltBackdrop()
-
-            VStack(spacing: 14) {
-                OrbitingBrandMark(size: 136)
-                VStack(spacing: 5) {
-                    Text("Add a fashion photo")
-                        .font(.title3.weight(.semibold))
-                    Text("A full outfit is fine—you can choose a detected item after the first search.")
-                        .font(.subheadline)
-                        .foregroundStyle(.white.opacity(0.72))
-                        .multilineTextAlignment(.center)
-                        .frame(maxWidth: 285)
-                }
-                .foregroundStyle(.white)
-            }
-            .padding(24)
-        }
-        .frame(height: 330)
-    }
-
     private var sourceButtons: some View {
-        GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-                sourceButton(title: "Camera", icon: "camera") {
-                    if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        isCameraPresented = true
-                    } else {
-                        importMessage = "Camera is not available on this device."
-                    }
-                }
-                sourceButton(title: "Photos", icon: "photo.on.rectangle") {
-                    isPhotoPickerPresented = true
-                }
-                sourceButton(title: "Paste", icon: "doc.on.clipboard") {
-                    pasteFromClipboard()
-                }
+        HStack(spacing: 10) {
+            sourceButton(title: "Camera", icon: "camera") { openCamera() }
+            sourceButton(title: "Photos", icon: "photo.on.rectangle") {
+                isPhotoPickerPresented = true
+            }
+            sourceButton(title: "Paste", icon: "doc.on.clipboard") {
+                pasteImage()
             }
         }
     }
@@ -244,69 +217,63 @@ struct CaptureSheet: View {
                     .font(.caption.weight(.semibold))
             }
             .frame(maxWidth: .infinity)
-            .frame(height: 66)
+            .frame(height: 68)
         }
-        .buttonStyle(.glass)
+        .buttonStyle(.bordered)
     }
 
-    private var queryField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(imageData == nil ? "Describe the item" : "Add a detail")
-                    .font(.headline)
-                Spacer()
-                Text(imageData == nil ? "Required" : "Optional")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            TextField(
-                "For example: navy cropped jacket under $200",
-                text: $query,
-                axis: .vertical
-            )
-            .lineLimit(2...4)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 15)
-            .glassEffect(
-                .regular,
-                in: RoundedRectangle(cornerRadius: StylezamDesign.compactRadius, style: .continuous)
-            )
+    private func openCamera() {
+        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+            isCameraPresented = true
+        } else {
+            importMessage = "Camera is not available on this device. Choose a photo instead."
         }
     }
 
     private func submit() {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        let input = SearchInput(
-            query: trimmedQuery.isEmpty ? nil : trimmedQuery,
-            imageData: imageData,
-            origin: imageData == nil ? .text : origin
-        )
-        guard !input.isEmpty else { return }
+        guard let imageData else { return }
         isSubmitting = true
         Task {
-            let id = await model.startSearch(input)
+            let id = await model.startSearch(
+                SearchInput(query: nil, imageData: imageData, origin: origin)
+            )
             if id == nil {
                 isSubmitting = false
             }
         }
     }
 
-    private func pasteFromClipboard() {
-        if let image = UIPasteboard.general.image,
-           let data = ImageEncoding.normalizedJPEG(from: image)
-        {
-            imageData = data
-            origin = .clipboard
-            importMessage = "Image pasted."
-            feedbackEvent += 1
-        } else if let text = UIPasteboard.general.string, !text.isEmpty {
-            query = text
-            origin = .clipboard
-            importMessage = "Text pasted."
-            feedbackEvent += 1
-        } else {
-            importMessage = "The clipboard does not contain an image or text."
+    private func pasteImage() {
+        guard let image = UIPasteboard.general.image,
+              let data = ImageEncoding.normalizedJPEG(from: image)
+        else {
+            importMessage = "The clipboard does not contain an image."
+            return
         }
+        imageData = data
+        origin = .clipboard
+        importMessage = "Image pasted."
+        feedbackEvent += 1
+    }
+}
+
+private struct CaptureFrameCorners: Shape {
+    func path(in rect: CGRect) -> Path {
+        let length = min(rect.width, rect.height) * 0.11
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY + length))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.minX + length, y: rect.minY))
+        path.move(to: CGPoint(x: rect.maxX - length, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY + length))
+        path.move(to: CGPoint(x: rect.maxX, y: rect.maxY - length))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX - length, y: rect.maxY))
+        path.move(to: CGPoint(x: rect.minX + length, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - length))
+        return path
     }
 }
 
@@ -316,7 +283,7 @@ private extension CaptureOrigin {
         case .camera: "Camera photo"
         case .photoLibrary: "Photo library"
         case .text: "Text search"
-        case .clipboard: "Clipboard"
+        case .clipboard: "Clipboard image"
         case .shareExtension: "Shared image"
         case .screenCapture: "Screen capture"
         }

@@ -26,14 +26,13 @@ curl http://127.0.0.1:8000/v1/capabilities
 
 If `STYLEZAM_API_TOKEN` is set, include `Authorization: Bearer <token>` for every `/v1` endpoint except `/v1/health`. Enter the same token in Stylezam Settings; the app stores it in the iPhone Keychain.
 
-Optional local vision:
+Optional GPU-backed segmentation and reranking:
 
 ```bash
 .venv/bin/pip install -e 'backend[vision]'
-ollama pull gemma3:4b
 ```
 
-Then set `STYLEZAM_OLLAMA_ENABLED=true` and/or `STYLEZAM_LOCAL_VISION_ENABLED=true`. The model weights are downloaded by their respective runtimes and can require several gigabytes.
+Then set `STYLEZAM_LOCAL_VISION_ENABLED=true`. Grounding DINO, SAM2, and CLIP weights are downloaded by their runtimes and can require several gigabytes. Hosted image understanding uses any configured `STYLEZAM_OPENAI_API_KEY`, `STYLEZAM_FIREWORKS_API_KEY`, or `STYLEZAM_QWEN_API_KEY`; the iPhone never receives these keys.
 
 ## 2. Generate the Xcode project
 
@@ -69,9 +68,10 @@ The repository includes `backend/Dockerfile` and a Render Blueprint at `render.y
 - `STYLEZAM_API_TOKEN` — a long random value shared only with your iPhone app.
 - `STYLEZAM_PUBLIC_BASE_URL` — the final `https://...` origin, with no trailing slash.
 - At least one product retrieval credential: SerpApi, eBay, or both.
+- At least one optional hosted vision credential—OpenAI, Fireworks, or Qwen—if structured clothing attributes should enrich image search.
 - `STYLEZAM_YOUCAM_API_KEY` if virtual try-on should be enabled.
 
-The standard container intentionally leaves Ollama and Grounding DINO/SAM2/CLIP disabled. Those local models require a separate GPU-capable deployment and several large model downloads; enabling their flags on the standard CPU container is not production-safe. Image search still works through eBay image search and/or SerpApi Lens, and the API always accepts, normalizes, stores, and deletes photo uploads independently of local ML.
+The standard container intentionally leaves Grounding DINO/SAM2/CLIP disabled. Those local models require a separate GPU-capable deployment and several large model downloads; enabling their flag on the standard CPU container is not production-safe. Hosted OpenAI, Fireworks, and Qwen understanding works over HTTPS. Image search still works through eBay image search and/or SerpApi Lens, and the API always accepts, normalizes, stores, and deletes photo uploads independently of optional ML.
 
 ## 4. Backend address
 
@@ -83,7 +83,7 @@ For device development, use one of:
 - An HTTPS tunnel to the Mac development server.
 - The Mac’s LAN IP if the phone and Mac are on the same trusted network.
 
-Open Stylezam → Setup and replace the service URL, then tap Test. Production should use HTTPS; do not add broad App Transport Security exceptions.
+Open Stylezam → Settings → Developer Debug and replace the service URL, then tap Test. Production should use HTTPS; do not add broad App Transport Security exceptions.
 
 ## 5. Screenshot Shortcut, Control Center, Action Button, and Share
 
@@ -107,7 +107,7 @@ The current Xcode 26 build compiles a truthful unavailable state. To enable live
 1. Open with Xcode 27 and compile against the iOS 27 SDK.
 2. Use a physical iPhone on iOS 27; Simulator is not sufficient for final capture validation.
 3. Keep the `screen-capture` background mode and `NSScreenCaptureUsageDescription` privacy string. Apple’s current sample does not document a manually entered screen-recording entitlement key.
-4. Open Stylezam → Setup → Choose a screen, then select content in Apple’s picker.
+4. Open Stylezam → Settings → Capture & Controls → Choose a screen, then select content in Apple’s picker.
 5. From another app, invoke the Stylezam Control Center/Action Button control to search a recent authorized frame.
 
 See [iOS 27 screen capture](IOS27_SCREEN_CAPTURE.md) for behavior and limitations.

@@ -2,26 +2,28 @@ import SwiftUI
 
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
+    @State private var section: LibrarySection = .recent
+    @State private var selectedTryOn: SavedTryOn?
     @Namespace private var productTransition
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 34) {
-                PageTitle(
-                    title: "Saved",
-                    subtitle: "Products you bookmarked and the real searches you created on this device."
-                )
-                .padding(.top, 18)
-                .motionReveal()
+            LazyVStack(alignment: .leading, spacing: 22) {
+                sectionPicker
+                    .padding(.top, 8)
 
                 if let loadError = model.library.loadError {
                     InlineErrorView(message: loadError)
                 }
 
-                savedProducts
-                    .motionReveal(delay: 0.06)
-                captureHistory
-                    .motionReveal(delay: 0.12)
+                switch section {
+                case .recent:
+                    recentSearches
+                case .saved:
+                    savedProducts
+                case .tryOns:
+                    tryOnHistory
+                }
             }
             .padding(.horizontal, StylezamDesign.pageInset)
             .padding(.bottom, 110)
@@ -31,21 +33,91 @@ struct LibraryView: View {
             ProductDetailView(product: product)
                 .navigationTransition(.zoom(sourceID: product.id, in: productTransition))
         }
-        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $selectedTryOn) { tryOn in
+            TryOnArchiveDetail(tryOn: tryOn)
+                .environment(model)
+        }
+        .navigationTitle("Library")
+        .navigationBarTitleDisplayMode(.large)
+        .animation(StylezamMotion.quickSpring, value: section)
+    }
+
+    private var sectionPicker: some View {
+        Picker("Library section", selection: $section) {
+            ForEach(LibrarySection.allCases) { item in
+                Text(item.title).tag(item)
+            }
+        }
+        .pickerStyle(.segmented)
+        .sensoryFeedback(.selection, trigger: section)
+    }
+
+    private var recentSearches: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            EditorialSectionHeader(
+                title: "Recent",
+                detail: model.library.captures.isEmpty
+                    ? "Empty"
+                    : model.library.captures.count == 1
+                        ? "1 search"
+                        : "\(model.library.captures.count) searches"
+            )
+
+            if model.library.captures.isEmpty {
+                emptyState(
+                    icon: "clock.arrow.circlepath",
+                    title: "No searches yet",
+                    message: "Photo, text, shared, and live-screen searches will appear here."
+                )
+            } else {
+                LazyVStack(spacing: 0) {
+                    ForEach(model.library.captures) { capture in
+                        Button {
+                            model.resumeSearch(
+                                id: capture.searchID,
+                                imageData: model.library.imageURL(for: capture).flatMap {
+                                    try? Data(contentsOf: $0, options: .mappedIfSafe)
+                                }
+                            )
+                        } label: {
+                            RecentSearchRow(
+                                capture: capture,
+                                imageURL: model.library.imageURL(for: capture)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .overlay(alignment: .bottom) {
+                            EditorialRule()
+                                .padding(.leading, 77)
+                        }
+                        .contextMenu {
+                            Button("Delete search", role: .destructive) {
+                                model.deleteCapture(capture)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .transition(.move(edge: .leading).combined(with: .opacity))
     }
 
     private var savedProducts: some View {
         VStack(alignment: .leading, spacing: 16) {
             EditorialSectionHeader(
-                title: "Saved products",
-                detail: model.library.products.isEmpty ? "Empty" : "\(model.library.products.count) saved"
+                title: "Saved",
+                detail: model.library.products.isEmpty
+                    ? "Empty"
+                    : model.library.products.count == 1
+                        ? "1 product"
+                        : "\(model.library.products.count) products"
             )
 
             if model.library.products.isEmpty {
-                archiveEmptyState(
-                    number: "01",
-                    title: "No products saved",
-                    message: "Bookmark a source-backed match and it will remain here on this device."
+                emptyState(
+                    icon: "bookmark",
+                    title: "Nothing saved",
+                    message: "Bookmark a product match and it will stay here for later."
                 )
             } else {
                 LazyVGrid(
@@ -56,16 +128,14 @@ struct LibraryView: View {
                     alignment: .leading,
                     spacing: 26
                 ) {
-                    ForEach(Array(model.library.products.enumerated()), id: \.element.id) { index, saved in
+                    ForEach(model.library.products) { saved in
                         NavigationLink(value: saved.product) {
                             SavedProductCard(saved: saved)
                         }
                         .buttonStyle(.plain)
                         .matchedTransitionSource(id: saved.product.id, in: productTransition)
-                        .motionReveal(delay: min(Double(index) * 0.045, 0.24))
-                        .motionScrollDepth()
                         .contextMenu {
-                            Button("Remove bookmark", role: .destructive) {
+                            Button("Remove from saved", role: .destructive) {
                                 model.library.toggleSaved(saved.product)
                             }
                         }
@@ -73,68 +143,90 @@ struct LibraryView: View {
                 }
             }
         }
+        .transition(.opacity)
     }
 
-    private var captureHistory: some View {
+    private var tryOnHistory: some View {
         VStack(alignment: .leading, spacing: 16) {
             EditorialSectionHeader(
-                title: "Search history",
-                detail: model.library.captures.isEmpty ? "Empty" : "\(model.library.captures.count) captures"
+                title: "Try-ons",
+                detail: model.library.tryOns.isEmpty
+                    ? "Empty"
+                    : model.library.tryOns.count == 1
+                        ? "1 preview"
+                        : "\(model.library.tryOns.count) previews"
             )
 
-            if model.library.captures.isEmpty {
-                archiveEmptyState(
-                    number: "02",
-                    title: "No searches yet",
-                    message: "Camera, Photos, Screenshot Shortcut, words, and Share sheet searches appear here."
+            if model.library.tryOns.isEmpty {
+                emptyState(
+                    icon: "tshirt",
+                    title: "No try-ons yet",
+                    message: "Completed appearance previews are downloaded and kept here automatically."
                 )
             } else {
-                ScrollView(.horizontal) {
-                    LazyHStack(alignment: .top, spacing: 12) {
-                        ForEach(model.library.captures) { capture in
-                            Button {
-                                model.resumeSearch(
-                                    id: capture.searchID,
-                                    imageData: model.library.imageURL(for: capture).flatMap {
-                                        try? Data(contentsOf: $0)
-                                    }
-                                )
-                            } label: {
-                                CaptureHistoryCard(
-                                    capture: capture,
-                                    imageURL: model.library.imageURL(for: capture)
-                                )
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 12),
+                        GridItem(.flexible(), spacing: 12),
+                    ],
+                    alignment: .leading,
+                    spacing: 22
+                ) {
+                    ForEach(model.library.tryOns) { tryOn in
+                        Button {
+                            selectedTryOn = tryOn
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                LocalFileImage(url: model.library.imageURL(for: tryOn))
+                                    .frame(maxWidth: .infinity)
+                                    .aspectRatio(0.78, contentMode: .fit)
+                                    .clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                Text(tryOn.product.title)
+                                    .font(.subheadline.weight(.semibold))
+                                    .lineLimit(2)
+                                    .foregroundStyle(.primary)
+                                Text(tryOn.createdAt.formatted(date: .abbreviated, time: .omitted))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
                             }
-                            .buttonStyle(.plain)
-                            .motionScrollDepth()
-                            .contextMenu {
-                                Button("Delete search", role: .destructive) {
-                                    model.deleteCapture(capture)
-                                }
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Delete try-on", role: .destructive) {
+                                model.library.deleteTryOn(tryOn)
                             }
                         }
                     }
-                    .padding(.vertical, 2)
                 }
-                .scrollIndicators(.hidden)
             }
         }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
     }
 
-    private func archiveEmptyState(number: String, title: String, message: String) -> some View {
-        SurfaceCard {
-            HStack(spacing: 15) {
-                OrbitingBrandMark(size: 72)
-                VStack(alignment: .leading, spacing: 5) {
-                    EditorialKicker(text: "Collection \(number)", color: StylezamDesign.cobalt)
-                    Text(title)
-                        .font(.headline)
-                    Text(message)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-            }
+    private func emptyState(icon: String, title: String, message: String) -> some View {
+        ContentUnavailableView(
+            title,
+            systemImage: icon,
+            description: Text(message)
+        )
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+}
+
+private enum LibrarySection: String, CaseIterable, Identifiable {
+    case recent
+    case saved
+    case tryOns
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recent: "Recent"
+        case .saved: "Saved"
+        case .tryOns: "Try-ons"
         }
     }
 }
@@ -149,71 +241,117 @@ private struct SavedProductCard: View {
                 .aspectRatio(0.78, contentMode: .fit)
                 .padding(8)
                 .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            if let brand = saved.product.brand {
-                EditorialKicker(text: brand)
-            }
+            Text((saved.product.brand ?? saved.product.merchant).uppercased())
+                .font(.caption2.weight(.bold))
+                .tracking(1)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
             Text(saved.product.title)
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(2)
                 .foregroundStyle(.primary)
-            HStack {
-                Text(saved.product.price?.formatted ?? "Price unavailable")
-                Spacer()
-                Text(saved.product.matchTier.label.uppercased())
-            }
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.secondary)
-        }
-    }
-}
-
-private struct CaptureHistoryCard: View {
-    let capture: SavedCapture
-    let imageURL: URL?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Group {
-                if let imageURL {
-                    LocalFileImage(url: imageURL)
-                } else {
-                    ZStack {
-                        Color.black
-                        Text("Aa")
-                            .font(.system(size: 52, weight: .black))
-                            .fontWidth(.condensed)
-                            .foregroundStyle(StylezamDesign.cobalt)
-                    }
-                }
-            }
-            .frame(width: 158, height: 190)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-
-            EditorialKicker(text: capture.origin.archiveLabel)
-            Text(capture.query ?? "Image search")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-                .lineLimit(2)
-                .frame(width: 158, alignment: .leading)
-            Text(capture.createdAt.formatted(date: .abbreviated, time: .omitted))
-                .font(.caption2)
+            Text(saved.product.price?.formatted ?? "Price unavailable")
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
         }
     }
 }
 
+private struct RecentSearchRow: View {
+    let capture: SavedCapture
+    let imageURL: URL?
+
+    var body: some View {
+        HStack(spacing: 13) {
+            Group {
+                if let imageURL {
+                    LocalFileImage(url: imageURL)
+                } else {
+                    StylezamDesign.cobalt
+                        .overlay {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title3.weight(.semibold))
+                                .foregroundStyle(.white)
+                        }
+                }
+            }
+            .frame(width: 64, height: 76)
+            .clipped()
+            .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(capture.query ?? capture.origin.libraryLabel)
+                    .font(.headline)
+                    .lineLimit(2)
+                HStack(spacing: 6) {
+                    Text(capture.origin.libraryLabel)
+                    Text("·")
+                    Text(capture.createdAt, style: .relative)
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 6)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.tertiary)
+        }
+        .foregroundStyle(.primary)
+        .padding(.vertical, 10)
+    }
+}
+
+private struct TryOnArchiveDetail: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let tryOn: SavedTryOn
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    LocalFileImage(url: model.library.imageURL(for: tryOn))
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(0.72, contentMode: .fit)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    Text(tryOn.product.title)
+                        .font(.title2.weight(.semibold))
+                    Text("Appearance preview · \(tryOn.createdAt.formatted(date: .long, time: .shortened))")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    ShareLink(item: model.library.imageURL(for: tryOn)) {
+                        Label("Share preview", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(StylezamDesign.cobalt)
+                }
+                .padding(StylezamDesign.pageInset)
+            }
+            .background(StylezamDesign.paper)
+            .navigationTitle("Try-on")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
 private extension CaptureOrigin {
-    var archiveLabel: String {
+    var libraryLabel: String {
         switch self {
         case .camera: "Camera"
-        case .photoLibrary: "Photos"
-        case .text: "Words"
+        case .photoLibrary: "Photo"
+        case .text: "Text"
         case .clipboard: "Clipboard"
         case .shareExtension: "Shared"
-        case .screenCapture: "Screen"
+        case .screenCapture: "Live screen"
         }
     }
 }

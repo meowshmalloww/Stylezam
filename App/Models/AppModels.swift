@@ -3,8 +3,14 @@ import Foundation
 enum AppTab: Hashable {
     case home
     case search
-    case looks
-    case you
+    case library
+    case settings
+}
+
+enum CaptureLaunchMode: Hashable, Sendable {
+    case chooser
+    case camera
+    case photos
 }
 
 enum CaptureOrigin: String, Codable, Sendable {
@@ -42,7 +48,30 @@ struct SavedProduct: Codable, Identifiable, Hashable, Sendable {
     let product: ProductResultDTO
 }
 
+struct SavedTryOn: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let createdAt: Date
+    let imageFilename: String
+    let product: ProductResultDTO
+}
+
 struct LibrarySnapshot: Codable, Sendable {
     var captures: [SavedCapture] = []
     var products: [SavedProduct] = []
+    var tryOns: [SavedTryOn] = []
+
+    private enum CodingKeys: String, CodingKey {
+        case captures
+        case products
+        case tryOns
+    }
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        captures = try container.decodeIfPresent([SavedCapture].self, forKey: .captures) ?? []
+        products = try container.decodeIfPresent([SavedProduct].self, forKey: .products) ?? []
+        tryOns = try container.decodeIfPresent([SavedTryOn].self, forKey: .tryOns) ?? []
+    }
 }
