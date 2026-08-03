@@ -13,6 +13,12 @@ struct CameraPicker: UIViewControllerRepresentable {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.cameraCaptureMode = .photo
+        picker.showsCameraControls = true
+        if UIImagePickerController.isCameraDeviceAvailable(.rear) {
+            picker.cameraDevice = .rear
+        } else if UIImagePickerController.isCameraDeviceAvailable(.front) {
+            picker.cameraDevice = .front
+        }
         picker.delegate = context.coordinator
         picker.allowsEditing = false
         return picker
@@ -47,4 +53,3 @@ struct CameraPicker: UIViewControllerRepresentable {
         }
     }
 }
-

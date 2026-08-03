@@ -28,7 +28,7 @@ struct SearchView: View {
         }
         .background(StylezamDesign.canvas)
         .navigationTitle(model.activeSearch == nil ? "Search" : "")
-        .navigationBarTitleDisplayMode(model.activeSearch == nil ? .large : .inline)
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if model.activeSearch != nil {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -540,7 +540,7 @@ struct SearchView: View {
                 .fontWidth(.condensed)
             Text("Try fewer descriptive words, select a tighter item box, or configure another real retrieval source.")
                 .foregroundStyle(.secondary)
-            Button("Capture another look") { model.presentCapture(.camera) }
+            Button("Capture another look") { model.presentCamera() }
                 .fontWeight(.semibold)
                 .padding(.top, 4)
         }

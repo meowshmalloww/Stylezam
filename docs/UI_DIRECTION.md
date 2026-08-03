@@ -36,7 +36,7 @@ A compact brand header appears once above a restrained editorial banner, direct 
 
 ### Capture
 
-The center Camera item in the native tab bar opens the photo-only capture sheet without replacing the user’s current content tab. Camera, Photos, and Paste Image share that sheet. A real selected image becomes the primary canvas and a single primary action starts the backend job. Text does not appear in this photo-first route.
+The center Camera item opens Apple’s full-screen photo camera with the physical iPhone’s rear/front switch, shutter, flash, retake, and Use Photo controls. Accepting the photo starts understanding automatically and moves into Search; there is no intermediate import canvas or “Find products” button. Photos, clipboard images, and text remain in Search rather than appearing in the Camera route.
 
 ### Search and Look Stack
 

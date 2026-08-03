@@ -74,7 +74,7 @@ struct HomeView: View {
                     detail: "Choose an image",
                     icon: "photo.on.rectangle"
                 ) {
-                    model.presentCapture(.photos)
+                    model.selectedTab = .search
                 }
 
                 quickAction(

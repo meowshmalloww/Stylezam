@@ -58,8 +58,9 @@ struct SettingsView: View {
                     .listRowBackground(Color.clear)
             }
         }
+        .contentMargins(.top, 12, for: .scrollContent)
         .navigationTitle("Settings")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

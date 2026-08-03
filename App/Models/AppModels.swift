@@ -8,12 +8,6 @@ enum AppTab: Hashable {
     case settings
 }
 
-enum CaptureLaunchMode: Hashable, Sendable {
-    case chooser
-    case camera
-    case photos
-}
-
 enum CaptureOrigin: String, Codable, Sendable {
     case camera
     case photoLibrary

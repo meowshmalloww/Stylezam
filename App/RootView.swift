@@ -39,8 +39,8 @@ struct RootView: View {
         .tint(StylezamDesign.cobalt)
         .tabBarMinimizeBehavior(.onScrollDown)
         .sensoryFeedback(.selection, trigger: model.selectedTab)
-        .sheet(isPresented: $model.isCapturePresented) {
-            CaptureSheet(initialMode: model.captureLaunchMode)
+        .fullScreenCover(isPresented: $model.isCapturePresented) {
+            CaptureSheet()
                 .environment(model)
         }
         .onOpenURL { model.handleURL($0) }
@@ -50,7 +50,7 @@ struct RootView: View {
         .onChange(of: model.selectedTab) { oldValue, newValue in
             if newValue == .camera {
                 model.selectedTab = oldValue == .camera ? lastContentTab : oldValue
-                model.presentCapture(.camera)
+                model.presentCamera()
             } else {
                 lastContentTab = newValue
             }

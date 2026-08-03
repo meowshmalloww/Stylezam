@@ -10,7 +10,6 @@ final class AppModel {
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
-    var captureLaunchMode: CaptureLaunchMode = .chooser
     var activeSearch: SearchJobDTO?
     var activeSearchImageData: Data?
     var activeSearchOrigin: CaptureOrigin = .text
@@ -57,8 +56,7 @@ final class AppModel {
         }
     }
 
-    func presentCapture(_ mode: CaptureLaunchMode = .chooser) {
-        captureLaunchMode = mode
+    func presentCamera() {
         isCapturePresented = true
     }
 
@@ -237,12 +235,12 @@ final class AppModel {
         guard url.scheme == "stylezam" else { return }
         switch url.host {
         case "capture":
-            presentCapture()
+            presentCamera()
         case "import":
             if let pending = library.consumePendingShare() {
                 Task { await startSearch(pending) }
             } else {
-                presentCapture()
+                selectedTab = .search
             }
         case "search":
             let identifier = url.pathComponents.dropFirst().first
@@ -269,7 +267,7 @@ final class AppModel {
                     )
                 }
             } else {
-                presentCapture()
+                presentCamera()
             }
         }
         if let pending = library.consumePendingShare() {

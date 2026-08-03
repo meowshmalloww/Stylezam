@@ -39,7 +39,7 @@ struct LibraryView: View {
         }
         .background(StylezamDesign.canvas)
         .navigationTitle("Library")
-        .navigationBarTitleDisplayMode(.large)
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(for: ProductResultDTO.self) { product in
             ProductDetailView(product: product)
                 .navigationTransition(.zoom(sourceID: product.id, in: productTransition))
