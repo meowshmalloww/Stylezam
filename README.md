@@ -44,7 +44,7 @@
   </tr>
 </table>
 
-The interface is deliberately content-first. Capture is a central native tab-bar action that opens Apple’s real front/rear photo camera, while image import and typed input stay in Search and Home remains a quiet editorial overview. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
+The interface is deliberately content-first. A short cold-launch sequence resolves the selected icon, writes on the Stylezam name, and then yields to Home, with a reduced-motion alternative. Capture is a central native tab-bar action that opens Apple’s real front/rear photo camera, while image import and typed input stay in Search and Home remains a quiet editorial overview. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
 
 ## Fashion search without invented answers
 

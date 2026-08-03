@@ -30,6 +30,10 @@ Capture is a central native tab-bar action rather than Home’s visual identity.
 
 ## Implemented screen system
 
+### Launch
+
+Apple’s static launch color hands off to a brief in-app identity sequence: the selected icon resolves from blur and rotation, the Stylezam name reveals from left to right, and the editorial tagline fades in before Home appears. It runs only during a cold process launch, contains no fake progress indicator, and collapses to a short fade when Reduce Motion is enabled.
+
 ### Home
 
 A compact brand header appears once above a restrained editorial banner, direct Photos and Search shortcuts, a horizontal Recent shelf, and saved-piece previews when the user has them. The artwork is static, geometric, and subordinate to the content. Home contains no viewfinder, radial scan button, connection dot, Settings shortcut, provider copy, gradient, or continuously animated decoration.
