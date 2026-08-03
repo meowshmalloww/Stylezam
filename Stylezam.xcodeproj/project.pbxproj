@@ -1,0 +1,830 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0271BCFF145FED130626D669 /* StylezamSearchLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59F6C779F19B676A1B7255DB /* StylezamSearchLiveActivity.swift */; };
+		0B7C3C2E439D3B2EFE88B17D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */; };
+		0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */; };
+		0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0323FB49E9A47D9209839A59 /* Assets.xcassets */; };
+		197425BF0FA96D593BC17093 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3508C5A578324E82F996A38B /* AppModels.swift */; };
+		1C4592C0DF2CE7D8967687B8 /* TryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8C067C57A06948F8D2E424 /* TryOnView.swift */; };
+		2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */; };
+		3DA3059A0E817F1C804BB95B /* LookStackCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DE7C343E62F1B883BD40B9 /* LookStackCanvas.swift */; };
+		40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */; };
+		458409D05674C04C290D9648 /* StylezamWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */; };
+		465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */; };
+		5CAA0AD8A15FB701955FDA4B /* StylezamShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5EB0C1F818A551151A1B965F /* TryOnViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B1C013842263E7F0FA5C46 /* TryOnViewModel.swift */; };
+		612527C8D504AACECBB047A0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186586B04572ED4CBAC07684 /* AppModel.swift */; };
+		66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */; };
+		755B5F562D260411BAD1C773 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		805D0F3CDC75E0CC528CF500 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */; };
+		81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FFF5ED05C00039B172D585 /* StylezamDesign.swift */; };
+		8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */; };
+		8C30A42D80D392E9389CA986 /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F790B57A92BDB9737A707E7 /* LibraryStore.swift */; };
+		8E60DB95DCD8A40808973642 /* StartStylezamCaptureIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */; };
+		8E82FCA0ED2E55ED59183BC4 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE399D95F73E214E27C19B8D /* APIClient.swift */; };
+		9B29BB1940201C7BD51C99A2 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */; };
+		9ECF2BD51954977A29FEE12A /* StartStylezamCaptureIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */; };
+		A03AC10C22EB32236A61A479 /* StylezamSearchActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */; };
+		A5352F1DD870CE7709C40963 /* StylezamWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */; };
+		AA8BEBA7AC62C51BCBEECAAE /* SearchActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */; };
+		B9B5CBAF9671DF404412C6D1 /* ScreenCaptureAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */; };
+		BFF866CDE74727A3FDD57E3A /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
+		C231B38854630C54DF79E113 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6149F74411CB2250C2927B /* SearchView.swift */; };
+		C256FE0FF794855A62D13D64 /* StylezamCaptureControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */; };
+		C2B59CBD104AE719647B40DD /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C19D1132056E5B01A68DADF9 /* RootView.swift */; };
+		C366E4AF7E9683D6DFA38F8F /* StylezamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */; };
+		CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */; };
+		CBE4F095FC69A21434B41E14 /* APIModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B00FEFF0FC5654425C30BA /* APIModels.swift */; };
+		D8D2B25724BAD0AD071BE888 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		DBA5378524EA4C0BFEDF9614 /* StylezamSearchActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */; };
+		E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */; };
+		EAF4BEF7975C4B347C0A4586 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		F36D719E6BB5959E1BF4A536 /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
+		F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A940D99785B136691E06C4A /* CaptureSheet.swift */; };
+		FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */; };
+		FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */; };
+		FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD56358BDF26FC853C97071 /* LibraryView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		778BC21CDBAE608CC8F36609 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A9BF53E7EBCE99DF94BAEE88 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5DD1D34A27B004B1B19ECA74;
+			remoteInfo = StylezamWidgets;
+		};
+		F884EDC14C8F28B7091ED417 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A9BF53E7EBCE99DF94BAEE88 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F42AB34E6474AA657C43A3A0;
+			remoteInfo = StylezamShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		47F91284358A1F61C93D0F7D /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A5352F1DD870CE7709C40963 /* StylezamWidgets.appex in Embed Foundation Extensions */,
+				5CAA0AD8A15FB701955FDA4B /* StylezamShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0323FB49E9A47D9209839A59 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		05DE7C343E62F1B883BD40B9 /* LookStackCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookStackCanvas.swift; sourceTree = "<group>"; };
+		05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchActivityManager.swift; sourceTree = "<group>"; };
+		0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamShortcuts.swift; sourceTree = "<group>"; };
+		186586B04572ED4CBAC07684 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		28EDEA4381FED85305717CBF /* Stylezam.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stylezam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		32FFF5ED05C00039B172D585 /* StylezamDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamDesign.swift; sourceTree = "<group>"; };
+		3508C5A578324E82F996A38B /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartStylezamCaptureIntent.swift; sourceTree = "<group>"; };
+		431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamMotion.swift; sourceTree = "<group>"; };
+		496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
+		4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		4F790B57A92BDB9737A707E7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		59F6C779F19B676A1B7255DB /* StylezamSearchLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamSearchLiveActivity.swift; sourceTree = "<group>"; };
+		5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenCaptureManager.swift; sourceTree = "<group>"; };
+		5CD56358BDF26FC853C97071 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
+		5D6149F74411CB2250C2927B /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
+		5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureAvailability.swift; sourceTree = "<group>"; };
+		7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailView.swift; sourceTree = "<group>"; };
+		817BAAA57D938EFD107A98EA /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
+		84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchStylezamImageIntent.swift; sourceTree = "<group>"; };
+		9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamApp.swift; sourceTree = "<group>"; };
+		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
+		A8B00FEFF0FC5654425C30BA /* APIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIModels.swift; sourceTree = "<group>"; };
+		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViews.swift; sourceTree = "<group>"; };
+		B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureControl.swift; sourceTree = "<group>"; };
+		B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamAppDelegate.swift; sourceTree = "<group>"; };
+		BF8C067C57A06948F8D2E424 /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
+		C19D1132056E5B01A68DADF9 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamWidgets.swift; sourceTree = "<group>"; };
+		D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		D9B1C013842263E7F0FA5C46 /* TryOnViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnViewModel.swift; sourceTree = "<group>"; };
+		E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamSearchActivityAttributes.swift; sourceTree = "<group>"; };
+		EE399D95F73E214E27C19B8D /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		0742F5738BED00E79B442C26 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				28EDEA4381FED85305717CBF /* Stylezam.app */,
+				0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */,
+				431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		1AF070B60ACCEE176E10DAA8 /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				996BE3B677148DF5FCAB660F /* Share */,
+				F4684D5F5BACDA0BB5ED819A /* Widgets */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		212B219837B5C75227A560CE /* Search */ = {
+			isa = PBXGroup;
+			children = (
+				5D6149F74411CB2250C2927B /* SearchView.swift */,
+			);
+			path = Search;
+			sourceTree = "<group>";
+		};
+		236E76EB36E6931FEE264BCB /* TryOn */ = {
+			isa = PBXGroup;
+			children = (
+				BF8C067C57A06948F8D2E424 /* TryOnView.swift */,
+				D9B1C013842263E7F0FA5C46 /* TryOnViewModel.swift */,
+			);
+			path = TryOn;
+			sourceTree = "<group>";
+		};
+		31848D26D3C9289FBAB54495 /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */,
+			);
+			path = Activity;
+			sourceTree = "<group>";
+		};
+		559605BC820B921E9D883153 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */,
+				4F790B57A92BDB9737A707E7 /* LibraryStore.swift */,
+				5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */,
+				E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */,
+				7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */,
+				05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */,
+				C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */,
+				B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */,
+				104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		56AAE292B65F315C73CB07B0 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				E3EB5133BF3A529254AD1BB8 /* DesignSystem */,
+				C9E548B2A6664838ED7F3031 /* Features */,
+				A915D72A19FDDCF3096B2A9F /* Models */,
+				FB07114A9A40365521508816 /* Networking */,
+				71C5F9309FBB87370517F026 /* Resources */,
+				559605BC820B921E9D883153 /* Services */,
+				186586B04572ED4CBAC07684 /* AppModel.swift */,
+				C19D1132056E5B01A68DADF9 /* RootView.swift */,
+				9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		58073B8CA50632B1C233FF91 /* Product */ = {
+			isa = PBXGroup;
+			children = (
+				7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */,
+			);
+			path = Product;
+			sourceTree = "<group>";
+		};
+		58F3CF3229840A1DF4CA3D46 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		62091735B67146014A6D9CC1 = {
+			isa = PBXGroup;
+			children = (
+				56AAE292B65F315C73CB07B0 /* App */,
+				1AF070B60ACCEE176E10DAA8 /* Extensions */,
+				94F2AC4DCF8717ED7A96B55F /* Shared */,
+				0742F5738BED00E79B442C26 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		71C5F9309FBB87370517F026 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				0323FB49E9A47D9209839A59 /* Assets.xcassets */,
+				A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		8A4469897690815ECBBB14F4 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		94F2AC4DCF8717ED7A96B55F /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				31848D26D3C9289FBAB54495 /* Activity */,
+				D8E1209E52D42493933F1C1F /* AppIntents */,
+				817BAAA57D938EFD107A98EA /* AppGroup.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		996BE3B677148DF5FCAB660F /* Share */ = {
+			isa = PBXGroup;
+			children = (
+				2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */,
+			);
+			path = Share;
+			sourceTree = "<group>";
+		};
+		A915D72A19FDDCF3096B2A9F /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A8B00FEFF0FC5654425C30BA /* APIModels.swift */,
+				3508C5A578324E82F996A38B /* AppModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		C36426B253EFACFD6DCD38CA /* Library */ = {
+			isa = PBXGroup;
+			children = (
+				5CD56358BDF26FC853C97071 /* LibraryView.swift */,
+			);
+			path = Library;
+			sourceTree = "<group>";
+		};
+		C9E548B2A6664838ED7F3031 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				D369F325E07BCE8A4CDD5CBA /* Capture */,
+				58F3CF3229840A1DF4CA3D46 /* Home */,
+				C36426B253EFACFD6DCD38CA /* Library */,
+				58073B8CA50632B1C233FF91 /* Product */,
+				212B219837B5C75227A560CE /* Search */,
+				8A4469897690815ECBBB14F4 /* Settings */,
+				236E76EB36E6931FEE264BCB /* TryOn */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		D369F325E07BCE8A4CDD5CBA /* Capture */ = {
+			isa = PBXGroup;
+			children = (
+				496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */,
+				9A940D99785B136691E06C4A /* CaptureSheet.swift */,
+			);
+			path = Capture;
+			sourceTree = "<group>";
+		};
+		D8E1209E52D42493933F1C1F /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */,
+				3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */,
+			);
+			path = AppIntents;
+			sourceTree = "<group>";
+		};
+		E3EB5133BF3A529254AD1BB8 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */,
+				05DE7C343E62F1B883BD40B9 /* LookStackCanvas.swift */,
+				32FFF5ED05C00039B172D585 /* StylezamDesign.swift */,
+				44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		F4684D5F5BACDA0BB5ED819A /* Widgets */ = {
+			isa = PBXGroup;
+			children = (
+				B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */,
+				59F6C779F19B676A1B7255DB /* StylezamSearchLiveActivity.swift */,
+				CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */,
+			);
+			path = Widgets;
+			sourceTree = "<group>";
+		};
+		FB07114A9A40365521508816 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				EE399D95F73E214E27C19B8D /* APIClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		063F2108A612FE4DC2FBBB6B /* Stylezam */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1BAEBA5AC0BECEEBE2A69F40 /* Build configuration list for PBXNativeTarget "Stylezam" */;
+			buildPhases = (
+				F7355A93A989A7C0DF56E544 /* Sources */,
+				0992E1A8DE37DA280E0F0DE5 /* Resources */,
+				47F91284358A1F61C93D0F7D /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				1403DFDF233FA36B79989CF3 /* PBXTargetDependency */,
+				D969E11514AD9F2BF1890555 /* PBXTargetDependency */,
+			);
+			name = Stylezam;
+			packageProductDependencies = (
+			);
+			productName = Stylezam;
+			productReference = 28EDEA4381FED85305717CBF /* Stylezam.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5DD1D34A27B004B1B19ECA74 /* StylezamWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = EEA485146610EA9369EAFCA9 /* Build configuration list for PBXNativeTarget "StylezamWidgets" */;
+			buildPhases = (
+				B3B27C280AB66EE485C481DE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StylezamWidgets;
+			packageProductDependencies = (
+			);
+			productName = StylezamWidgets;
+			productReference = 431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		F42AB34E6474AA657C43A3A0 /* StylezamShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5256CAC6B7139DF9EBC52E37 /* Build configuration list for PBXNativeTarget "StylezamShare" */;
+			buildPhases = (
+				7D18313A4A7D55CAF74204F1 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = StylezamShare;
+			packageProductDependencies = (
+			);
+			productName = StylezamShare;
+			productReference = 0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A9BF53E7EBCE99DF94BAEE88 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					063F2108A612FE4DC2FBBB6B = {
+						ProvisioningStyle = Automatic;
+					};
+					5DD1D34A27B004B1B19ECA74 = {
+						ProvisioningStyle = Automatic;
+					};
+					F42AB34E6474AA657C43A3A0 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 263AA2F032E8C05971BD7D0E /* Build configuration list for PBXProject "Stylezam" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 62091735B67146014A6D9CC1;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 0742F5738BED00E79B442C26 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				063F2108A612FE4DC2FBBB6B /* Stylezam */,
+				5DD1D34A27B004B1B19ECA74 /* StylezamWidgets */,
+				F42AB34E6474AA657C43A3A0 /* StylezamShare */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		0992E1A8DE37DA280E0F0DE5 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */,
+				40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		7D18313A4A7D55CAF74204F1 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D8D2B25724BAD0AD071BE888 /* AppGroup.swift in Sources */,
+				9B29BB1940201C7BD51C99A2 /* ShareViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B3B27C280AB66EE485C481DE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EAF4BEF7975C4B347C0A4586 /* AppGroup.swift in Sources */,
+				BFF866CDE74727A3FDD57E3A /* SearchStylezamImageIntent.swift in Sources */,
+				8E60DB95DCD8A40808973642 /* StartStylezamCaptureIntent.swift in Sources */,
+				C256FE0FF794855A62D13D64 /* StylezamCaptureControl.swift in Sources */,
+				DBA5378524EA4C0BFEDF9614 /* StylezamSearchActivityAttributes.swift in Sources */,
+				0271BCFF145FED130626D669 /* StylezamSearchLiveActivity.swift in Sources */,
+				458409D05674C04C290D9648 /* StylezamWidgets.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F7355A93A989A7C0DF56E544 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8E82FCA0ED2E55ED59183BC4 /* APIClient.swift in Sources */,
+				CBE4F095FC69A21434B41E14 /* APIModels.swift in Sources */,
+				755B5F562D260411BAD1C773 /* AppGroup.swift in Sources */,
+				612527C8D504AACECBB047A0 /* AppModel.swift in Sources */,
+				197425BF0FA96D593BC17093 /* AppModels.swift in Sources */,
+				A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */,
+				F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */,
+				0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */,
+				66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */,
+				805D0F3CDC75E0CC528CF500 /* KeychainStore.swift in Sources */,
+				8C30A42D80D392E9389CA986 /* LibraryStore.swift in Sources */,
+				FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */,
+				8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */,
+				3DA3059A0E817F1C804BB95B /* LookStackCanvas.swift in Sources */,
+				FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */,
+				CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */,
+				C2B59CBD104AE719647B40DD /* RootView.swift in Sources */,
+				B9B5CBAF9671DF404412C6D1 /* ScreenCaptureAvailability.swift in Sources */,
+				AA8BEBA7AC62C51BCBEECAAE /* SearchActivityManager.swift in Sources */,
+				F36D719E6BB5959E1BF4A536 /* SearchStylezamImageIntent.swift in Sources */,
+				C231B38854630C54DF79E113 /* SearchView.swift in Sources */,
+				FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */,
+				0B7C3C2E439D3B2EFE88B17D /* SettingsView.swift in Sources */,
+				9ECF2BD51954977A29FEE12A /* StartStylezamCaptureIntent.swift in Sources */,
+				C366E4AF7E9683D6DFA38F8F /* StylezamApp.swift in Sources */,
+				465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */,
+				81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */,
+				2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */,
+				A03AC10C22EB32236A61A479 /* StylezamSearchActivityAttributes.swift in Sources */,
+				E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */,
+				1C4592C0DF2CE7D8967687B8 /* TryOnView.swift in Sources */,
+				5EB0C1F818A551151A1B965F /* TryOnViewModel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		1403DFDF233FA36B79989CF3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5DD1D34A27B004B1B19ECA74 /* StylezamWidgets */;
+			targetProxy = 778BC21CDBAE608CC8F36609 /* PBXContainerItemProxy */;
+		};
+		D969E11514AD9F2BF1890555 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F42AB34E6474AA657C43A3A0 /* StylezamShare */;
+			targetProxy = F884EDC14C8F28B7091ED417 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0449A07ABEA0173E3A43FF73 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/Stylezam.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app;
+				PRODUCT_NAME = Stylezam;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		2F3125FC32DC8967B8E4B7CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Extensions/Share/StylezamShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/Share/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app.share;
+				PRODUCT_NAME = StylezamShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		58AE8F13E13EA9958879987B /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Extensions/Widgets/StylezamWidgets.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app.widgets;
+				PRODUCT_NAME = StylezamWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8366F1D4302FFD5D90DC37A0 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		96D7CB8E90B35D2874A33B94 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		C86676D91934341D01C66976 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Extensions/Widgets/StylezamWidgets.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/Widgets/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app.widgets;
+				PRODUCT_NAME = StylezamWidgets;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		E857412DA44D5B025B86CDCA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = App/Stylezam.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app;
+				PRODUCT_NAME = Stylezam;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		EDBBAD4DD9434662213BD609 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Extensions/Share/StylezamShare.entitlements;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/Share/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.stylezam.app.share;
+				PRODUCT_NAME = StylezamShare;
+				SDKROOT = iphoneos;
+				SKIP_INSTALL = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1BAEBA5AC0BECEEBE2A69F40 /* Build configuration list for PBXNativeTarget "Stylezam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0449A07ABEA0173E3A43FF73 /* Debug */,
+				E857412DA44D5B025B86CDCA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		263AA2F032E8C05971BD7D0E /* Build configuration list for PBXProject "Stylezam" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				96D7CB8E90B35D2874A33B94 /* Debug */,
+				8366F1D4302FFD5D90DC37A0 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		5256CAC6B7139DF9EBC52E37 /* Build configuration list for PBXNativeTarget "StylezamShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EDBBAD4DD9434662213BD609 /* Debug */,
+				2F3125FC32DC8967B8E4B7CA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		EEA485146610EA9369EAFCA9 /* Build configuration list for PBXNativeTarget "StylezamWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C86676D91934341D01C66976 /* Debug */,
+				58AE8F13E13EA9958879987B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A9BF53E7EBCE99DF94BAEE88 /* Project object */;
+}

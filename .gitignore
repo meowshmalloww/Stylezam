@@ -1,0 +1,11 @@
+.DS_Store
+.venv/
+*.egg-info/
+.tools/
+backend/.data/
+backend/.env
+Config/Secrets.xcconfig
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/

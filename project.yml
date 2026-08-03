@@ -1,0 +1,101 @@
+name: Stylezam
+options:
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+  generateEmptyDirectories: false
+  minimumXcodeGenVersion: 2.45.0
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+
+targets:
+  Stylezam:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+        excludes:
+          - Resources
+          - Info.plist
+          - Stylezam.entitlements
+      - path: App/Resources
+        buildPhase: resources
+      - path: Shared
+    entitlements:
+      path: App/Stylezam.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stylezam.app
+        PRODUCT_NAME: Stylezam
+        INFOPLIST_FILE: App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    dependencies:
+      - target: StylezamWidgets
+        embed: true
+      - target: StylezamShare
+        embed: true
+
+  StylezamWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extensions/Widgets
+        excludes:
+          - Info.plist
+          - StylezamWidgets.entitlements
+      - path: Shared/Activity
+      - path: Shared/AppIntents
+      - path: Shared/AppGroup.swift
+    entitlements:
+      path: Extensions/Widgets/StylezamWidgets.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stylezam.app.widgets
+        PRODUCT_NAME: StylezamWidgets
+        INFOPLIST_FILE: Extensions/Widgets/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+
+  StylezamShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extensions/Share
+        excludes:
+          - Info.plist
+          - StylezamShare.entitlements
+      - path: Shared/AppGroup.swift
+    entitlements:
+      path: Extensions/Share/StylezamShare.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stylezam.app.share
+        PRODUCT_NAME: StylezamShare
+        INFOPLIST_FILE: Extensions/Share/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        SKIP_INSTALL: YES
+
+schemes:
+  Stylezam:
+    build:
+      targets:
+        Stylezam: all
+        StylezamWidgets: all
+        StylezamShare: all
+    run:
+      config: Debug
+    archive:
+      config: Release
