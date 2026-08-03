@@ -32,7 +32,7 @@ Capture is a central native tab-bar action rather than Home’s visual identity.
 
 ### Launch
 
-Apple’s static launch color hands off to a brief in-app identity sequence: the selected icon resolves from blur and rotation, the Stylezam name reveals from left to right, and the editorial tagline fades in before Home appears. It runs only during a cold process launch, contains no fake progress indicator, and collapses to a short fade when Reduce Motion is enabled.
+Apple’s static launch color hands off to a brief in-app identity sequence: the three ivory pieces of the selected mark arrive independently and settle into the finished icon, the Stylezam name appears character by character, and the editorial tagline fades in before Home appears. It runs only during a cold process launch, contains no fake progress indicator, and collapses to a short fade when Reduce Motion is enabled.
 
 ### Home
 

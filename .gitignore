@@ -6,6 +6,7 @@ backend/.data/
 backend/.env
 Config/Secrets.xcconfig
 DerivedData/
+DerivedDataDevice/
 build/
 *.xcuserstate
 xcuserdata/
