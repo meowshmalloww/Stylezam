@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key><string>Stylezam</string>
+    <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+    <key>CFBundleName</key><string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
+    <key>CFBundleURLTypes</key>
+    <array><dict>
+        <key>CFBundleTypeRole</key><string>Editor</string>
+        <key>CFBundleURLName</key><string>com.stylezam.app</string>
+        <key>CFBundleURLSchemes</key><array><string>stylezam</string></array>
+    </dict></array>
+    <key>ITSAppUsesNonExemptEncryption</key><false/>
+    <key>LSRequiresIPhoneOS</key><true/>
+    <key>NSCameraUsageDescription</key>
+    <string>Stylezam uses the camera only when you choose to capture a look or a try-on photo.</string>
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>Stylezam can connect to the Stylezam service running on your Mac during development.</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>Choose a fashion image or your own photo for product search and virtual try-on.</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>Save a generated try-on image to your photo library when you request it.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Choose screen content so Stylezam can search a fashion frame only when you press Capture a Look.</string>
+    <key>NSSupportsLiveActivities</key><true/>
+    <key>UIApplicationSupportsIndirectInputEvents</key><true/>
+    <key>UIBackgroundModes</key>
+    <array><string>screen-capture</string></array>
+    <key>UILaunchScreen</key><dict><key>UIColorName</key><string>BrandCobalt</string></dict>
+    <key>UISupportedInterfaceOrientations</key>
+    <array><string>UIInterfaceOrientationPortrait</string></array>
+</dict>
+</plist>
