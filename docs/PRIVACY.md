@@ -1,6 +1,6 @@
 # Privacy and data handling
 
-This document describes the implemented local-vision release. Product retrieval and virtual try-on are unavailable, so no shopping or generation provider receives data.
+This document describes the implemented local-vision and optional photo try-on release. Product retrieval remains unavailable. YouCam receives data only when the user explicitly creates a try-on.
 
 Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for the required-reason APIs it uses. The manifests declare no tracking and no tracking domains. App Store privacy answers still require final account-specific review.
 
@@ -12,7 +12,7 @@ Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for th
 - Individual transparent garment crops and structured detection records.
 - The recent iOS 27 screen-frame buffer, which remains in memory rather than becoming a rolling recording.
 
-Stylezam has no processing-server address, bearer token, provider API key, crop-upload action, model-download request, or remote inference call in this build.
+The capture and garment-detection pipeline has no remote inference call. The separate Try On workspace uploads the chosen person photo and selected product images to YouCam, polls the generated task, and downloads the result. Users see this disclosure next to the action.
 
 ## User-controlled input
 
@@ -30,6 +30,8 @@ The app does not analyze every camera frame continuously. Live preview is thrott
 ## Network boundary
 
 Local garment understanding does not require network access. Older Library data from an earlier development build can contain saved product URLs and remote product image URLs; those links are fetched or opened only when the user views the legacy product entry. They are not part of the capture pipeline.
+
+Photo try-on requires network access. The user must consent immediately before submission. YouCam documents a file-retention period of up to 30 days, while generated result links expire sooner; the app discloses this in the Try On workspace. Stylezam requests immediate deletion after downloading each finished task, but the documented 30-day automatic-retention boundary remains the fallback if that request fails. A prototype YouCam token can be stored in the device Keychain. Before release, replace direct bearer authentication with a scoped server-side proxy and align remote deletion behavior with the active YouCam agreement.
 
 ## Deletion
 

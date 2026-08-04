@@ -190,6 +190,15 @@ struct ProductDetailView: View {
     private var actionBar: some View {
         GlassEffectContainer(spacing: 10) {
             Button {
+                model.addToTryOn(product)
+            } label: {
+                Label("Try on", systemImage: "wand.and.sparkles")
+                    .fontWeight(.semibold)
+                    .frame(height: 54)
+                    .padding(.horizontal, 14)
+            }
+            .buttonStyle(.glass)
+            Button {
                 openURL(product.productURL)
             } label: {
                 merchantButtonLabel

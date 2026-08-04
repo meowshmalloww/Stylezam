@@ -101,3 +101,11 @@ See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). Keep Apple’s sample as refe
 - Verify the compiled app contains one model copy, not both source and compiled packages.
 - Test offline capture and Library deletion on a signed device.
 - Complete privacy disclosures and model/dataset legal review.
+
+## 7. YouCam photo try-on
+
+Try On is optional and does not affect local garment detection. For a prototype build, either enter the YouCam API key once in the debug Try On screen (it is stored in this device's Keychain), or copy `Config/Secrets.xcconfig.example` to the Git-ignored `Config/Secrets.xcconfig` and set `YOUCAM_API_KEY`.
+
+The app separates YouCam inputs into Outfit, Hand/Wrist, and Face/Neck photo contexts because jewelry endpoints require closer framing than clothing. Images must be under 10 MB. The UI requires explicit upload consent and explains YouCam's documented retention boundary.
+
+Do not distribute an app containing a shared YouCam bearer credential. Before release, put authentication and YouCam calls behind a scoped Stylezam server, rotate all development keys, add abuse/rate controls, and complete the provider data-retention review.

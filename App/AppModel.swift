@@ -16,6 +16,7 @@ final class AppModel {
     var isAnalyzingCapture = false
     var captureStatus: String?
     var latestPreviewCandidates: [GarmentCandidate] = []
+    var pendingTryOnProducts: [ProductResultDTO] = []
 
     @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
     @ObservationIgnored private let visionEngine = GarmentVisionEngine()
@@ -49,6 +50,13 @@ final class AppModel {
 
     func presentCamera() {
         isCapturePresented = true
+    }
+
+    func addToTryOn(_ product: ProductResultDTO) {
+        if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
+            pendingTryOnProducts.append(product)
+        }
+        selectedTab = .tryOn
     }
 
     @discardableResult
@@ -219,10 +227,10 @@ final class AppModel {
             if let pending = library.consumePendingShare() {
                 Task { await consumePendingInput(pending) }
             } else {
-                selectedTab = .search
+                selectedTab = .tryOn
             }
         case "search":
-            selectedTab = .search
+            selectedTab = .tryOn
             lastError = "Product retrieval is not in this local build yet."
         case "library":
             selectedTab = .library
@@ -277,7 +285,7 @@ final class AppModel {
                 mode: input.origin == .screenCapture ? .screen : .imported
             )
         } else {
-            selectedTab = .search
+            selectedTab = .tryOn
             lastError = "Text product search is not in this local build yet. Add a fashion image to detect its pieces."
         }
     }

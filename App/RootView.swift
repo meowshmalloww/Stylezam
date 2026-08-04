@@ -15,10 +15,10 @@ struct RootView: View {
             .tabItem { Label("Home", systemImage: "house") }
 
             NavigationStack {
-                SearchView()
+                TryOnView()
             }
-            .tag(AppTab.search)
-            .tabItem { Label("Search", systemImage: "magnifyingglass") }
+            .tag(AppTab.tryOn)
+            .tabItem { Label("Try On", systemImage: "wand.and.sparkles") }
 
             Color.clear
                 .tag(AppTab.camera)

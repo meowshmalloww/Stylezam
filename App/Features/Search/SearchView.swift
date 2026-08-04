@@ -4,6 +4,7 @@ import UIKit
 
 struct SearchView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
     @State private var referenceImageData: Data?
     @State private var referenceItem: PhotosPickerItem?
     @State private var isCameraPresented = false
@@ -165,6 +166,7 @@ private extension SearchView {
                         self.referenceImageData = nil
                         referenceItem = nil
                         message = nil
+                        dismiss()
                     }
                 }
             } label: {

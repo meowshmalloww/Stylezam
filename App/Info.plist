@@ -17,6 +17,7 @@
         <key>CFBundleURLSchemes</key><array><string>stylezam</string></array>
     </dict></array>
     <key>ITSAppUsesNonExemptEncryption</key><false/>
+    <key>YouCamAPIKey</key><string>$(YOUCAM_API_KEY)</string>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key>
     <string>Stylezam uses the camera only when you choose to capture a fashion look.</string>

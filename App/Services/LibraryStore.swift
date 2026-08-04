@@ -1,6 +1,14 @@
 import Foundation
 import Observation
 
+private enum LibraryStoreError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        "The existing Library could not be loaded, so Stylezam stopped this write to protect its data."
+    }
+}
+
 @MainActor
 @Observable
 final class LibraryStore {
@@ -11,7 +19,9 @@ final class LibraryStore {
     private let capturesURL: URL
     private let garmentsURL: URL
     private let tryOnsURL: URL
+    private let wardrobeURL: URL
     private let snapshotURL: URL
+    private var acceptsWrites = true
 
     init() {
         let fallback = FileManager.default.urls(
@@ -23,6 +33,7 @@ final class LibraryStore {
         capturesURL = rootURL.appending(path: "Captures", directoryHint: .isDirectory)
         garmentsURL = rootURL.appending(path: "Garments", directoryHint: .isDirectory)
         tryOnsURL = rootURL.appending(path: "TryOns", directoryHint: .isDirectory)
+        wardrobeURL = rootURL.appending(path: "Wardrobe", directoryHint: .isDirectory)
         snapshotURL = rootURL.appending(path: "library.json")
         do {
             try FileManager.default.createDirectory(
@@ -37,8 +48,10 @@ final class LibraryStore {
                 at: garmentsURL,
                 withIntermediateDirectories: true
             )
+            try FileManager.default.createDirectory(at: wardrobeURL, withIntermediateDirectories: true)
             try load()
         } catch {
+            acceptsWrites = false
             loadError = error.localizedDescription
         }
     }
@@ -46,6 +59,7 @@ final class LibraryStore {
     var scans: [SavedScan] { snapshot.scans }
     var captures: [SavedCapture] { snapshot.captures }
     var products: [SavedProduct] { snapshot.products }
+    var wardrobeItems: [SavedWardrobeItem] { snapshot.wardrobeItems }
     var tryOns: [SavedTryOn] { snapshot.tryOns }
 
     @discardableResult
@@ -187,38 +201,96 @@ final class LibraryStore {
         tryOnsURL.appending(path: tryOn.imageFilename)
     }
 
+    func imageURL(for item: SavedWardrobeItem) -> URL {
+        wardrobeURL.appending(path: item.imageFilename)
+    }
+
+    @discardableResult
+    func addWardrobeItem(title: String, category: TryOnCategory, imageData: Data, sourceProduct: ProductResultDTO? = nil) throws -> SavedWardrobeItem {
+        let previous = snapshot
+        let id = UUID()
+        let ext = imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "png" : "jpg"
+        let filename = "\(id.uuidString).\(ext)"
+        let url = wardrobeURL.appending(path: filename)
+        try imageData.write(to: url, options: .atomic)
+        let item = SavedWardrobeItem(id: id, savedAt: .now, imageFilename: filename, title: title, category: category, sourceProduct: sourceProduct)
+        snapshot.wardrobeItems.insert(item, at: 0)
+        let removed = Array(snapshot.wardrobeItems.dropFirst(100))
+        snapshot.wardrobeItems = Array(snapshot.wardrobeItems.prefix(100))
+        do {
+            try persist()
+            for old in removed { try? FileManager.default.removeItem(at: imageURL(for: old)) }
+            return item
+        } catch {
+            snapshot = previous
+            try? FileManager.default.removeItem(at: url)
+            throw error
+        }
+    }
+
+    func deleteWardrobeItem(_ item: SavedWardrobeItem) {
+        let previous = snapshot
+        snapshot.wardrobeItems.removeAll { $0.id == item.id }
+        do {
+            try persist()
+            try? FileManager.default.removeItem(at: imageURL(for: item))
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
     @discardableResult
     func addTryOn(
         jobID: String,
-        product: ProductResultDTO,
+        product: ProductResultDTO? = nil,
+        title: String? = nil,
         imageData: Data
     ) throws -> SavedTryOn {
         if let existing = snapshot.tryOns.first(where: { $0.id == jobID }) {
+            let existingURL = imageURL(for: existing)
+            if !FileManager.default.fileExists(atPath: existingURL.path) {
+                try imageData.write(to: existingURL, options: .atomic)
+            }
             return existing
         }
-        let filename = "\(jobID).jpg"
+        let previous = snapshot
+        let ext = imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "png" : "jpg"
+        let filename = "\(UUID().uuidString).\(ext)"
+        let destination = tryOnsURL.appending(path: filename)
         try imageData.write(
-            to: tryOnsURL.appending(path: filename),
+            to: destination,
             options: .atomic
         )
         let tryOn = SavedTryOn(
             id: jobID,
             createdAt: .now,
             imageFilename: filename,
-            product: product
+            product: product,
+            title: title
         )
         snapshot.tryOns.insert(tryOn, at: 0)
+        let removed = Array(snapshot.tryOns.dropFirst(60))
         snapshot.tryOns = Array(snapshot.tryOns.prefix(60))
-        try persist()
-        return tryOn
+        do {
+            try persist()
+            for old in removed { try? FileManager.default.removeItem(at: imageURL(for: old)) }
+            return tryOn
+        } catch {
+            snapshot = previous
+            try? FileManager.default.removeItem(at: destination)
+            throw error
+        }
     }
 
     func deleteTryOn(_ tryOn: SavedTryOn) {
+        let previous = snapshot
         snapshot.tryOns.removeAll { $0.id == tryOn.id }
-        try? FileManager.default.removeItem(at: imageURL(for: tryOn))
         do {
             try persist()
+            try? FileManager.default.removeItem(at: imageURL(for: tryOn))
         } catch {
+            snapshot = previous
             loadError = error.localizedDescription
         }
     }
@@ -312,6 +384,9 @@ final class LibraryStore {
                     at: tryOnsURL.appending(path: tryOn.imageFilename)
                 )
             }
+            for item in previousSnapshot.wardrobeItems {
+                try? FileManager.default.removeItem(at: imageURL(for: item))
+            }
         } catch {
             snapshot = previousSnapshot
             throw error
@@ -358,6 +433,7 @@ final class LibraryStore {
     }
 
     private func persist() throws {
+        guard acceptsWrites else { throw LibraryStoreError.unavailable }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601

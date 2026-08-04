@@ -99,7 +99,7 @@ struct LibraryView: View {
     private func count(for item: LibrarySection) -> Int {
         switch item {
         case .recent: model.library.scans.count
-        case .saved: model.library.products.count
+        case .saved: model.library.products.count + model.library.wardrobeItems.count
         case .tryOns: model.library.tryOns.count
         }
     }
@@ -151,10 +151,10 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
                 title: "Saved pieces",
-                detail: countLabel(model.library.products.count, singular: "product")
+                detail: countLabel(model.library.products.count + model.library.wardrobeItems.count, singular: "item")
             )
 
-            if model.library.products.isEmpty {
+            if model.library.products.isEmpty && model.library.wardrobeItems.isEmpty {
                 emptyState(
                     icon: "bookmark",
                     title: "Nothing saved",
@@ -169,6 +169,22 @@ struct LibraryView: View {
                     alignment: .leading,
                     spacing: 26
                 ) {
+                    ForEach(model.library.wardrobeItems) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            LocalFileImage(url: model.library.imageURL(for: item), contentMode: .fit)
+                                .frame(maxWidth: .infinity)
+                                .aspectRatio(0.78, contentMode: .fit)
+                                .padding(8)
+                                .background(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            Text(item.category.title.uppercased())
+                                .font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(.secondary)
+                            Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                        }
+                        .contextMenu {
+                            Button("Remove from saved", role: .destructive) { model.library.deleteWardrobeItem(item) }
+                        }
+                    }
                     ForEach(model.library.products) { saved in
                         NavigationLink(value: saved.product) {
                             SavedProductCard(saved: saved)
@@ -218,7 +234,7 @@ struct LibraryView: View {
                                     .aspectRatio(0.78, contentMode: .fit)
                                     .clipped()
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                Text(tryOn.product.title)
+                                Text(tryOn.displayTitle)
                                     .font(.subheadline.weight(.semibold))
                                     .lineLimit(2)
                                     .foregroundStyle(.primary)
@@ -503,7 +519,7 @@ private struct TryOnArchiveDetail: View {
                         .aspectRatio(0.72, contentMode: .fit)
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Text(tryOn.product.title)
+                    Text(tryOn.displayTitle)
                         .font(.title2.weight(.semibold))
                     Text("Appearance preview · \(tryOn.createdAt.formatted(date: .long, time: .shortened))")
                         .font(.subheadline)

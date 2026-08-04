@@ -2,7 +2,13 @@
 
 ## Current boundary
 
-Stylezam currently implements local fashion capture, garment instance detection, segmentation, crop creation, inspection, and persistence. Product retrieval, current prices, and virtual try-on are explicitly deferred and have no active runtime client.
+Stylezam implements local fashion capture, garment instance detection, segmentation, crop creation, inspection, and persistence. Product retrieval and current prices remain deferred. Photo-based virtual try-on is an explicit network feature backed by YouCam.
+
+## Photo try-on
+
+The Try On workspace accepts a person photo and a selectable rail of product or Library-piece images. Selected items are applied sequentially through YouCam's category-specific asynchronous APIs, so each completed result becomes the source for the next item. Finished images can be saved locally in Library. Clothing uses the clothes v3 endpoint; bags, scarves, shoes, and hats use their dedicated endpoints; jewelry uses the dedicated 2D VTO endpoints. Outfit, Hand/Wrist, and Face/Neck are separate photo contexts because one full-body photo cannot reliably satisfy every endpoint. After each result is downloaded, Stylezam requests deletion of that finished remote task and its associated media.
+
+The prototype bearer credential is stored in the device Keychain or supplied by an ignored local build configuration. Production distribution requires a server-side credential proxy rather than embedding a shared bearer token in the app.
 
 ## Capture data flow
 

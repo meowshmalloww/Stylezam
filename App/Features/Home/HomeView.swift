@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HomeView: View {
     @Environment(AppModel.self) private var model
+    @State private var isImageSearchPresented = false
 
     var body: some View {
         ScrollView {
@@ -23,6 +24,10 @@ struct HomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: ProductResultDTO.self) { product in
             ProductDetailView(product: product)
+        }
+        .sheet(isPresented: $isImageSearchPresented) {
+            NavigationStack { SearchView() }
+                .environment(model)
         }
     }
 
@@ -82,7 +87,7 @@ struct HomeView: View {
                     detail: "Photos or clipboard",
                     icon: "photo.badge.plus"
                 ) {
-                    model.selectedTab = .search
+                    isImageSearchPresented = true
                 }
             }
         }

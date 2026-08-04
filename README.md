@@ -18,7 +18,7 @@
 
 Stylezam’s current build is local by design. The RF-DETR Core ML model is included in the application, compiled by Xcode, and loaded directly on the iPhone. Capture, boxes, masks, transparent crops, duplicate filtering, and Library storage do not require a cloud host, local computer, API token, provider key, or first-run model download.
 
-Product retrieval, current prices, and virtual try-on remain deferred. The app does not insert sample products, simulated progress, or invented prices while those features are unavailable.
+Product retrieval and current prices remain deferred. Photo-based virtual try-on is available through an explicitly configured YouCam API connection; garment detection and Library capture remain fully local.
 
 ## What works now
 
@@ -32,6 +32,7 @@ Product retrieval, current prices, and virtual try-on remain deferred. The app d
 - Duplicate suppression for recent Live and screen captures.
 - Photo import, clipboard input, Share extension, App Intents, Control Center control, Live Activities, and Dynamic Island state.
 - Conditional iOS 27 ScreenCaptureKit adapter; iOS 26 continues to support camera, import, clipboard, and Share input.
+- Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with selectable Library pieces and saved results.
 
 <table>
   <tr>
@@ -51,6 +52,8 @@ flowchart LR
     Select --> Masks["Boxes · masks · transparent crops"]
     Masks --> Library["Local Library"]
     Masks --> Inspector["Local Vision Inspector"]
+    TryOn["Selected photo + product images"] --> YouCam["YouCam photo try-on"]
+    YouCam --> Library
     Search["Product retrieval"] -. "deferred" .-> Future["Future benchmarked implementation"]
 ```
 
@@ -94,7 +97,7 @@ scripts/                project generation, model research/export, and verificat
 
 ## Known release boundaries
 
-- Product retrieval, current prices, and virtual try-on are not implemented in this local vision build.
+- Product retrieval and current prices are not implemented. Try-on requires network access and a configured YouCam account.
 - The conditional iOS 27 screen path still requires an iOS 27 SDK/device verification pass.
 - Physical-device camera performance, thermals, Live Activity, extensions, and App Group provisioning must be tested with the final signing team.
 - App Store privacy disclosures and model/dataset legal review remain release tasks.

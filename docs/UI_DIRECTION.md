@@ -27,9 +27,9 @@ Home is a calm overview with a compact identity header, a restrained editorial i
 
 The center tab action opens a custom full-screen camera. Photo/Live modes, flash, automatic Live toggle, shutter, front/rear switch, garment outlines, and one-line guidance are reachable without Apple’s legacy image-picker camera chrome. Controls use dark translucent media chrome so the scene stays legible; no decorative scan waves or random circles are added.
 
-### Search
+### Try On
 
-Search is the future product-retrieval workspace. Today it can accept an image and route it through the real capture/understanding pipeline into Library. Text product retrieval remains visibly unavailable until implemented; the page must not show fake listings, prices, or progress.
+Try On uses a full-height person-photo stage and a horizontal item rail suited to iPhone. Users can add product photos or detected Library pieces, toggle inclusion, remove items, create a sequential YouCam preview, and save the result. It never represents the generated image as proof of physical fit.
 
 ### Library
 
