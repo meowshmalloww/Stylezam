@@ -37,7 +37,7 @@ Library groups recent scans and their detected pieces as media, with meaningful 
 
 ### Settings
 
-Consumer-facing rows cover Capture & Controls, Notifications, Privacy, model setup, and help. Backend address, bearer token, server capability state, item-limit slider, automatic Live behavior, and model removal live in Developer Debug. Provider/model selection stays backend-only; Qwen3.7 Plus, OpenAI, eBay, SerpApi, YouCam, local model servers, and GPU switches are not presented as consumer choices.
+Consumer-facing rows cover Capture & Controls, Notifications, and Privacy. Developer Debug contains the bundled-model state, Vision Inspector, item-limit slider, and automatic Live behavior. There is no connection form, token field, model download/removal control, or provider selector.
 
 ## Accessibility and performance
 

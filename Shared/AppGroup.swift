@@ -6,7 +6,6 @@ enum StylezamShared {
     static let pendingImageKey = "stylezam.pending-image-name"
     static let pendingTextKey = "stylezam.pending-text"
     static let pendingOriginKey = "stylezam.pending-origin"
-    static let pendingSearchIDKey = "stylezam.pending-search-id"
     static let pendingScanIDKey = "stylezam.pending-scan-id"
 
     static var defaults: UserDefaults {

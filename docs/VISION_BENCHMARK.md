@@ -9,13 +9,13 @@ Decision date: 2026-08-03.
 - Source revision: `f1b64c11fa42d2f7455708b7a05f81c015461427`.
 - Source checkpoint SHA-256: `aafefc440ea8f3f388e894a898e4270a2eeb6e38a3c3ffd3751d07d0f30b26bb`.
 - Export: native RF-DETR Core ML, FP16, 384 × 384 MLMultiArray input.
-- Published pack: `garment-rfdetr-seg-small/1.0.1`.
-- Published size: approximately 59 MB.
+- Bundled pack: `App/Resources/Models/StylezamGarmentSegmentation.mlpackage`.
+- Bundled source-package size: 61,728,723 bytes.
 - Core ML weight SHA-256: `367113287aa69beb185a4af20e1505b3a1c4fc829b3c0e4ee48788b1e2d48341`.
 - Model/checkpoint license declaration: Apache-2.0.
 - Dataset: Fashionpedia annotations/ontology, CC BY 4.0.
 
-Fashionpedia’s official license page confirms CC BY 4.0 for annotations and ontology: [Fashionpedia data license](https://fashionpedia.github.io/home/data_license.html). The attribution is embedded in the server manifest and displayed in model setup.
+Fashionpedia’s official license page confirms CC BY 4.0 for annotations and ontology: [Fashionpedia data license](https://fashionpedia.github.io/home/data_license.html). The attribution is embedded in the bundled model manifest.
 
 ## Qualification result
 
@@ -39,14 +39,14 @@ This is a smoke benchmark, not a production accuracy claim. Eight linearly sampl
 - The small segmentation variant is Apache-designated by RF-DETR.
 - The checkpoint has fashion-specific classes instead of generic COCO labels.
 - Native Core ML export avoided a custom unverified graph rewrite.
-- The phone performs the expensive work, keeping Daytona CPU-only.
-- The package is small enough for an explicit Wi-Fi-only first-run download.
+- The phone performs the complete vision pipeline without an inference service.
+- The package is small enough to ship inside the application and avoid first-run setup.
 
-Grounded SAM variants were excluded from the 4 GB CPU backend, YOLO variants were avoided for their evaluated AGPL license, and prompt-only mask models still required a separate detector. See [Providers](PROVIDERS.md).
+Multi-model grounding/mask stacks were excluded for size, memory, and latency; evaluated YOLO variants added unwanted license obligations; and prompt-only mask models still required a separate detector. See [Model decision](MODEL_DECISION.md).
 
 ## Reproduce the qualification
 
-The benchmark/export environment is intentionally separate from the runtime backend because it contains PyTorch, RF-DETR, Core ML Tools, NumPy, PyArrow, and the Fashionpedia validation data.
+The benchmark/export environment is intentionally separate from the iOS runtime because it contains PyTorch, RF-DETR, Core ML Tools, NumPy, PyArrow, and Fashionpedia validation data. None of those Python dependencies ship in the app.
 
 ```bash
 python scripts/benchmark_garment_model.py \
@@ -72,15 +72,10 @@ python scripts/verify_coreml_garment_model.py \
   --classes Config/FashionpediaClasses.json \
   --runs 6
 
-python scripts/package_garment_model.py \
-  --model /tmp/stylezam-coreml/rfdetr-seg-small.mlpackage \
-  --checkpoint /path/to/checkpoint_best_ema.pth \
-  --output-dir backend/.data/model-packs \
-  --classes Config/FashionpediaClasses.json \
-  --version 1.0.2
+python3 scripts/verify_model_pack_catalog.py
 ```
 
-Published versions are immutable. Packaging refuses to overwrite an existing version.
+Replacing the bundled model requires updating both the `.mlpackage` and its manifest hashes, then running the repository checks.
 
 ## Coverage gap
 

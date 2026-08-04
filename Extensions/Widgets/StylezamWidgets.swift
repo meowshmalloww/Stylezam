@@ -5,7 +5,6 @@ import WidgetKit
 struct StylezamWidgets: WidgetBundle {
     var body: some Widget {
         StylezamCaptureLiveActivity()
-        StylezamSearchLiveActivity()
         StylezamCaptureControl()
     }
 }

@@ -9,12 +9,9 @@ struct VisionDebugView: View {
     @State private var sourceData: Data?
     @State private var sourceName: String?
     @State private var detection: GarmentDetectionBatch?
-    @State private var analysis: GarmentAnalysisDTO?
     @State private var elapsedMilliseconds: Double?
     @State private var errorMessage: String?
-    @State private var cloudErrorMessage: String?
     @State private var isInspecting = false
-    @State private var isSendingCrops = false
     @State private var copiedReport = false
     @State private var inspectionID = UUID()
 
@@ -94,7 +91,7 @@ struct VisionDebugView: View {
         } header: {
             Text("Test image")
         } footer: {
-            Text("Use a non-sensitive image. Sending crops to the server is a separate manual action below.")
+            Text("The photo and generated crops stay inside this local inspection and are not uploaded.")
         }
     }
 
@@ -153,50 +150,11 @@ struct VisionDebugView: View {
             } label: {
                 Label("Run local detector again", systemImage: "arrow.clockwise")
             }
-            .disabled(isInspecting || isSendingCrops)
-
-            Button {
-                Task { await sendCrops(candidates) }
-            } label: {
-                HStack {
-                    Label(
-                        analysis == nil ? "Send crops for detailed labels" : "Run detailed labels again",
-                        systemImage: "arrow.up.doc"
-                    )
-                    Spacer()
-                    if isSendingCrops {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                }
-            }
-            .disabled(isInspecting || isSendingCrops)
-
-            if let analysis {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Server response received")
-                        .font(.subheadline.weight(.medium))
-                    Text("\(analysis.provider) · \(analysis.model)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-            } else {
-                Text("Cloud labels have not run. The crops shown below are still the real local output.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let cloudErrorMessage {
-                Text(cloudErrorMessage)
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
-            }
+            .disabled(isInspecting)
         } header: {
-            Text("Server crop test")
+            Text("Local rerun")
         } footer: {
-            Text("This uses the same authenticated garment-analysis endpoint as a saved capture. It does not save this inspection to Library.")
+            Text("This reruns the bundled Core ML model and crop generator. It does not save the inspection to Library.")
         }
     }
 
@@ -205,8 +163,7 @@ struct VisionDebugView: View {
             ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
                 VisionCandidateDebugRow(
                     index: index + 1,
-                    candidate: candidate,
-                    remoteLabel: analysis?.items.first { $0.itemID == candidate.id }
+                    candidate: candidate
                 )
             }
         } header: {
@@ -228,7 +185,7 @@ struct VisionDebugView: View {
                 )
             }
 
-            Text("The report contains model state, timings, item IDs, confidences, boxes, crop byte counts, and returned labels. It does not include image bytes or credentials.")
+            Text("The report contains model state, timings, item IDs, confidences, boxes, and crop byte counts. It does not include image bytes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -304,10 +261,8 @@ struct VisionDebugView: View {
         inspectionID = requestID
         isInspecting = true
         detection = nil
-        analysis = nil
         elapsedMilliseconds = nil
         errorMessage = nil
-        cloudErrorMessage = nil
         copiedReport = false
         let started = ProcessInfo.processInfo.systemUptime
         do {
@@ -323,30 +278,14 @@ struct VisionDebugView: View {
         isInspecting = false
     }
 
-    private func sendCrops(_ candidates: [GarmentCandidate]) async {
-        isSendingCrops = true
-        analysis = nil
-        cloudErrorMessage = nil
-        copiedReport = false
-        do {
-            analysis = try await model.inspectGarmentLabels(for: candidates)
-        } catch {
-            cloudErrorMessage = error.localizedDescription
-        }
-        isSendingCrops = false
-    }
-
     private func resetResults() {
         inspectionID = UUID()
         sourceData = nil
         sourceName = nil
         detection = nil
-        analysis = nil
         elapsedMilliseconds = nil
         errorMessage = nil
-        cloudErrorMessage = nil
         isInspecting = false
-        isSendingCrops = false
         copiedReport = false
     }
 
@@ -369,9 +308,7 @@ struct VisionDebugView: View {
                     box: $0.box,
                     cropBytes: $0.cropData?.count
                 )
-            },
-            serverAnalysis: analysis,
-            serverError: cloudErrorMessage
+            }
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -431,7 +368,6 @@ private struct VisionSourceDebugPreview: View {
 private struct VisionCandidateDebugRow: View {
     let index: Int
     let candidate: GarmentCandidate
-    let remoteLabel: GarmentLabelDTO?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -468,25 +404,6 @@ private struct VisionCandidateDebugRow: View {
             }
             .font(.caption)
 
-            if let remoteLabel {
-                Divider()
-                HStack {
-                    Label("Detailed label", systemImage: remoteLabel.accepted ? "checkmark.circle" : "xmark.circle")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer()
-                    Text(remoteLabel.accepted ? "Accepted" : "Rejected")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(remoteLabel.accepted ? StylezamDesign.cobalt : .red)
-                }
-                debugRemoteValue("Name", remoteLabel.displayName)
-                debugRemoteValue("Category", remoteLabel.category)
-                debugRemoteValue("Brand", remoteLabel.brand)
-                debugRemoteValue("Colors", joined(remoteLabel.colors))
-                debugRemoteValue("Materials", joined(remoteLabel.materials))
-                debugRemoteValue("Patterns", joined(remoteLabel.patterns))
-                debugRemoteValue("Details", joined(remoteLabel.details))
-                debugRemoteValue("Visible text", joined(remoteLabel.visibleText))
-            }
         }
         .padding(.vertical, 8)
     }
@@ -501,22 +418,10 @@ private struct VisionCandidateDebugRow: View {
         }
     }
 
-    private func debugRemoteValue(_ title: String, _ value: String?) -> some View {
-        Group {
-            if let value, !value.isEmpty {
-                LabeledContent(title, value: value)
-                    .font(.caption)
-            }
-        }
-    }
-
     private func coordinate(_ first: Double, _ second: Double) -> String {
         "\(first.formatted(.number.precision(.fractionLength(4)))) / \(second.formatted(.number.precision(.fractionLength(4))))"
     }
 
-    private func joined(_ values: [String]) -> String? {
-        values.isEmpty ? nil : values.joined(separator: ", ")
-    }
 }
 
 private struct VisionCropDebugPreview: View {
@@ -566,8 +471,6 @@ private struct VisionDiagnosticReport: Codable {
     let maxItems: Int
     let elapsedMilliseconds: Double?
     let items: [VisionDiagnosticItem]
-    let serverAnalysis: GarmentAnalysisDTO?
-    let serverError: String?
 }
 
 private struct VisionDiagnosticItem: Codable {

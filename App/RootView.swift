@@ -44,9 +44,6 @@ struct RootView: View {
                 .environment(model)
         }
         .onOpenURL { model.handleURL($0) }
-        .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenSearch)) { note in
-            model.handlePendingNotification(searchID: note.object as? String)
-        }
         .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenScan)) { note in
             model.handlePendingScanNotification(scanID: note.object as? String)
         }

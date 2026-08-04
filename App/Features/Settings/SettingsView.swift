@@ -33,7 +33,7 @@ struct SettingsView: View {
                     SettingsLinkLabel(
                         icon: "hand.raised",
                         title: "Privacy",
-                        detail: "On-device vision, crop uploads, storage, and deletion"
+                        detail: "On-device vision, local storage, and deletion"
                     )
                 }
             }
@@ -45,7 +45,7 @@ struct SettingsView: View {
                     SettingsLinkLabel(
                         icon: "hammer",
                         title: "Developer Debug",
-                        detail: "Service connection, model pack, and capture limits"
+                        detail: "Bundled model, vision inspector, and capture limits"
                     )
                 }
             }
@@ -227,17 +227,17 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "On this iPhone",
                 icon: "iphone",
-                detail: "Captured photos, segmented garment crops, saved products, and appearance previews are stored in Stylezam’s local Library. The downloadable garment model runs here too."
+                detail: "The garment model, detection, segmentation, captured photos, and transparent garment crops all stay on this iPhone. The model is included with the app."
             )
             privacySection(
-                title: "Sent when you ask",
-                icon: "arrow.up.doc",
-                detail: "The full capture stays on your iPhone during garment detection. Up to your configured item limit of segmented crops can be sent for detailed labels; the server deletes its temporary copies after the response."
+                title: "No processing server",
+                icon: "network.slash",
+                detail: "Stylezam does not upload captures or crops for detection and does not require a server, service token, or AI-provider key."
             )
             privacySection(
-                title: "Server credentials",
-                icon: "key",
-                detail: "The Fireworks credential stays on the CPU-only server. The Stylezam production service token is stored in Keychain. Stylezam does not put provider keys in the app."
+                title: "Network access",
+                icon: "safari",
+                detail: "This local vision build does not perform product retrieval or virtual try-on. Older saved product cards can still open their merchant links when you choose them."
             )
 
             Section {
@@ -247,7 +247,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Your data")
             } footer: {
-                Text("This removes local captures, garment crops, legacy searches, saved products, and appearance previews. Crop-label uploads are already deleted by the Stylezam server after each request; provider retention can differ by service.")
+                Text("This removes local captures, garment crops, legacy searches, saved products, and appearance previews. Nothing is deleted from another device or service.")
             }
         }
         .navigationTitle("Privacy")
@@ -283,45 +283,10 @@ private struct PrivacySettingsView: View {
 
 private struct DeveloperSettingsView: View {
     @Environment(AppModel.self) private var model
-    @State private var isTesting = false
 
     var body: some View {
         @Bindable var settings = model.settings
         Form {
-            Section {
-                TextField("https://your-stylezam-service.example", text: $settings.backendURLString)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-
-                SecureField("Service token", text: $settings.backendToken)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .privacySensitive()
-
-                Button {
-                    isTesting = true
-                    Task {
-                        await model.refreshCapabilities()
-                        await model.modelPack.refresh(using: try? model.settings.client())
-                        isTesting = false
-                    }
-                } label: {
-                    HStack {
-                        Text("Test connection")
-                        Spacer()
-                        if isTesting {
-                            ProgressView()
-                                .controlSize(.small)
-                        }
-                    }
-                }
-            } header: {
-                Text("Connection")
-            } footer: {
-                Text(model.serverMessage ?? "Stylezam does not issue this token. Create a private random token, use the same value for STYLEZAM_API_TOKEN on Daytona, and enter it here. It is stored in Keychain; localhost is intentionally rejected on iPhone.")
-            }
-
             Section {
                 NavigationLink {
                     VisionDebugView()
@@ -329,7 +294,7 @@ private struct DeveloperSettingsView: View {
                     Label {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Vision Inspector")
-                            Text("See boxes, segmented crops, confidence, and server labels")
+                            Text("See real boxes, masks, crops, confidence, and timing")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -347,32 +312,26 @@ private struct DeveloperSettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Image(systemName: model.modelPack.isInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
+                    Image(systemName: model.modelPack.isInstalled ? "checkmark.circle.fill" : "exclamationmark.triangle")
                         .foregroundStyle(model.modelPack.isInstalled ? StylezamDesign.cobalt : .secondary)
                 }
 
-                if model.modelPack.isInstalled {
-                    Button("Remove downloaded model", role: .destructive) {
-                        do {
-                            try model.modelPack.removeInstalledPack()
-                        } catch {
-                            model.lastError = error.localizedDescription
-                        }
+                if let manifest = model.modelPack.manifest {
+                    LabeledContent("Model size") {
+                        Text(
+                            ByteCountFormatter.string(
+                                fromByteCount: Int64(manifest.totalBytes),
+                                countStyle: .file
+                            )
+                        )
                     }
-                } else {
-                    Button("Download on Wi-Fi") {
-                        guard let client = try? model.settings.client() else {
-                            model.lastError = APIClientError.invalidBaseURL.localizedDescription
-                            return
-                        }
-                        model.modelPack.download(using: client)
-                    }
-                    .disabled(isModelBusy)
+                    LabeledContent("Input", value: "\(manifest.inputResolution) × \(manifest.inputResolution)")
+                    LabeledContent("Classes", value: "\(manifest.classNames.count)")
                 }
             } header: {
                 Text("On-device vision")
             } footer: {
-                Text("The current verified Core ML pack is about 59 MB. It is integrity-checked, compiled on this iPhone, and never runs on Daytona.")
+                Text("The verified Core ML model is part of the app bundle and uses Apple’s local compute path. There is no model download and no processing server.")
             }
 
             Section {
@@ -399,41 +358,27 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Capture behavior")
             } footer: {
-                Text("Five is the safe default. Increasing the limit uses more memory, produces more crop uploads, and can make labeling slower.")
+                Text("Five is the safe default. Increasing the limit uses more memory and can make local segmentation and crop generation slower.")
             }
 
-            Section("Service roles") {
-                serviceRow(
-                    title: "Detailed crop labels",
-                    ready: model.capabilities?.garmentLabeling == true
-                )
-                serviceRow(
-                    title: "Model-pack delivery",
-                    ready: model.capabilities?.modelPackAvailable == true
-                )
-                Text("The deployed service is CPU-only. Product retrieval, price lookup, YouCam, and GPU vision workers are not active in this phase.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            Section("Runtime") {
+                runtimeRow(title: "Garment detection", value: model.modelPack.isInstalled ? "Ready" : "Unavailable")
+                runtimeRow(title: "Segmentation crops", value: "On device")
+                runtimeRow(title: "Product retrieval", value: "Not built yet")
+                runtimeRow(title: "Virtual try-on", value: "Not built yet")
             }
         }
         .navigationTitle("Developer Debug")
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var isModelBusy: Bool {
-        switch model.modelPack.status {
-        case .downloading, .compiling: true
-        default: false
-        }
-    }
-
-    private func serviceRow(title: String, ready: Bool) -> some View {
+    private func runtimeRow(title: String, value: String) -> some View {
         HStack {
             Text(title)
             Spacer()
-            Text(ready ? "Ready" : "Off")
+            Text(value)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(ready ? StylezamDesign.cobalt : .secondary)
+                .foregroundStyle(value == "Ready" || value == "On device" ? StylezamDesign.cobalt : .secondary)
         }
     }
 }

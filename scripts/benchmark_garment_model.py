@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Benchmark Stylezam's garment segmenter without involving product search.
 
-This script is intentionally separate from the runtime backend. The backend is
-CPU-only and does not ship PyTorch; the benchmark exists to qualify downloadable
-on-device model packs before they are published to the app.
+This script is intentionally separate from the iOS runtime. The application does
+not ship PyTorch; the benchmark exists to qualify bundled on-device model packs
+before they are included in the app.
 """
 
 from __future__ import annotations

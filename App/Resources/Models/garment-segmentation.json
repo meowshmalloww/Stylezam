@@ -84,7 +84,6 @@
   "modelID": "garment-rfdetr-seg-small",
   "sourceRevision": "f1b64c11fa42d2f7455708b7a05f81c015461427",
   "sourceURL": "https://huggingface.co/resoa/garment-detector-seg",
-  "storagePrefix": "garment-rfdetr-seg-small/1.0.1/StylezamGarmentSegmentation.mlpackage",
   "totalBytes": 61728723,
   "version": "1.0.1"
 }

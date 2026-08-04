@@ -36,6 +36,10 @@ actor GarmentVisionEngine {
     private var loadedModelURL: URL?
     private var loadedModel: MLModel?
 
+    func prepare(modelURL: URL) throws {
+        _ = try model(at: modelURL)
+    }
+
     func analyze(
         imageData: Data,
         modelURL: URL?,
@@ -57,7 +61,8 @@ actor GarmentVisionEngine {
                 image: cgImage,
                 modelURL: modelURL,
                 manifest: manifest,
-                maxItems: itemLimit
+                maxItems: itemLimit,
+                includeMasks: includeCrops
             )
         } else {
             method = .foregroundInstance
@@ -86,18 +91,30 @@ actor GarmentVisionEngine {
         manifest: ModelPackManifestDTO,
         maxItems: Int
     ) async throws -> LiveGarmentPreview {
-        let detection = try await analyze(
-            imageData: imageData,
-            modelURL: modelURL,
-            manifest: manifest,
-            maxItems: maxItems,
-            includeCrops: false
-        )
         guard let source = Self.normalizedImage(from: imageData),
               let image = source.cgImage
         else {
             throw GarmentVisionError.invalidImage
         }
+        let detections = try coreMLDetections(
+            image: image,
+            modelURL: modelURL,
+            manifest: manifest,
+            maxItems: min(12, max(1, maxItems)),
+            includeMasks: false
+        )
+        let detection = GarmentDetectionBatch(
+            method: .coreML,
+            candidates: detections.map {
+                GarmentCandidate(
+                    id: UUID().uuidString,
+                    localLabel: $0.label,
+                    confidence: $0.confidence,
+                    box: $0.box,
+                    cropData: nil
+                )
+            }
+        )
         let metrics = Self.frameMetrics(image)
         let largestArea = detection.candidates
             .map { $0.box.width * $0.box.height }
@@ -143,7 +160,8 @@ actor GarmentVisionEngine {
         image: CGImage,
         modelURL: URL,
         manifest: ModelPackManifestDTO,
-        maxItems: Int
+        maxItems: Int,
+        includeMasks: Bool
     ) throws -> [RawDetection] {
         let model = try model(at: modelURL)
         let input = try Self.modelInput(
@@ -219,6 +237,18 @@ actor GarmentVisionEngine {
         }
 
         return selected.map { candidate in
+            guard includeMasks else {
+                return RawDetection(
+                    queryIndex: candidate.query,
+                    classID: candidate.classID,
+                    label: manifest.classNames[candidate.classID],
+                    confidence: candidate.confidence,
+                    box: candidate.box,
+                    maskWidth: 0,
+                    maskHeight: 0,
+                    mask: []
+                )
+            }
             var mask = [UInt8](repeating: 0, count: maskWidth * maskHeight)
             for y in 0..<maskHeight {
                 for x in 0..<maskWidth {

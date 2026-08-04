@@ -99,7 +99,6 @@ final class LibraryStore {
                 mode: mode,
                 detectionMethod: detection.method,
                 labelState: .local,
-                remoteAnalysisID: nil,
                 items: items
             )
             snapshot.scans.insert(scan, at: 0)
@@ -118,50 +117,6 @@ final class LibraryStore {
                 try? FileManager.default.removeItem(at: url)
             }
             throw error
-        }
-    }
-
-    func applyAnalysis(_ analysis: GarmentAnalysisDTO, to scanID: UUID) throws {
-        guard let index = snapshot.scans.firstIndex(where: { $0.id == scanID }) else {
-            return
-        }
-        let previousSnapshot = snapshot
-        let labels = Dictionary(uniqueKeysWithValues: analysis.items.map { ($0.itemID, $0) })
-        snapshot.scans[index].items = snapshot.scans[index].items.map { item in
-            guard let label = labels[item.id] else { return item }
-            var updated = item
-            updated.accepted = label.accepted
-            updated.category = label.category
-            updated.displayName = label.displayName
-            updated.brand = label.brand
-            updated.colors = label.colors
-            updated.materials = label.materials
-            updated.patterns = label.patterns
-            updated.details = label.details
-            updated.visibleText = label.visibleText
-            return updated
-        }
-        snapshot.scans[index].labelState = .enriched
-        snapshot.scans[index].remoteAnalysisID = analysis.id
-        do {
-            try persist()
-        } catch {
-            snapshot = previousSnapshot
-            throw error
-        }
-    }
-
-    func markAnalysisUnavailable(for scanID: UUID) {
-        guard let index = snapshot.scans.firstIndex(where: { $0.id == scanID }) else {
-            return
-        }
-        let previousSnapshot = snapshot
-        snapshot.scans[index].labelState = .unavailable
-        do {
-            try persist()
-        } catch {
-            snapshot = previousSnapshot
-            loadError = error.localizedDescription
         }
     }
 

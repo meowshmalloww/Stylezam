@@ -2,7 +2,6 @@ import UIKit
 import UserNotifications
 
 extension Notification.Name {
-    static let stylezamOpenSearch = Notification.Name("stylezam.open-search")
     static let stylezamOpenScan = Notification.Name("stylezam.open-scan")
 }
 
@@ -31,11 +30,6 @@ final class StylezamAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
             StylezamShared.defaults.set(scanID, forKey: StylezamShared.pendingScanIDKey)
             await MainActor.run {
                 NotificationCenter.default.post(name: .stylezamOpenScan, object: scanID)
-            }
-        } else if let searchID = userInfo["searchID"] as? String {
-            StylezamShared.defaults.set(searchID, forKey: StylezamShared.pendingSearchIDKey)
-            await MainActor.run {
-                NotificationCenter.default.post(name: .stylezamOpenSearch, object: searchID)
             }
         }
     }

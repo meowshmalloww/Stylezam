@@ -19,11 +19,9 @@
     <key>ITSAppUsesNonExemptEncryption</key><false/>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key>
-    <string>Stylezam uses the camera only when you choose to capture a look or a try-on photo.</string>
+    <string>Stylezam uses the camera only when you choose to capture a fashion look.</string>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Choose a fashion image so Stylezam can separate and label the clothing and accessories you select.</string>
-    <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Save a generated try-on image to your photo library when you request it.</string>
+    <string>Choose a fashion image so Stylezam can detect and separate its visible pieces on this iPhone.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Choose screen content so Stylezam can scan a fashion frame only when you start or trigger capture.</string>
     <key>NSSupportsLiveActivities</key><true/>
@@ -32,6 +30,11 @@
     <array><string>screen-capture</string></array>
     <key>UILaunchScreen</key><dict><key>UIColorName</key><string>BrandCobalt</string></dict>
     <key>UISupportedInterfaceOrientations</key>
-    <array><string>UIInterfaceOrientationPortrait</string></array>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
 </dict>
 </plist>

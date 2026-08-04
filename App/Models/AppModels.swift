@@ -120,7 +120,6 @@ struct SavedScan: Codable, Identifiable, Hashable, Sendable {
     let mode: CaptureMode
     let detectionMethod: GarmentDetectionMethod
     var labelState: ScanLabelState
-    var remoteAnalysisID: String?
     var items: [SavedGarment]
 }
 

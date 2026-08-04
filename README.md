@@ -6,32 +6,32 @@
 
 <p align="center">
   <strong>Capture a look. Separate the pieces. Keep what matters.</strong><br>
-  A native iPhone fashion-capture foundation with on-device garment segmentation and bounded cloud labeling.
+  A native iPhone fashion-capture app with fully on-device garment detection and segmentation.
 </p>
 
 <p align="center">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6.0-FA7343?style=flat-square&logo=swift&logoColor=white">
   <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-0A57FF?style=flat-square&logo=apple&logoColor=white">
-  <img alt="CPU backend" src="https://img.shields.io/badge/backend-CPU%20only-202124?style=flat-square">
+  <img alt="Local Core ML" src="https://img.shields.io/badge/vision-on--device-111111?style=flat-square&logo=apple&logoColor=white">
   <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-111111?style=flat-square">
 </p>
 
-Stylezam’s first release boundary is intentionally honest: photo capture, live garment detection, crop creation, structured labeling, and the local Library are implemented. Shopping retrieval, current prices, and virtual try-on are disabled until a separate retrieval benchmark is complete. Disabled routes fail with `feature_not_enabled`; the app does not show sample products or simulated matches.
+Stylezam’s current build is local by design. The RF-DETR Core ML model is included in the application, compiled by Xcode, and loaded directly on the iPhone. Capture, boxes, masks, transparent crops, duplicate filtering, and Library storage do not require a cloud host, local computer, API token, provider key, or first-run model download.
+
+Product retrieval, current prices, and virtual try-on remain deferred. The app does not insert sample products, simulated progress, or invented prices while those features are unavailable.
 
 ## What works now
 
-- A custom full-screen camera with rear/front switching, flash, photo mode, and hybrid Live mode.
-- Automatic Live capture when a frame is stable, plus a manual shutter at any time.
+- Custom full-screen camera with rear/front switching, flash, Photo mode, and hybrid Live mode.
+- Automatic Live capture after a stable, high-quality frame, plus a manual shutter at any time.
+- Bundled 61.7 MB FP16 Core ML garment-segmentation package—no setup download.
+- On-device boxes, instance masks, Fashionpedia item classes, and transparent PNG crops.
 - Up to five pieces per look by default; Developer Debug can raise the limit to 12.
-- A Wi-Fi-only, checksum-verified 59 MB Core ML model download.
-- On-device RF-DETR garment detection, masks, crops, and labels for Fashionpedia’s 27 item classes.
-- One bounded Qwen3.7 Plus request through Fireworks to validate and enrich all crops from a look.
-- A non-destructive Vision Inspector in Settings → Developer Debug that overlays every box, shows transparent crops on light and dark backgrounds, reports confidence and timing, and can manually exercise the real crop-label endpoint.
-- A local Library containing the original look, individual pieces, source, timestamp, and analysis state.
+- Real Vision Inspector with source overlays, crop previews, normalized geometry, confidence, byte counts, and measured local inference time.
+- Local Library containing the source look, detected pieces, capture source, and timestamp.
 - Duplicate suppression for recent Live and screen captures.
-- Photo import, clipboard input, App Intents, a Control Center control, Live Activities, and Dynamic Island state.
-- Share-extension source and handoff UI, with cross-process image handoff requiring an App Group entitlement that a free Personal Team may not provision.
-- An iOS 27 ScreenCaptureKit adapter behind SDK availability checks; the iOS 26 build shows a truthful unavailable state.
+- Photo import, clipboard input, Share extension, App Intents, Control Center control, Live Activities, and Dynamic Island state.
+- Conditional iOS 27 ScreenCaptureKit adapter; iOS 26 continues to support camera, import, clipboard, and Share input.
 
 <table>
   <tr>
@@ -41,88 +41,62 @@ Stylezam’s first release boundary is intentionally honest: photo capture, live
   </tr>
 </table>
 
-## Current architecture
+## Architecture
 
 ```mermaid
 flowchart LR
-    Camera["Camera · Photos · Share · Screen"] --> PhoneModel["Core ML garment segmentation"]
-    PhoneModel --> Crops["Up to 5 masked crops"]
-    Crops --> Library["Local Library"]
-    Crops --> API["Authenticated Daytona API"]
-    API --> Limits["Size · concurrency · monthly caps"]
-    Limits --> Qwen["Qwen3.7 Plus on Fireworks"]
-    Qwen --> Labels["Validated structured labels"]
-    Labels --> Library
-    Search["Product retrieval"] -. "deferred" .-> API
+    Input["Camera · Photos · Clipboard · Share · Screen"] --> Normalize["Orientation and bounded image normalization"]
+    Normalize --> Model["Bundled RF-DETR Core ML"]
+    Model --> Select["Confidence · item classes · IoU suppression · item cap"]
+    Select --> Masks["Boxes · masks · transparent crops"]
+    Masks --> Library["Local Library"]
+    Masks --> Inspector["Local Vision Inspector"]
+    Search["Product retrieval"] -. "deferred" .-> Future["Future benchmarked implementation"]
 ```
 
-The Daytona service has no server-side inference model, PyTorch, GPU runtime, or local inference server. Detection runs on the iPhone. The 2-core/4 GB service only authenticates requests, distributes the hashed Core ML pack, normalizes temporary crops, enforces a 24 MB request cap and two-analysis concurrency cap, and calls Fireworks.
+Live preview avoids crop creation and mask materialization; those heavier operations run only for an accepted photo. Core ML is cached after first load and uses all compute units available to the device. See [Architecture](./docs/ARCHITECTURE.md), [Model decision](./docs/MODEL_DECISION.md), [Privacy](./docs/PRIVACY.md), and [Vision benchmark](./docs/VISION_BENCHMARK.md).
 
-Read the full [architecture](./docs/ARCHITECTURE.md), [provider decision](./docs/PROVIDERS.md), [privacy behavior](./docs/PRIVACY.md), and [vision benchmark](./docs/VISION_BENCHMARK.md).
+## Bundled model
 
-## Model decision
+The selected artifact is `resoa/garment-detector-seg`, an RF-DETR-Seg-Small checkpoint converted to FP16 Core ML at 384 × 384. The exact source revision, checkpoint SHA-256, compiled-input/output contract, class order, license declarations, and each package-file hash are recorded in `App/Resources/Models/garment-segmentation.json`.
 
-The selected pack is `resoa/garment-detector-seg`, an RF-DETR-Seg-Small checkpoint converted to FP16 Core ML. The model card and RF-DETR’s designated small segmentation model are Apache-2.0; Fashionpedia’s annotations and ontology are CC BY 4.0. The exact source revision, source-checkpoint SHA-256, and every shipped Core ML file hash are embedded in the model manifest.
+The item taxonomy covers core clothing, shoes, bags/wallets, hats/head coverings, glasses, ties, gloves, watches, belts, socks/stockings, scarves, and umbrellas. Fashionpedia does not provide reliable item classes for rings, bracelets, necklaces, or earrings, so this build does not pretend those classes are solved.
 
-The release item taxonomy includes clothing, shoes, bags/wallets, hats/head coverings, glasses, ties, gloves, watches, belts, socks/stockings, scarves, and umbrellas. Rings, bracelets, necklaces, and earrings are not reliable V1 detections because Fashionpedia does not provide those as item classes. Qwen3.7 Plus can label jewelry only after a real crop exists, so Stylezam does not pretend the missing detector coverage is solved.
-
-## Run the checks
+## Build and verify
 
 ```bash
-./scripts/bootstrap_backend.sh
 ./scripts/check.sh
 ```
 
-The check script runs the backend tests, validates the published model pack, regenerates the Xcode project, and builds all iOS targets for the simulator with signing disabled.
+The check verifies every bundled model file against its published byte count and SHA-256, regenerates the Xcode project, builds all iOS targets for the simulator, and proves the resulting `Stylezam.app` contains both the compiled `.mlmodelc` and its manifest.
 
-## Deploy the CPU service
-
-The production container is pinned to a Python base-image digest and installs only hash-locked Python packages. The Daytona helper deliberately requests exactly 2 CPU cores, 4096 MB RAM, 10 GB disk, no auto-stop, and no GPU:
-
-The versioned public image for the Daytona dashboard is:
-
-```text
-ghcr.io/meowshmalloww/stylezam-backend:0.1.0
-```
-
-Select **Image**, allocate 2 CPU / 4 GB RAM / 10 GB disk with no GPU, disable auto-stop, enable Public HTTP Preview, and leave outbound networking enabled. Add the Fireworks credential and a separate random Stylezam service password through Daytona Environment Variables; neither secret is part of the image.
+For development and a connected iPhone:
 
 ```bash
-export STYLEZAM_API_TOKEN="a-long-random-service-token"
-export STYLEZAM_FIREWORKS_API_KEY="your-fireworks-key"
-export STYLEZAM_FIREWORKS_MONTHLY_CAP=100
-./scripts/create_daytona.sh
+./scripts/generate_project.sh
+open Stylezam.xcodeproj
 ```
 
-The script requires an authenticated Daytona CLI and does not install it for you. After creation, copy the sandbox’s public port 8000 HTTPS preview URL and the same service token into Settings → Developer Debug. The iPhone client rejects localhost and insecure HTTP addresses.
-
-Fireworks Qwen3.7 Plus is a serverless pay-per-token API. Stylezam’s monthly count is a hard application-side call stop, but it is not an account billing guarantee. Fireworks also documents a prepaid-credit model and an account monthly spend limit that pauses API requests when reached. Set the account limit to $50 before adding the replacement key; see [Setup](./docs/SETUP.md). The Fireworks limit applies to the whole account, while Stylezam’s lower call cap protects this service specifically.
-
-See [Setup](./docs/SETUP.md) for signing, physical-device installation, Daytona, and iOS 27 steps.
+Choose your Development Team and run the `Stylezam` scheme. A free Personal Team can install the main app for seven-day testing, subject to Apple’s capability and provisioning limits. See [Setup](./docs/SETUP.md).
 
 ## Repository map
 
 ```text
-App/                    SwiftUI app, custom camera, Library, and Core ML runtime
+App/Resources/Models/  bundled Core ML package and verified manifest
+App/                    SwiftUI app, camera, local vision runtime, and Library
 Extensions/Share/       image/text Share extension
 Extensions/Widgets/     Control Widget, Live Activity, and Dynamic Island UI
 Shared/                 App Group, App Intents, and activity attributes
-backend/                CPU-only FastAPI service and locked runtime dependencies
-backend/.data/model-packs/
-                        immutable Core ML pack published to authenticated phones
 Config/                 Fashionpedia class ordering and build configuration
 docs/                   architecture, setup, privacy, benchmark, and design notes
-scripts/                build, benchmark, package, deployment, and verification tools
+scripts/                project generation, model research/export, and verification
 ```
 
-## Known release blockers
+## Known release boundaries
 
-- The real iOS 27 screen path still needs Xcode 27 and an iOS 27 device test. This Mac currently has Xcode 26.6 and the iOS 26.5 SDK.
-- Daytona deployment still needs your Daytona authentication, Fireworks key, and chosen service token.
-- The real Qwen3.7 Plus request cannot be integration-tested without spending one provider call; the request/response contract is covered by a mocked test.
-- Physical-device App Group, Share extension, Control Widget, Live Activity, and camera behavior require signing and device verification.
-- Product retrieval, prices, and try-on remain off by design.
+- Product retrieval, current prices, and virtual try-on are not implemented in this local vision build.
+- The conditional iOS 27 screen path still requires an iOS 27 SDK/device verification pass.
+- Physical-device camera performance, thermals, Live Activity, extensions, and App Group provisioning must be tested with the final signing team.
+- App Store privacy disclosures and model/dataset legal review remain release tasks.
 
-## License and notices
-
-Stylezam source is licensed under [Apache License 2.0](./LICENSE). Model, dataset, and runtime notices are in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). License selection is engineering due diligence, not legal advice.
+Stylezam source is licensed under [Apache License 2.0](./LICENSE). Model, dataset, and platform notices are in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md).

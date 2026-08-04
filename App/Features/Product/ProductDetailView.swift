@@ -5,12 +5,7 @@ struct ProductDetailView: View {
     @Environment(\.openURL) private var openURL
     let product: ProductResultDTO
 
-    @State private var isTryOnPresented = false
     @State private var heroVisible = false
-
-    private var canTryOn: Bool {
-        product.imageURL != nil && model.capabilities?.virtualTryOn == true
-    }
 
     var body: some View {
         ScrollView {
@@ -57,16 +52,6 @@ struct ProductDetailView: View {
         }
         .safeAreaInset(edge: .bottom) {
             actionBar
-        }
-        .sheet(isPresented: $isTryOnPresented) {
-            if let imageURL = product.imageURL {
-                TryOnView(
-                    product: product,
-                    productImageURL: imageURL,
-                    settings: model.settings
-                )
-                .environment(model)
-            }
         }
         .sensoryFeedback(.success, trigger: model.library.isSaved(product))
     }
@@ -204,34 +189,13 @@ struct ProductDetailView: View {
 
     private var actionBar: some View {
         GlassEffectContainer(spacing: 10) {
-            HStack(spacing: 10) {
-                if canTryOn {
-                    Button {
-                        isTryOnPresented = true
-                    } label: {
-                        Label("Try-on", systemImage: "figure.stand")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 54)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(StylezamDesign.cobalt)
-                    Button {
-                        openURL(product.productURL)
-                    } label: {
-                        merchantButtonLabel
-                    }
-                    .buttonStyle(.glass)
-                } else {
-                    Button {
-                        openURL(product.productURL)
-                    } label: {
-                        merchantButtonLabel
-                    }
-                    .buttonStyle(.glassProminent)
-                    .tint(StylezamDesign.cobalt)
-                }
+            Button {
+                openURL(product.productURL)
+            } label: {
+                merchantButtonLabel
             }
+            .buttonStyle(.glassProminent)
+            .tint(StylezamDesign.cobalt)
         }
         .padding(.horizontal, 12)
         .padding(.top, 8)

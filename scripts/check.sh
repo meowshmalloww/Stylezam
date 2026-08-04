@@ -2,24 +2,30 @@
 set -eu
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-
-if [ ! -x "$project_root/.venv/bin/pytest" ]; then
-    echo "Run ./scripts/bootstrap_backend.sh first." >&2
-    exit 1
-fi
-
-cd "$project_root/backend"
-"$project_root/.venv/bin/pytest" -q
+derived_data="$project_root/DerivedData"
 
 cd "$project_root"
-"$project_root/.venv/bin/python" scripts/verify_model_pack_catalog.py
-"$project_root/scripts/generate_project.sh"
+python3 scripts/verify_model_pack_catalog.py
+./scripts/generate_project.sh
 xcodebuild \
     -project Stylezam.xcodeproj \
     -scheme Stylezam \
     -configuration Debug \
     -sdk iphonesimulator \
     -destination "generic/platform=iOS Simulator" \
-    -derivedDataPath DerivedData \
+    -derivedDataPath "$derived_data" \
     CODE_SIGNING_ALLOWED=NO \
     build
+
+app_bundle="$derived_data/Build/Products/Debug-iphonesimulator/Stylezam.app"
+if [ ! -d "$app_bundle/StylezamGarmentSegmentation.mlmodelc" ]; then
+    echo "Bundled compiled Core ML model is missing from Stylezam.app." >&2
+    exit 1
+fi
+if [ ! -f "$app_bundle/garment-segmentation.json" ] \
+    && [ ! -f "$app_bundle/Models/garment-segmentation.json" ]; then
+    echo "Bundled garment manifest is missing from Stylezam.app." >&2
+    exit 1
+fi
+
+echo "Verified local-only iOS build and bundled Core ML resources."
