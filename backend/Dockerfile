@@ -1,5 +1,10 @@
 FROM python:3.12.13-slim-bookworm@sha256:d50fb7611f86d04a3b0471b46d7557818d88983fc3136726336b2a4c657aa30b
 
+LABEL org.opencontainers.image.source="https://github.com/meowshmalloww/Stylezam" \
+      org.opencontainers.image.title="Stylezam backend" \
+      org.opencontainers.image.description="CPU-only authenticated garment labeling gateway for Stylezam" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \

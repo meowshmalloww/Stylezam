@@ -319,10 +319,26 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Connection")
             } footer: {
-                Text(model.serverMessage ?? "Use the deployed HTTPS address. Localhost is intentionally rejected on iPhone; the production service token is stored in Keychain.")
+                Text(model.serverMessage ?? "Stylezam does not issue this token. Create a private random token, use the same value for STYLEZAM_API_TOKEN on Daytona, and enter it here. It is stored in Keychain; localhost is intentionally rejected on iPhone.")
             }
 
             Section {
+                NavigationLink {
+                    VisionDebugView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Vision Inspector")
+                            Text("See boxes, segmented crops, confidence, and server labels")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "viewfinder.rectangular")
+                            .foregroundStyle(StylezamDesign.cobalt)
+                    }
+                }
+
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Garment model")

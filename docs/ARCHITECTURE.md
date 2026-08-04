@@ -13,7 +13,7 @@ sequenceDiagram
     participant CoreML as On-device RF-DETR
     participant Library as Local Library
     participant API as Daytona CPU API
-    participant Fireworks as Fireworks MiniMax M3
+    participant Fireworks as Fireworks Qwen3.7 Plus
 
     User->>Camera: Capture photo or choose Live
     Camera->>CoreML: Normalized frame
@@ -68,7 +68,7 @@ The production API is intentionally small enough for 2 CPU cores, 4 GB RAM, and 
 - reject unsafe paths, request bodies over 24 MB, normalized crop batches over 20 MB, excess item counts, and quota exhaustion;
 - decode with a 20-million-pixel ceiling, apply EXIF orientation, strip metadata, and preserve segmented alpha masks as PNG (ordinary images become JPEG);
 - permit at most two complete crop normalization-and-labeling operations per process;
-- make one MiniMax M3 request for a crop batch;
+- make one Qwen3.7 Plus request for a crop batch;
 - delete normalized crop files in a `finally` block;
 - expose product and try-on routes only when their separate feature flags are enabled.
 
@@ -76,7 +76,7 @@ No GPU flag, PyTorch, RF-DETR runtime, Grounding DINO, SAM2, CLIP, Ollama, or de
 
 ## Provider boundary
 
-MiniMax is a validation and labeling stage, not the source of crop geometry. The prompt requires visible facts, rejects body/background fragments, forbids unsupported brand guesses, and requests a strict JSON schema. The backend verifies that every submitted item ID appears exactly once before returning the response.
+Qwen3.7 Plus is a validation and labeling stage, not the source of crop geometry. The request disables reasoning for this bounded classification task, requires visible facts, rejects body/background fragments, forbids unsupported brand guesses, and requests a strict JSON schema. The backend verifies that every submitted item ID appears exactly once before returning the response.
 
 The default app-side quota is 100 crop-batch requests per UTC month. A failed provider attempt still consumes the locally claimed slot because it may already have reached Fireworks. This prevents retry storms from bypassing the cap.
 

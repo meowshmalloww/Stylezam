@@ -30,16 +30,17 @@ def image_path(tmp_path: Path) -> Path:
 
 
 @pytest.mark.asyncio
-async def test_fireworks_minimax_vision_request(tmp_path: Path) -> None:
+async def test_fireworks_qwen3p7_vision_request(tmp_path: Path) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         assert request.url.path == "/inference/v1/chat/completions"
         assert request.headers["authorization"] == "Bearer fireworks-secret"
-        assert payload["model"] == "accounts/fireworks/models/minimax-m3"
+        assert payload["model"] == "accounts/fireworks/models/qwen3p7-plus"
         image = payload["messages"][0]["content"][1]
         assert image["image_url"]["url"].startswith("data:image/jpeg;base64,")
         assert payload["response_format"]["type"] == "json_schema"
         assert payload["temperature"] == 0
+        assert payload["reasoning_effort"] == "none"
         return httpx.Response(
             200,
             json={"choices": [{"message": {"content": json.dumps(ATTRIBUTES)}}]},

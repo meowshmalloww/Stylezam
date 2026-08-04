@@ -68,4 +68,4 @@ Stylezam links Apple platform frameworks supplied by the OS/SDK, including Swift
 
 ## Hosted service
 
-MiniMax M3 is accessed through the user’s Fireworks account and is not redistributed in the Stylezam repository or Daytona image. Fireworks terms, acceptable-use rules, data-handling policy, and model availability apply to those API calls.
+Qwen3.7 Plus is a closed-weight model accessed through the user’s Fireworks account and is not redistributed in the Stylezam repository or Daytona image. Fireworks terms, acceptable-use rules, data-handling policy, and model availability apply to those API calls.

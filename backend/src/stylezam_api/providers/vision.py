@@ -69,7 +69,7 @@ def _secret_value(secret: Optional[SecretStr]) -> Optional[str]:
 
 class FireworksVisionAnalyzer:
     id = "fireworks"
-    name = "Fireworks MiniMax M3"
+    name = "Fireworks Qwen3.7 Plus"
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient) -> None:
         self.settings = settings
@@ -109,6 +109,7 @@ class FireworksVisionAnalyzer:
                         },
                     },
                     "temperature": 0,
+                    "reasoning_effort": "none",
                     "max_tokens": 1_000,
                 },
                 timeout=self.settings.job_timeout_seconds,
@@ -121,7 +122,7 @@ class FireworksVisionAnalyzer:
         except (httpx.HTTPError, ValueError, KeyError, TypeError, ValidationError) as exc:
             raise ProviderUpstreamError(
                 self.id,
-                "MiniMax M3 could not return structured fashion attributes.",
+                "Qwen3.7 Plus could not return structured fashion attributes.",
             ) from exc
 
 

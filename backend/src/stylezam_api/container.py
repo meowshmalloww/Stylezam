@@ -43,7 +43,7 @@ class Container:
         self.fireworks_vision = fireworks_analyzer(settings, self.http)
         self.garment_labeler = FireworksGarmentLabeler(settings, self.http)
         # Product retrieval is intentionally deferred. If it is enabled later,
-        # MiniMax M3 is the only configured image-understanding provider.
+        # Qwen3.7 Plus is the only configured image-understanding provider.
         self.vision_analyzers = [self.fireworks_vision]
         self.local_vision = DisabledLocalVision()
         self.clip = DisabledVisualReranker()
@@ -100,8 +100,8 @@ class Container:
             model_pack_available=model_pack_available,
             providers=[
                 ProviderCapability(
-                    id="fireworks-minimax-m3",
-                    name="MiniMax M3 via Fireworks",
+                    id="fireworks-qwen3p7-plus",
+                    name="Qwen3.7 Plus via Fireworks",
                     capability="garment_crop_validation",
                     configured=self.garment_labeler.configured,
                     monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."

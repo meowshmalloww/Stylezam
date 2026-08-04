@@ -37,7 +37,7 @@ Library groups recent scans and their detected pieces as media, with meaningful 
 
 ### Settings
 
-Consumer-facing rows cover Capture & Controls, Notifications, Privacy, model setup, and help. Backend address, bearer token, server capability state, item-limit slider, automatic Live behavior, and model removal live in Developer Debug. Qwen, OpenAI, eBay, SerpApi, YouCam, local model servers, and GPU switches are not presented as active consumer choices.
+Consumer-facing rows cover Capture & Controls, Notifications, Privacy, model setup, and help. Backend address, bearer token, server capability state, item-limit slider, automatic Live behavior, and model removal live in Developer Debug. Provider/model selection stays backend-only; Qwen3.7 Plus, OpenAI, eBay, SerpApi, YouCam, local model servers, and GPU switches are not presented as consumer choices.
 
 ## Accessibility and performance
 

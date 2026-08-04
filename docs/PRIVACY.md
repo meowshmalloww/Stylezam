@@ -18,13 +18,13 @@ The app does not upload every camera frame. A still is processed after the shutt
 
 After on-device segmentation, Stylezam sends only the candidate garment crops required for labeling, plus their generated item IDs, local class labels, confidence values, and normalized boxes. The full original look is not part of the garment-label request.
 
-The request goes to the user-configured Stylezam HTTPS service using a bearer token. The service checks decoded dimensions, applies EXIF orientation, strips embedded metadata, and preserves segmented alpha masks as PNG (ordinary opaque images are re-encoded as JPEG). It then sends the crop batch as Base64 image inputs to MiniMax M3 through Fireworks.
+The request goes to the user-configured Stylezam HTTPS service using a bearer token. The service checks decoded dimensions, applies EXIF orientation, strips embedded metadata, and preserves segmented alpha masks as PNG (ordinary opaque images are re-encoded as JPEG). It then sends the crop batch as Base64 image inputs to Qwen3.7 Plus through Fireworks.
 
-Fireworks documents zero data retention by default for open-model inference: prompt and generation data are held in volatile memory for the request unless the account explicitly opts into logging features. Fireworks still retains service metadata such as token counts. Review the current policy for the account actually used: [Fireworks data handling](https://docs.fireworks.ai/guides/security_compliance/data_handling).
+Qwen3.7 Plus is a closed-weight model hosted directly by Fireworks. Fireworks’s launch material describes its governance and data-handling commitments, while the general zero-retention documentation is specifically worded for open-model inference. Confirm the current Qwen3.7 Plus and account terms before release rather than assuming the open-model wording applies unchanged. Fireworks can retain service metadata such as token counts: [Qwen3.7 Plus launch](https://fireworks.ai/blog/qwen-3p7-plus), [Fireworks data handling](https://docs.fireworks.ai/guides/security_compliance/data_handling).
 
 ## Temporary backend storage
 
-Normalized crop files exist only for the duration of the label call. The route deletes them in a `finally` block on success, provider error, quota error, or cancellation. The server persists aggregate provider-call counts in SQLite so it can enforce the UTC-month limit. It does not persist MiniMax prompts or label responses as garment-analysis jobs.
+Normalized crop files exist only for the duration of the label call. The route deletes them in a `finally` block on success, provider error, quota error, or cancellation. The server persists aggregate provider-call counts in SQLite so it can enforce the UTC-month limit. It does not persist Qwen prompts or label responses as garment-analysis jobs.
 
 The model files are immutable and are served only through bearer-authenticated endpoints. Their hashes and provenance are public facts in the manifest, but the deployment does not expose an unauthenticated static model directory.
 

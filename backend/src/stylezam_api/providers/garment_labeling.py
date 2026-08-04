@@ -130,7 +130,7 @@ def _prompt(items: Sequence[GarmentInputMetadata]) -> str:
 
 class FireworksGarmentLabeler:
     id = "fireworks-garment-labeler"
-    name = "Fireworks MiniMax M3"
+    name = "Fireworks Qwen3.7 Plus"
 
     def __init__(self, settings: Settings, client: httpx.AsyncClient) -> None:
         self.settings = settings
@@ -186,6 +186,7 @@ class FireworksGarmentLabeler:
                             },
                         },
                         "temperature": 0,
+                        "reasoning_effort": "none",
                         "max_tokens": 1_600,
                     },
                     timeout=self.settings.job_timeout_seconds,
@@ -204,5 +205,5 @@ class FireworksGarmentLabeler:
         except (httpx.HTTPError, KeyError, TypeError, ValueError, ValidationError) as exc:
             raise ProviderUpstreamError(
                 self.id,
-                "Fireworks MiniMax M3 could not validate the garment crops.",
+                "Fireworks Qwen3.7 Plus could not validate the garment crops.",
             ) from exc

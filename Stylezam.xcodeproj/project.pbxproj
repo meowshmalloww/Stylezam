@@ -60,6 +60,7 @@
 		EAF4BEF7975C4B347C0A4586 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
 		F36D719E6BB5959E1BF4A536 /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
 		F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A940D99785B136691E06C4A /* CaptureSheet.swift */; };
+		F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70AC81BE3A88E7297739342 /* VisionDebugView.swift */; };
 		FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */; };
 		FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */; };
 		FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD56358BDF26FC853C97071 /* LibraryView.swift */; };
@@ -143,6 +144,7 @@
 		BF8C067C57A06948F8D2E424 /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
 		C19D1132056E5B01A68DADF9 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
+		C70AC81BE3A88E7297739342 /* VisionDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionDebugView.swift; sourceTree = "<group>"; };
 		CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamWidgets.swift; sourceTree = "<group>"; };
 		D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
 		D9B1C013842263E7F0FA5C46 /* TryOnViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnViewModel.swift; sourceTree = "<group>"; };
@@ -272,6 +274,7 @@
 			isa = PBXGroup;
 			children = (
 				5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */,
+				C70AC81BE3A88E7297739342 /* VisionDebugView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -585,6 +588,7 @@
 				E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */,
 				1C4592C0DF2CE7D8967687B8 /* TryOnView.swift in Sources */,
 				5EB0C1F818A551151A1B965F /* TryOnViewModel.swift in Sources */,
+				F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

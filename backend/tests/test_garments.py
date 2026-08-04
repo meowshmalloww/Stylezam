@@ -52,8 +52,9 @@ async def test_fireworks_labeler_uses_one_bounded_multimodal_request(
 
     def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
-        assert payload["model"] == "accounts/fireworks/models/minimax-m3"
+        assert payload["model"] == "accounts/fireworks/models/qwen3p7-plus"
         assert payload["max_tokens"] == 1600
+        assert payload["reasoning_effort"] == "none"
         assert payload["response_format"]["type"] == "json_schema"
         images = [
             part

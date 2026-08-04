@@ -203,6 +203,26 @@ final class AppModel {
         }
     }
 
+    /// Runs the same detector and segmented-crop path used by a saved capture,
+    /// without duplicate filtering, persistence, notifications, or navigation.
+    func inspectGarments(in imageData: Data) async throws -> GarmentDetectionBatch {
+        try await visionEngine.analyze(
+            imageData: imageData,
+            modelURL: modelPack.activeModelURL,
+            manifest: modelPack.manifest,
+            maxItems: settings.maxDetectedItems
+        )
+    }
+
+    /// Sends the inspector's real segmented crops through the same authenticated
+    /// endpoint used to enrich a saved Library scan, without mutating the Library.
+    func inspectGarmentLabels(
+        for candidates: [GarmentCandidate]
+    ) async throws -> GarmentAnalysisDTO {
+        let client = try settings.client()
+        return try await client.analyzeGarments(candidates)
+    }
+
     @discardableResult
     func startSearch(_ input: SearchInput, saveCapture: Bool = true) async -> String? {
         guard !input.isEmpty else { return nil }

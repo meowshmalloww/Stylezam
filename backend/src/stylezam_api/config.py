@@ -48,7 +48,7 @@ class Settings(BaseSettings):
 
     fireworks_api_key: Optional[SecretStr] = None
     fireworks_base_url: str = "https://api.fireworks.ai/inference/v1"
-    fireworks_vision_model: str = "accounts/fireworks/models/minimax-m3"
+    fireworks_vision_model: str = "accounts/fireworks/models/qwen3p7-plus"
     fireworks_monthly_cap: int = 100
 
     youcam_api_key: Optional[str] = None
