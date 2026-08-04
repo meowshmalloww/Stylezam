@@ -14,27 +14,37 @@
 		197425BF0FA96D593BC17093 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3508C5A578324E82F996A38B /* AppModels.swift */; };
 		1C4592C0DF2CE7D8967687B8 /* TryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF8C067C57A06948F8D2E424 /* TryOnView.swift */; };
 		2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */; };
+		3031C041FFC99D16D2089A61 /* CameraSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D7CD24096454F2142A32276 /* CameraSessionController.swift */; };
+		370DC13159B1D9A573AC57AC /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */; };
+		375DF52023B702EBA4328FE7 /* CaptureActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810938F0D56327572F4CCF7B /* CaptureActivityManager.swift */; };
 		3DA3059A0E817F1C804BB95B /* LookStackCanvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DE7C343E62F1B883BD40B9 /* LookStackCanvas.swift */; };
 		40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */; };
 		457BA936B47C78C3D3C3C4AC /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48962ED198B3B07771116D6B /* LaunchExperienceView.swift */; };
 		458409D05674C04C290D9648 /* StylezamWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */; };
 		465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */; };
+		5477192D67F401EFEB756C39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */; };
 		5CAA0AD8A15FB701955FDA4B /* StylezamShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		5EB0C1F818A551151A1B965F /* TryOnViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B1C013842263E7F0FA5C46 /* TryOnViewModel.swift */; };
 		612527C8D504AACECBB047A0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186586B04572ED4CBAC07684 /* AppModel.swift */; };
 		66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */; };
+		68A8B3891A1D11AFC46D5B58 /* StylezamCaptureLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */; };
 		755B5F562D260411BAD1C773 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		7A7ED7F4218FD184C6DE5D9A /* ModelPackSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 192175A7E3379BD03679D83B /* ModelPackSetupView.swift */; };
 		805D0F3CDC75E0CC528CF500 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */; };
 		81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FFF5ED05C00039B172D585 /* StylezamDesign.swift */; };
 		8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */; };
+		8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */; };
 		8C30A42D80D392E9389CA986 /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F790B57A92BDB9737A707E7 /* LibraryStore.swift */; };
 		8E60DB95DCD8A40808973642 /* StartStylezamCaptureIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */; };
 		8E82FCA0ED2E55ED59183BC4 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE399D95F73E214E27C19B8D /* APIClient.swift */; };
 		9B29BB1940201C7BD51C99A2 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */; };
+		9ECB0AE5CB9A8B8441B60C85 /* GarmentDuplicateGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */; };
 		9ECF2BD51954977A29FEE12A /* StartStylezamCaptureIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D36F391D6ED22CC7FD5990B /* StartStylezamCaptureIntent.swift */; };
 		A03AC10C22EB32236A61A479 /* StylezamSearchActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */; };
+		A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */; };
 		A5352F1DD870CE7709C40963 /* StylezamWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */; };
+		AA7F0C31451C4B802854BFC2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2D218B380E2F95B01735CA1B /* PrivacyInfo.xcprivacy */; };
 		AA8BEBA7AC62C51BCBEECAAE /* SearchActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */; };
 		B9B5CBAF9671DF404412C6D1 /* ScreenCaptureAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */; };
 		BFF866CDE74727A3FDD57E3A /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
@@ -92,9 +102,16 @@
 		05DE7C343E62F1B883BD40B9 /* LookStackCanvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LookStackCanvas.swift; sourceTree = "<group>"; };
 		05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchActivityManager.swift; sourceTree = "<group>"; };
 		0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0D7CD24096454F2142A32276 /* CameraSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionController.swift; sourceTree = "<group>"; };
 		104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamShortcuts.swift; sourceTree = "<group>"; };
+		11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentVisionEngine.swift; sourceTree = "<group>"; };
 		186586B04572ED4CBAC07684 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		192175A7E3379BD03679D83B /* ModelPackSetupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPackSetupView.swift; sourceTree = "<group>"; };
+		1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		28EDEA4381FED85305717CBF /* Stylezam.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stylezam.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDuplicateGuard.swift; sourceTree = "<group>"; };
+		2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureLiveActivity.swift; sourceTree = "<group>"; };
+		2D218B380E2F95B01735CA1B /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		32FFF5ED05C00039B172D585 /* StylezamDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamDesign.swift; sourceTree = "<group>"; };
 		3508C5A578324E82F996A38B /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
@@ -112,7 +129,9 @@
 		5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureAvailability.swift; sourceTree = "<group>"; };
 		7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailView.swift; sourceTree = "<group>"; };
+		810938F0D56327572F4CCF7B /* CaptureActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureActivityManager.swift; sourceTree = "<group>"; };
 		817BAAA57D938EFD107A98EA /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
+		835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPackManager.swift; sourceTree = "<group>"; };
 		84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchStylezamImageIntent.swift; sourceTree = "<group>"; };
 		9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamApp.swift; sourceTree = "<group>"; };
 		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
@@ -130,6 +149,7 @@
 		E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		ED298DA3428A7090BBBA5DB3 /* StylezamSearchActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamSearchActivityAttributes.swift; sourceTree = "<group>"; };
 		EE399D95F73E214E27C19B8D /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -180,9 +200,13 @@
 		559605BC820B921E9D883153 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				810938F0D56327572F4CCF7B /* CaptureActivityManager.swift */,
+				2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */,
+				11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */,
 				D0AACEE75A02A24B1AE96A0A /* KeychainStore.swift */,
 				4F790B57A92BDB9737A707E7 /* LibraryStore.swift */,
 				5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */,
+				835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */,
 				E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */,
 				7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */,
 				05F5EA5DA4CC0D11CE33C44B /* SearchActivityManager.swift */,
@@ -265,6 +289,7 @@
 		996BE3B677148DF5FCAB660F /* Share */ = {
 			isa = PBXGroup;
 			children = (
+				2D218B380E2F95B01735CA1B /* PrivacyInfo.xcprivacy */,
 				2DB157A542FD9AA7AC74BF73 /* ShareViewController.swift */,
 			);
 			path = Share;
@@ -283,6 +308,7 @@
 			isa = PBXGroup;
 			children = (
 				48962ED198B3B07771116D6B /* LaunchExperienceView.swift */,
+				192175A7E3379BD03679D83B /* ModelPackSetupView.swift */,
 			);
 			path = Launch;
 			sourceTree = "<group>";
@@ -314,6 +340,8 @@
 			isa = PBXGroup;
 			children = (
 				496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */,
+				EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */,
+				0D7CD24096454F2142A32276 /* CameraSessionController.swift */,
 				9A940D99785B136691E06C4A /* CaptureSheet.swift */,
 			);
 			path = Capture;
@@ -342,7 +370,9 @@
 		F4684D5F5BACDA0BB5ED819A /* Widgets */ = {
 			isa = PBXGroup;
 			children = (
+				1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */,
 				B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */,
+				2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */,
 				59F6C779F19B676A1B7255DB /* StylezamSearchLiveActivity.swift */,
 				CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */,
 			);
@@ -386,6 +416,7 @@
 			buildConfigurationList = EEA485146610EA9369EAFCA9 /* Build configuration list for PBXNativeTarget "StylezamWidgets" */;
 			buildPhases = (
 				B3B27C280AB66EE485C481DE /* Sources */,
+				9CBA86262CAEFC7D475FA719 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -403,6 +434,7 @@
 			buildConfigurationList = 5256CAC6B7139DF9EBC52E37 /* Build configuration list for PBXNativeTarget "StylezamShare" */;
 			buildPhases = (
 				7D18313A4A7D55CAF74204F1 /* Sources */,
+				75EEB4C1B0E8517F234E1F01 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -466,6 +498,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		75EEB4C1B0E8517F234E1F01 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA7F0C31451C4B802854BFC2 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9CBA86262CAEFC7D475FA719 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5477192D67F401EFEB756C39 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -486,6 +534,7 @@
 				BFF866CDE74727A3FDD57E3A /* SearchStylezamImageIntent.swift in Sources */,
 				8E60DB95DCD8A40808973642 /* StartStylezamCaptureIntent.swift in Sources */,
 				C256FE0FF794855A62D13D64 /* StylezamCaptureControl.swift in Sources */,
+				68A8B3891A1D11AFC46D5B58 /* StylezamCaptureLiveActivity.swift in Sources */,
 				DBA5378524EA4C0BFEDF9614 /* StylezamSearchActivityAttributes.swift in Sources */,
 				0271BCFF145FED130626D669 /* StylezamSearchLiveActivity.swift in Sources */,
 				458409D05674C04C290D9648 /* StylezamWidgets.swift in Sources */,
@@ -502,7 +551,12 @@
 				612527C8D504AACECBB047A0 /* AppModel.swift in Sources */,
 				197425BF0FA96D593BC17093 /* AppModels.swift in Sources */,
 				A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */,
+				370DC13159B1D9A573AC57AC /* CameraPreview.swift in Sources */,
+				3031C041FFC99D16D2089A61 /* CameraSessionController.swift in Sources */,
+				375DF52023B702EBA4328FE7 /* CaptureActivityManager.swift in Sources */,
 				F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */,
+				9ECB0AE5CB9A8B8441B60C85 /* GarmentDuplicateGuard.swift in Sources */,
+				8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */,
 				0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */,
 				66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */,
 				805D0F3CDC75E0CC528CF500 /* KeychainStore.swift in Sources */,
@@ -511,6 +565,8 @@
 				FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */,
 				8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */,
 				3DA3059A0E817F1C804BB95B /* LookStackCanvas.swift in Sources */,
+				A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */,
+				7A7ED7F4218FD184C6DE5D9A /* ModelPackSetupView.swift in Sources */,
 				FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */,
 				CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */,
 				C2B59CBD104AE719647B40DD /* RootView.swift in Sources */,

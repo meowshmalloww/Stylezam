@@ -28,6 +28,12 @@ async def create_tryon(
     person_image: UploadFile = File(...),
     container: Container = Depends(get_container),
 ) -> TryOnJob:
+    if not container.settings.virtual_tryon_enabled:
+        raise StylezamError(
+            "feature_not_enabled",
+            "Virtual try-on is not enabled in this build.",
+            status_code=503,
+        )
     if not container.youcam.configured:
         raise ProviderConfigurationError(
             "YouCam is required for virtual try-on.", ["STYLEZAM_YOUCAM_API_KEY"]

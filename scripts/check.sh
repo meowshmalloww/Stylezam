@@ -12,6 +12,7 @@ cd "$project_root/backend"
 "$project_root/.venv/bin/pytest" -q
 
 cd "$project_root"
+"$project_root/.venv/bin/python" scripts/verify_model_pack_catalog.py
 "$project_root/scripts/generate_project.sh"
 xcodebuild \
     -project Stylezam.xcodeproj \
@@ -22,4 +23,3 @@ xcodebuild \
     -derivedDataPath DerivedData \
     CODE_SIGNING_ALLOWED=NO \
     build
-

@@ -75,6 +75,65 @@ struct BoundingBoxDTO: Codable, Hashable, Sendable {
     let height: Double
 }
 
+struct GarmentInputMetadataDTO: Codable, Hashable, Sendable {
+    let itemID: String
+    let localLabel: String
+    let localConfidence: Double
+    let box: BoundingBoxDTO
+}
+
+struct GarmentLabelDTO: Codable, Hashable, Sendable {
+    let itemID: String
+    let accepted: Bool
+    let category: String?
+    let displayName: String?
+    let brand: String?
+    let colors: [String]
+    let materials: [String]
+    let patterns: [String]
+    let details: [String]
+    let visibleText: [String]
+}
+
+struct GarmentAnalysisDTO: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let provider: String
+    let model: String
+    let items: [GarmentLabelDTO]
+    let createdAt: Date
+}
+
+struct ModelPackFileDTO: Codable, Hashable, Sendable {
+    let path: String
+    let url: URL
+    let sha256: String
+    let bytes: Int
+}
+
+struct ModelPackManifestDTO: Codable, Hashable, Sendable {
+    let modelID: String
+    let version: String
+    let displayName: String
+    let totalBytes: Int
+    let minimumIos: String
+    let inputName: String
+    let inputResolution: Int
+    let boxOutputName: String
+    let logitOutputName: String
+    let maskOutputName: String
+    let classNames: [String]
+    let licenseName: String
+    let licenseURL: URL
+    let sourceURL: URL
+    let sourceRevision: String
+    let checkpointSHA256: String
+    let datasetName: String
+    let datasetLicenseName: String
+    let datasetLicenseURL: URL
+    let attribution: String
+    let files: [ModelPackFileDTO]
+}
+
 struct DetectedItemDTO: Codable, Hashable, Sendable {
     let label: String
     let confidence: Double
@@ -194,6 +253,8 @@ struct CapabilitiesDTO: Codable, Hashable, Sendable {
     let visualReranking: Bool
     let virtualTryOn: Bool
     let publicImageIngress: Bool
+    let garmentLabeling: Bool
+    let modelPackAvailable: Bool
     let providers: [ProviderCapabilityDTO]
 }
 
@@ -241,4 +302,3 @@ enum JSONValue: Codable, Hashable, Sendable {
         }
     }
 }
-

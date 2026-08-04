@@ -47,6 +47,9 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenSearch)) { note in
             model.handlePendingNotification(searchID: note.object as? String)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenScan)) { note in
+            model.handlePendingScanNotification(scanID: note.object as? String)
+        }
         .onChange(of: model.selectedTab) { oldValue, newValue in
             if newValue == .camera {
                 model.selectedTab = oldValue == .camera ? lastContentTab : oldValue

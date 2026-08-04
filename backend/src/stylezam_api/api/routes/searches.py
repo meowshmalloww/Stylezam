@@ -27,6 +27,12 @@ async def create_search(
     image: Optional[UploadFile] = File(default=None),
     container: Container = Depends(get_container),
 ) -> SearchJob:
+    if not container.settings.product_search_enabled:
+        raise StylezamError(
+            "feature_not_enabled",
+            "Product search is not enabled in this build.",
+            status_code=503,
+        )
     normalized_query = query.strip() if query and query.strip() else None
     if image is None and normalized_query is None:
         raise StylezamError(

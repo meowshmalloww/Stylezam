@@ -4,12 +4,13 @@ struct LibraryView: View {
     @Environment(AppModel.self) private var model
     @State private var section: LibrarySection = .recent
     @State private var selectedTryOn: SavedTryOn?
+    @State private var selectedScan: SavedScan?
     @Namespace private var productTransition
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                Text("Search history, products, and appearance previews saved on this iPhone.")
+                Text("Captures, separated pieces, saved products, and appearance previews kept on this iPhone.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -24,7 +25,7 @@ struct LibraryView: View {
                 Group {
                     switch section {
                     case .recent:
-                        recentSearches
+                        recentScans
                     case .saved:
                         savedProducts
                     case .tryOns:
@@ -48,8 +49,20 @@ struct LibraryView: View {
             TryOnArchiveDetail(tryOn: tryOn)
                 .environment(model)
         }
+        .sheet(item: $selectedScan) { scan in
+            ScanDetailView(scanID: scan.id)
+                .environment(model)
+        }
         .animation(.easeInOut(duration: 0.2), value: section)
         .sensoryFeedback(.selection, trigger: section)
+        .onChange(of: model.activeScanID, initial: true) { _, scanID in
+            guard let scanID,
+                  let scan = model.library.scans.first(where: { $0.id == scanID })
+            else { return }
+            section = .recent
+            selectedScan = scan
+            model.activeScanID = nil
+        }
     }
 
     private var categoryBar: some View {
@@ -85,24 +98,24 @@ struct LibraryView: View {
 
     private func count(for item: LibrarySection) -> Int {
         switch item {
-        case .recent: model.library.captures.count
+        case .recent: model.library.scans.count
         case .saved: model.library.products.count
         case .tryOns: model.library.tryOns.count
         }
     }
 
-    private var recentSearches: some View {
+    private var recentScans: some View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
-                title: "Search history",
-                detail: countLabel(model.library.captures.count, singular: "search")
+                title: "Captured looks",
+                detail: countLabel(model.library.scans.count, singular: "capture")
             )
 
-            if model.library.captures.isEmpty {
+            if model.library.scans.isEmpty {
                 emptyState(
                     icon: "clock.arrow.circlepath",
-                    title: "No searches yet",
-                    message: "Camera, photo, text, shared, and screen searches will appear here."
+                    title: "No captures yet",
+                    message: "Camera, imported, shared, and live-screen scans will appear here."
                 )
             } else {
                 LazyVGrid(
@@ -113,19 +126,19 @@ struct LibraryView: View {
                     alignment: .leading,
                     spacing: 24
                 ) {
-                    ForEach(model.library.captures) { capture in
+                    ForEach(model.library.scans) { scan in
                         Button {
-                            resume(capture)
+                            selectedScan = scan
                         } label: {
-                            RecentSearchTile(
-                                capture: capture,
-                                imageURL: model.library.imageURL(for: capture)
+                            RecentScanTile(
+                                scan: scan,
+                                imageURL: model.library.imageURL(for: scan)
                             )
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            Button("Delete search", role: .destructive) {
-                                model.deleteCapture(capture)
+                            Button("Delete capture", role: .destructive) {
+                                model.deleteScan(scan)
                             }
                         }
                     }
@@ -240,16 +253,7 @@ struct LibraryView: View {
         if count == 1 {
             return "1 \(singular)"
         }
-        return singular == "search" ? "\(count) searches" : "\(count) \(singular)s"
-    }
-
-    private func resume(_ capture: SavedCapture) {
-        model.resumeSearch(
-            id: capture.searchID,
-            imageData: model.library.imageURL(for: capture).flatMap {
-                try? Data(contentsOf: $0, options: .mappedIfSafe)
-            }
-        )
+        return "\(count) \(singular)s"
     }
 }
 
@@ -269,48 +273,191 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
     }
 }
 
-private struct RecentSearchTile: View {
-    let capture: SavedCapture
-    let imageURL: URL?
+private struct RecentScanTile: View {
+    let scan: SavedScan
+    let imageURL: URL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Group {
-                if let imageURL {
-                    LocalFileImage(url: imageURL)
-                } else {
-                    Color(uiColor: .secondarySystemBackground)
-                        .overlay {
-                            VStack(spacing: 12) {
-                                Image(systemName: "text.magnifyingglass")
-                                    .font(.system(size: 34, weight: .light))
-                                Text("TEXT SEARCH")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .tracking(1.1)
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            LocalFileImage(url: imageURL)
             .frame(maxWidth: .infinity)
             .aspectRatio(0.95, contentMode: .fit)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
 
-            Text(capture.query ?? capture.origin.libraryLabel)
+            let acceptedCount = scan.items.filter(\.accepted).count
+            Text(acceptedCount == 1 ? "1 piece" : "\(acceptedCount) pieces")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(2)
                 .foregroundStyle(.primary)
 
             HStack(spacing: 5) {
-                Text(capture.origin.libraryLabel)
+                Text(scan.origin.libraryLabel)
                 Text("·")
-                Text(StylezamRelativeTime.string(since: capture.createdAt))
+                Text(StylezamRelativeTime.string(since: scan.createdAt))
             }
             .font(.caption)
             .foregroundStyle(.secondary)
         }
         .contentShape(Rectangle())
+    }
+}
+
+private struct ScanDetailView: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let scanID: UUID
+
+    private var scan: SavedScan? {
+        model.library.scans.first { $0.id == scanID }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                if let scan {
+                    VStack(alignment: .leading, spacing: 24) {
+                        LocalFileImage(
+                            url: model.library.imageURL(for: scan),
+                            contentMode: .fit
+                        )
+                        .frame(maxWidth: .infinity)
+                        .background(Color(uiColor: .secondarySystemBackground))
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(scan.mode.detailTitle)
+                                    .font(.title2.weight(.semibold))
+                                Text(scan.createdAt.formatted(date: .long, time: .shortened))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            labelState(scan)
+                        }
+
+                        EditorialRule()
+
+                        VStack(alignment: .leading, spacing: 14) {
+                            EditorialSectionHeader(
+                                title: "Pieces",
+                                detail: "\(visibleItems(scan).count)"
+                            )
+
+                            if visibleItems(scan).isEmpty {
+                                ContentUnavailableView(
+                                    "No distinct pieces found",
+                                    systemImage: "viewfinder",
+                                    description: Text(
+                                        model.modelPack.isInstalled
+                                            ? "Try a brighter angle with less overlap."
+                                            : "Download the garment model for worn outfits; the built-in fallback works best on isolated products."
+                                    )
+                                )
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 22)
+                            } else {
+                                ForEach(visibleItems(scan)) { item in
+                                    garmentRow(item)
+                                }
+                            }
+                        }
+                    }
+                    .padding(StylezamDesign.pageInset)
+                    .padding(.bottom, 24)
+                } else {
+                    ContentUnavailableView("Capture unavailable", systemImage: "photo")
+                }
+            }
+            .background(StylezamDesign.canvas)
+            .navigationTitle("Capture")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if let scan {
+                        ShareLink(item: model.library.imageURL(for: scan)) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share capture")
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func visibleItems(_ scan: SavedScan) -> [SavedGarment] {
+        scan.items.filter { scan.labelState == .enriched ? $0.accepted : true }
+    }
+
+    @ViewBuilder
+    private func labelState(_ scan: SavedScan) -> some View {
+        switch scan.labelState {
+        case .local:
+            Label("Labeling", systemImage: "ellipsis")
+                .foregroundStyle(.secondary)
+        case .enriched:
+            Label("Ready", systemImage: "checkmark")
+                .foregroundStyle(StylezamDesign.cobalt)
+        case .unavailable:
+            Label("On-device", systemImage: "iphone")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func garmentRow(_ item: SavedGarment) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Group {
+                if let cropURL = model.library.cropURL(for: item) {
+                    LocalFileImage(url: cropURL, contentMode: .fit)
+                } else {
+                    Color(uiColor: .secondarySystemBackground)
+                        .overlay { Image(systemName: "tshirt") }
+                }
+            }
+            .frame(width: 92, height: 108)
+            .background(Color(uiColor: .secondarySystemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text(item.title)
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let brand = item.brand {
+                    Text(brand.uppercased())
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.8)
+                        .foregroundStyle(.secondary)
+                }
+                let attributes = item.colors + item.materials + item.patterns + item.details
+                if !attributes.isEmpty {
+                    Text(attributes.prefix(4).joined(separator: " · "))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text("On-device confidence \(item.localConfidence.formatted(.percent.precision(.fractionLength(0))))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private extension CaptureMode {
+    var detailTitle: String {
+        switch self {
+        case .photo: "Camera capture"
+        case .live: "Live capture"
+        case .screen: "Screen capture"
+        case .imported: "Imported image"
+        }
     }
 }
 

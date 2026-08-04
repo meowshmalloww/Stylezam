@@ -51,11 +51,11 @@ struct HomeView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .tracking(1.3)
                     .foregroundStyle(.white.opacity(0.62))
-                Text("Find what\ncaught your eye.")
+                Text("Keep the look.\nSeparate the pieces.")
                     .font(.system(size: 34, weight: .semibold))
                     .tracking(-1.25)
                     .foregroundStyle(.white)
-                Text("Camera, photos, or a product search.")
+                Text("Camera, live screen, or an image you already have.")
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.68))
             }
@@ -70,17 +70,17 @@ struct HomeView: View {
             HomeSectionHeader(title: "Start somewhere")
             HStack(spacing: 12) {
                 quickAction(
-                    title: "Photos",
-                    detail: "Choose an image",
-                    icon: "photo.on.rectangle"
+                    title: "Capture",
+                    detail: "Front or back camera",
+                    icon: "camera"
                 ) {
-                    model.selectedTab = .search
+                    model.presentCamera()
                 }
 
                 quickAction(
-                    title: "Search",
-                    detail: "Words + image",
-                    icon: "text.magnifyingglass"
+                    title: "Add image",
+                    detail: "Photos or clipboard",
+                    icon: "photo.badge.plus"
                 ) {
                     model.selectedTab = .search
                 }
@@ -130,11 +130,11 @@ struct HomeView: View {
                 model.selectedTab = .library
             }
 
-            if model.library.captures.isEmpty {
+            if model.library.scans.isEmpty {
                 HStack(spacing: 12) {
                     Image(systemName: "clock")
                         .foregroundStyle(.secondary)
-                    Text("Your searches will collect here.")
+                    Text("Your captured looks will collect here.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -142,13 +142,14 @@ struct HomeView: View {
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: 12) {
-                        ForEach(model.library.captures.prefix(6)) { capture in
+                        ForEach(model.library.scans.prefix(6)) { scan in
                             Button {
-                                resume(capture)
+                                model.activeScanID = scan.id
+                                model.selectedTab = .library
                             } label: {
                                 HomeRecentCard(
-                                    capture: capture,
-                                    imageURL: model.library.imageURL(for: capture)
+                                    scan: scan,
+                                    imageURL: model.library.imageURL(for: scan)
                                 )
                             }
                             .buttonStyle(.plain)
@@ -181,14 +182,6 @@ struct HomeView: View {
         }
     }
 
-    private func resume(_ capture: SavedCapture) {
-        model.resumeSearch(
-            id: capture.searchID,
-            imageData: model.library.imageURL(for: capture).flatMap {
-                try? Data(contentsOf: $0, options: .mappedIfSafe)
-            }
-        )
-    }
 }
 
 private struct HomeSectionHeader: View {
@@ -209,38 +202,23 @@ private struct HomeSectionHeader: View {
 }
 
 private struct HomeRecentCard: View {
-    let capture: SavedCapture
-    let imageURL: URL?
+    let scan: SavedScan
+    let imageURL: URL
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Group {
-                if let imageURL {
-                    LocalFileImage(url: imageURL)
-                } else {
-                    Color(uiColor: .secondarySystemBackground)
-                        .overlay {
-                            VStack(spacing: 8) {
-                                Image(systemName: "text.magnifyingglass")
-                                    .font(.title2)
-                                Text("TEXT SEARCH")
-                                    .font(.system(size: 8, weight: .semibold))
-                                    .tracking(0.9)
-                            }
-                            .foregroundStyle(.secondary)
-                        }
-                }
-            }
+            LocalFileImage(url: imageURL)
             .frame(width: 154, height: 116)
             .clipped()
             .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
 
-            Text(capture.query ?? capture.origin.homeLabel)
+            let count = scan.items.filter(\.accepted).count
+            Text(count == 1 ? "1 piece" : "\(count) pieces")
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(2)
                 .foregroundStyle(.primary)
                 .frame(width: 154, alignment: .leading)
-            Text(StylezamRelativeTime.string(since: capture.createdAt))
+            Text(StylezamRelativeTime.string(since: scan.createdAt))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -297,18 +275,5 @@ private struct HomePressButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.72 : 1)
             .scaleEffect(configuration.isPressed && !reduceMotion ? 0.985 : 1)
             .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
-    }
-}
-
-private extension CaptureOrigin {
-    var homeLabel: String {
-        switch self {
-        case .camera: "Camera search"
-        case .photoLibrary: "Photo search"
-        case .text: "Text search"
-        case .clipboard: "Clipboard search"
-        case .shareExtension: "Shared search"
-        case .screenCapture: "Screen search"
-        }
     }
 }

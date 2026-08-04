@@ -77,6 +77,67 @@ class BoundingBox(APIModel):
         return value
 
 
+class GarmentInputMetadata(APIModel):
+    item_id: str = Field(min_length=1, max_length=80)
+    local_label: str = Field(min_length=1, max_length=120)
+    local_confidence: float = Field(ge=0, le=1)
+    box: BoundingBox
+
+
+class GarmentLabel(APIModel):
+    item_id: str
+    accepted: bool
+    category: Optional[str] = None
+    display_name: Optional[str] = None
+    brand: Optional[str] = None
+    colors: List[str] = Field(default_factory=list)
+    materials: List[str] = Field(default_factory=list)
+    patterns: List[str] = Field(default_factory=list)
+    details: List[str] = Field(default_factory=list)
+    visible_text: List[str] = Field(default_factory=list)
+
+
+class GarmentAnalysisResponse(APIModel):
+    id: str
+    provider: str
+    model: str
+    items: List[GarmentLabel]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class ModelPackFile(APIModel):
+    path: str
+    url: str
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    bytes: int = Field(ge=1)
+
+
+class ModelPackManifest(APIModel):
+    model_id: str
+    version: str
+    display_name: str
+    total_bytes: int = Field(ge=1)
+    minimum_ios: str
+    input_name: str
+    input_resolution: int = Field(ge=1)
+    box_output_name: str
+    logit_output_name: str
+    mask_output_name: str
+    class_names: List[str]
+    license_name: str
+    license_url: str
+    source_url: str
+    source_revision: str
+    checkpoint_sha256: str = Field(
+        alias="checkpointSHA256",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    dataset_name: str
+    dataset_license_name: str
+    dataset_license_url: str
+    attribution: str
+    files: List[ModelPackFile]
+
 class DetectedItem(APIModel):
     label: str
     confidence: float = Field(ge=0, le=1)
@@ -188,6 +249,8 @@ class CapabilitiesResponse(APIModel):
     visual_reranking: bool
     virtual_try_on: bool
     public_image_ingress: bool
+    garment_labeling: bool
+    model_pack_available: bool
     providers: List[ProviderCapability]
 
 

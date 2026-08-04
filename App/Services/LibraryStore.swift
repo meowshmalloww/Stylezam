@@ -9,6 +9,7 @@ final class LibraryStore {
 
     private let rootURL: URL
     private let capturesURL: URL
+    private let garmentsURL: URL
     private let tryOnsURL: URL
     private let snapshotURL: URL
 
@@ -20,6 +21,7 @@ final class LibraryStore {
         rootURL = (StylezamShared.containerURL ?? fallback)
             .appending(path: "Stylezam", directoryHint: .isDirectory)
         capturesURL = rootURL.appending(path: "Captures", directoryHint: .isDirectory)
+        garmentsURL = rootURL.appending(path: "Garments", directoryHint: .isDirectory)
         tryOnsURL = rootURL.appending(path: "TryOns", directoryHint: .isDirectory)
         snapshotURL = rootURL.appending(path: "library.json")
         do {
@@ -31,15 +33,170 @@ final class LibraryStore {
                 at: tryOnsURL,
                 withIntermediateDirectories: true
             )
+            try FileManager.default.createDirectory(
+                at: garmentsURL,
+                withIntermediateDirectories: true
+            )
             try load()
         } catch {
             loadError = error.localizedDescription
         }
     }
 
+    var scans: [SavedScan] { snapshot.scans }
     var captures: [SavedCapture] { snapshot.captures }
     var products: [SavedProduct] { snapshot.products }
     var tryOns: [SavedTryOn] { snapshot.tryOns }
+
+    @discardableResult
+    func addScan(
+        imageData: Data,
+        origin: CaptureOrigin,
+        mode: CaptureMode,
+        detection: GarmentDetectionBatch
+    ) throws -> SavedScan {
+        let previousSnapshot = snapshot
+        let id = UUID()
+        let imageFilename = "\(id.uuidString).jpg"
+        var createdURLs: [URL] = []
+
+        do {
+            let captureURL = capturesURL.appending(path: imageFilename)
+            createdURLs.append(captureURL)
+            try imageData.write(to: captureURL, options: .atomic)
+
+            let items = try detection.candidates.map { candidate in
+                var cropFilename: String?
+                if let cropData = candidate.cropData {
+                    let filename = "\(id.uuidString)-\(candidate.id).png"
+                    let destination = garmentsURL.appending(path: filename)
+                    createdURLs.append(destination)
+                    try cropData.write(to: destination, options: .atomic)
+                    cropFilename = filename
+                }
+                return SavedGarment(
+                    id: candidate.id,
+                    cropFilename: cropFilename,
+                    localLabel: candidate.localLabel,
+                    localConfidence: candidate.confidence,
+                    box: candidate.box,
+                    accepted: true,
+                    category: nil,
+                    displayName: nil,
+                    brand: nil,
+                    colors: [],
+                    materials: [],
+                    patterns: [],
+                    details: [],
+                    visibleText: []
+                )
+            }
+            let scan = SavedScan(
+                id: id,
+                createdAt: .now,
+                imageFilename: imageFilename,
+                origin: origin,
+                mode: mode,
+                detectionMethod: detection.method,
+                labelState: .local,
+                remoteAnalysisID: nil,
+                items: items
+            )
+            snapshot.scans.insert(scan, at: 0)
+            let removed = Array(snapshot.scans.dropFirst(60))
+            snapshot.scans = Array(snapshot.scans.prefix(60))
+            try persist()
+
+            // Delete trimmed media only after the new snapshot is durable.
+            for oldScan in removed {
+                removeFiles(for: oldScan)
+            }
+            return scan
+        } catch {
+            snapshot = previousSnapshot
+            for url in createdURLs {
+                try? FileManager.default.removeItem(at: url)
+            }
+            throw error
+        }
+    }
+
+    func applyAnalysis(_ analysis: GarmentAnalysisDTO, to scanID: UUID) throws {
+        guard let index = snapshot.scans.firstIndex(where: { $0.id == scanID }) else {
+            return
+        }
+        let previousSnapshot = snapshot
+        let labels = Dictionary(uniqueKeysWithValues: analysis.items.map { ($0.itemID, $0) })
+        snapshot.scans[index].items = snapshot.scans[index].items.map { item in
+            guard let label = labels[item.id] else { return item }
+            var updated = item
+            updated.accepted = label.accepted
+            updated.category = label.category
+            updated.displayName = label.displayName
+            updated.brand = label.brand
+            updated.colors = label.colors
+            updated.materials = label.materials
+            updated.patterns = label.patterns
+            updated.details = label.details
+            updated.visibleText = label.visibleText
+            return updated
+        }
+        snapshot.scans[index].labelState = .enriched
+        snapshot.scans[index].remoteAnalysisID = analysis.id
+        do {
+            try persist()
+        } catch {
+            snapshot = previousSnapshot
+            throw error
+        }
+    }
+
+    func markAnalysisUnavailable(for scanID: UUID) {
+        guard let index = snapshot.scans.firstIndex(where: { $0.id == scanID }) else {
+            return
+        }
+        let previousSnapshot = snapshot
+        snapshot.scans[index].labelState = .unavailable
+        do {
+            try persist()
+        } catch {
+            snapshot = previousSnapshot
+            loadError = error.localizedDescription
+        }
+    }
+
+    func imageURL(for scan: SavedScan) -> URL {
+        capturesURL.appending(path: scan.imageFilename)
+    }
+
+    func cropURL(for item: SavedGarment) -> URL? {
+        guard let filename = item.cropFilename else { return nil }
+        return garmentsURL.appending(path: filename)
+    }
+
+    func recentGarmentFingerprintSources(
+        since cutoff: Date,
+        limit: Int = 40
+    ) -> [GarmentFingerprintSource] {
+        var values: [GarmentFingerprintSource] = []
+        for scan in snapshot.scans where scan.createdAt >= cutoff {
+            guard scan.mode == .live || scan.mode == .screen else { continue }
+            for item in scan.items {
+                guard let url = cropURL(for: item),
+                      let data = try? Data(contentsOf: url)
+                else { continue }
+                values.append(
+                    GarmentFingerprintSource(
+                        label: item.localLabel,
+                        data: data,
+                        createdAt: scan.createdAt
+                    )
+                )
+                if values.count == limit { return values }
+            }
+        }
+        return values
+    }
 
     @discardableResult
     func addCapture(input: SearchInput, searchID: String) throws -> SavedCapture {
@@ -143,6 +300,18 @@ final class LibraryStore {
         }
     }
 
+    func deleteScan(_ scan: SavedScan) {
+        let previousSnapshot = snapshot
+        snapshot.scans.removeAll { $0.id == scan.id }
+        do {
+            try persist()
+            removeFiles(for: scan)
+        } catch {
+            snapshot = previousSnapshot
+            loadError = error.localizedDescription
+        }
+    }
+
     @discardableResult
     func replaceSearchID(_ previousID: String, with replacementID: String) -> Bool {
         guard snapshot.captures.contains(where: { $0.searchID == previousID }) else {
@@ -169,16 +338,38 @@ final class LibraryStore {
     }
 
     func clear() throws {
-        for capture in snapshot.captures {
-            if let imageURL = imageURL(for: capture) {
-                try? FileManager.default.removeItem(at: imageURL)
+        let previousSnapshot = snapshot
+        snapshot = LibrarySnapshot()
+        do {
+            try persist()
+            for scan in previousSnapshot.scans {
+                removeFiles(for: scan)
+            }
+            for capture in previousSnapshot.captures {
+                if let filename = capture.imageFilename {
+                    try? FileManager.default.removeItem(
+                        at: capturesURL.appending(path: filename)
+                    )
+                }
+            }
+            for tryOn in previousSnapshot.tryOns {
+                try? FileManager.default.removeItem(
+                    at: tryOnsURL.appending(path: tryOn.imageFilename)
+                )
+            }
+        } catch {
+            snapshot = previousSnapshot
+            throw error
+        }
+    }
+
+    private func removeFiles(for scan: SavedScan) {
+        try? FileManager.default.removeItem(at: imageURL(for: scan))
+        for item in scan.items {
+            if let cropURL = cropURL(for: item) {
+                try? FileManager.default.removeItem(at: cropURL)
             }
         }
-        for tryOn in snapshot.tryOns {
-            try? FileManager.default.removeItem(at: imageURL(for: tryOn))
-        }
-        snapshot = LibrarySnapshot()
-        try persist()
     }
 
     func consumePendingShare() -> SearchInput? {
@@ -188,7 +379,8 @@ final class LibraryStore {
         let origin = defaults.string(forKey: StylezamShared.pendingOriginKey)
             .flatMap(CaptureOrigin.init(rawValue:)) ?? .shareExtension
         var imageData: Data?
-        if let imageName, let container = StylezamShared.containerURL {
+        if let imageName {
+            let container = StylezamShared.handoffContainerURL
             let url = container.appending(path: imageName)
             imageData = try? Data(contentsOf: url)
             try? FileManager.default.removeItem(at: url)

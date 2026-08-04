@@ -7,6 +7,7 @@ final class AppModel {
     let settings: SettingsStore
     let library: LibraryStore
     let liveScreen: LiveScreenCaptureManager
+    let modelPack: ModelPackManager
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
@@ -17,28 +18,40 @@ final class AppModel {
     var capabilities: CapabilitiesDTO?
     var serverMessage: String?
     var lastError: String?
+    var activeScanID: UUID?
+    var isAnalyzingCapture = false
+    var captureStatus: String?
+    var latestPreviewCandidates: [GarmentCandidate] = []
 
     @ObservationIgnored private let activityManager = SearchActivityManager()
+    @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
+    @ObservationIgnored private let visionEngine = GarmentVisionEngine()
+    @ObservationIgnored private let duplicateGuard = GarmentDuplicateGuard()
     @ObservationIgnored private let notifications = NotificationService()
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var lastCaptureRequest: Double = 0
+    @ObservationIgnored private var latestCaptureActivityID: String?
 
     init(
         settings: SettingsStore = SettingsStore(),
         library: LibraryStore = LibraryStore(),
-        liveScreen: LiveScreenCaptureManager = LiveScreenCaptureManager()
+        liveScreen: LiveScreenCaptureManager = LiveScreenCaptureManager(),
+        modelPack: ModelPackManager = ModelPackManager()
     ) {
         self.settings = settings
         self.library = library
         self.liveScreen = liveScreen
+        self.modelPack = modelPack
     }
 
     func start() async {
         await refreshCapabilities()
+        await modelPack.refresh(using: try? settings.client())
         handleExternalCaptureRequest()
         handlePendingNotification()
+        handlePendingScanNotification()
         if let pending = library.consumePendingShare() {
-            await startSearch(pending)
+            await consumePendingInput(pending)
         }
     }
 
@@ -58,6 +71,136 @@ final class AppModel {
 
     func presentCamera() {
         isCapturePresented = true
+    }
+
+    @discardableResult
+    func processCapture(
+        imageData: Data,
+        origin: CaptureOrigin,
+        mode: CaptureMode
+    ) async -> SavedScan? {
+        guard !isAnalyzingCapture else { return nil }
+        isAnalyzingCapture = true
+        latestPreviewCandidates = []
+        captureStatus = "Finding pieces"
+        lastError = nil
+        let activityID = UUID().uuidString
+        latestCaptureActivityID = activityID
+        await captureActivityManager.start(
+            id: activityID,
+            source: mode.activityLabel,
+            phase: "Finding pieces"
+        )
+        defer { isAnalyzingCapture = false }
+
+        do {
+            let rawDetection = try await visionEngine.analyze(
+                imageData: imageData,
+                modelURL: modelPack.activeModelURL,
+                manifest: modelPack.manifest,
+                maxItems: settings.maxDetectedItems
+            )
+            let detection: GarmentDetectionBatch
+            if mode == .live || mode == .screen {
+                let history = library.recentGarmentFingerprintSources(
+                    since: Date.now.addingTimeInterval(-20 * 60)
+                )
+                let novel = await duplicateGuard.novelCandidates(
+                    rawDetection.candidates,
+                    history: history
+                )
+                guard !rawDetection.candidates.isEmpty, !novel.isEmpty else {
+                    captureStatus = rawDetection.candidates.isEmpty
+                        ? "No distinct pieces found"
+                        : "Already in Library"
+                    await captureActivityManager.finish(
+                        captureID: activityID,
+                        itemCount: 0,
+                        failed: false
+                    )
+                    return nil
+                }
+                detection = GarmentDetectionBatch(
+                    method: rawDetection.method,
+                    candidates: novel
+                )
+            } else {
+                detection = rawDetection
+            }
+            let scan = try library.addScan(
+                imageData: imageData,
+                origin: origin,
+                mode: mode,
+                detection: detection
+            )
+            activeScanID = scan.id
+            selectedTab = .library
+            captureStatus = detection.candidates.isEmpty
+                ? "Saved · no distinct pieces found"
+                : "Labeling \(detection.candidates.count) pieces"
+            await captureActivityManager.update(
+                captureID: activityID,
+                phase: captureStatus ?? "Labeling pieces",
+                itemCount: detection.candidates.count,
+                isComplete: false,
+                failed: false
+            )
+
+            guard !detection.candidates.isEmpty else {
+                library.markAnalysisUnavailable(for: scan.id)
+                await captureActivityManager.finish(
+                    captureID: activityID,
+                    itemCount: 0,
+                    failed: false
+                )
+                if settings.notificationsEnabled,
+                   await notifications.requestAuthorization()
+                {
+                    await notifications.captureFinished(
+                        itemCount: 0,
+                        scanID: scan.id,
+                        detailedLabelsReady: false
+                    )
+                }
+                return scan
+            }
+            Task { [weak self] in
+                await self?.enrichScan(
+                    id: scan.id,
+                    candidates: detection.candidates,
+                    activityID: activityID
+                )
+            }
+            return scan
+        } catch {
+            lastError = error.localizedDescription
+            captureStatus = nil
+            await captureActivityManager.finish(
+                captureID: activityID,
+                itemCount: 0,
+                failed: true
+            )
+            return nil
+        }
+    }
+
+    func previewGarments(in imageData: Data) async -> LiveGarmentPreview? {
+        guard let modelURL = modelPack.activeModelURL,
+              let manifest = modelPack.manifest,
+              !isAnalyzingCapture
+        else { return nil }
+        do {
+            let preview = try await visionEngine.preview(
+                imageData: imageData,
+                modelURL: modelURL,
+                manifest: manifest,
+                maxItems: settings.maxDetectedItems
+            )
+            latestPreviewCandidates = preview.candidates
+            return preview
+        } catch {
+            return nil
+        }
     }
 
     @discardableResult
@@ -203,6 +346,13 @@ final class AppModel {
         }
     }
 
+    func deleteScan(_ scan: SavedScan) {
+        library.deleteScan(scan)
+        if activeScanID == scan.id {
+            activeScanID = nil
+        }
+    }
+
     func clearLibrary() {
         let searchIDs = library.captures.map(\.searchID)
         do {
@@ -238,13 +388,15 @@ final class AppModel {
             presentCamera()
         case "import":
             if let pending = library.consumePendingShare() {
-                Task { await startSearch(pending) }
+                Task { await consumePendingInput(pending) }
             } else {
                 selectedTab = .search
             }
         case "search":
             let identifier = url.pathComponents.dropFirst().first
             if let identifier { resumeSearch(id: identifier) }
+        case "library":
+            selectedTab = .library
         default:
             break
         }
@@ -258,12 +410,10 @@ final class AppModel {
             lastCaptureRequest = requestedAt
             if let liveFrame = liveScreen.consumeLatestFrame() {
                 Task {
-                    await startSearch(
-                        SearchInput(
-                            query: nil,
-                            imageData: liveFrame,
-                            origin: .screenCapture
-                        )
+                    await processCapture(
+                        imageData: liveFrame,
+                        origin: .screenCapture,
+                        mode: .screen
                     )
                 }
             } else {
@@ -271,7 +421,7 @@ final class AppModel {
             }
         }
         if let pending = library.consumePendingShare() {
-            Task { await startSearch(pending) }
+            Task { await consumePendingInput(pending) }
         }
     }
 
@@ -281,6 +431,21 @@ final class AppModel {
         guard let searchID, !searchID.isEmpty else { return }
         defaults.removeObject(forKey: StylezamShared.pendingSearchIDKey)
         resumeSearch(id: searchID)
+    }
+
+    func handlePendingScanNotification(scanID suppliedID: String? = nil) {
+        let defaults = StylezamShared.defaults
+        let rawID = suppliedID ?? defaults.string(forKey: StylezamShared.pendingScanIDKey)
+        guard let rawID,
+              let scanID = UUID(uuidString: rawID),
+              library.scans.contains(where: { $0.id == scanID })
+        else {
+            defaults.removeObject(forKey: StylezamShared.pendingScanIDKey)
+            return
+        }
+        defaults.removeObject(forKey: StylezamShared.pendingScanIDKey)
+        activeScanID = scanID
+        selectedTab = .library
     }
 
     private func pollSearch(id: String) async {
@@ -325,6 +490,83 @@ final class AppModel {
             return
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    private func consumePendingInput(_ input: SearchInput) async {
+        if let imageData = input.imageData {
+            _ = await processCapture(
+                imageData: imageData,
+                origin: input.origin,
+                mode: input.origin == .screenCapture ? .screen : .imported
+            )
+        } else {
+            await startSearch(input)
+        }
+    }
+
+    private func enrichScan(
+        id: UUID,
+        candidates: [GarmentCandidate],
+        activityID: String
+    ) async {
+        do {
+            let client = try settings.client()
+            let analysis = try await client.analyzeGarments(candidates)
+            try library.applyAnalysis(analysis, to: id)
+            guard library.scans.contains(where: { $0.id == id }) else { return }
+            let acceptedCount = analysis.items.filter(\.accepted).count
+            if latestCaptureActivityID == activityID {
+                captureStatus = acceptedCount == 1
+                    ? "1 piece ready"
+                    : "\(acceptedCount) pieces ready"
+            }
+            await captureActivityManager.finish(
+                captureID: activityID,
+                itemCount: acceptedCount,
+                failed: false
+            )
+            if settings.notificationsEnabled,
+               await notifications.requestAuthorization()
+            {
+                await notifications.captureFinished(
+                    itemCount: acceptedCount,
+                    scanID: id,
+                    detailedLabelsReady: true
+                )
+            }
+        } catch {
+            library.markAnalysisUnavailable(for: id)
+            guard library.scans.contains(where: { $0.id == id }) else { return }
+            if latestCaptureActivityID == activityID {
+                captureStatus = "Saved locally · detailed labels unavailable"
+                serverMessage = error.localizedDescription
+            }
+            await captureActivityManager.finish(
+                captureID: activityID,
+                itemCount: candidates.count,
+                failed: false
+            )
+            if settings.notificationsEnabled,
+               await notifications.requestAuthorization()
+            {
+                await notifications.captureFinished(
+                    itemCount: candidates.count,
+                    scanID: id,
+                    detailedLabelsReady: false
+                )
+            }
+        }
+    }
+}
+
+private extension CaptureMode {
+    var activityLabel: String {
+        switch self {
+        case .photo: "Camera"
+        case .live: "Live camera"
+        case .screen: "Live screen"
+        case .imported: "Imported image"
         }
     }
 }

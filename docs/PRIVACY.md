@@ -1,58 +1,58 @@
 # Privacy and data handling
 
-Stylezam is designed around explicit capture actions and minimum provider disclosure. This document describes the repository defaults; a production operator still needs a public privacy policy and App Store privacy labels matching its deployment.
+This document describes the implemented capture/understanding release. Product retrieval and virtual try-on are disabled, so their providers receive nothing.
+
+Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for the required-reason APIs it actually uses. The manifests declare no tracking domains and no tracking. App Store privacy-label answers still need a final account-specific review before distribution; the manifests do not replace that submission step.
 
 ## What stays on the iPhone
 
-- Bookmarked product records.
-- Search history and normalized capture copies.
-- Completed try-on previews in the local Library.
-- Backend URL and notification preference.
-- Up to 15 seconds of throttled iOS 27 live-screen frames, held in memory only and cleared when capture stops.
+- The downloadable Core ML garment model and its compiled representation.
+- Live preview inference, boxes, masks, quality guidance, and duplicate fingerprints.
+- Original saved looks and individual crop files in the Stylezam Library.
+- The backend service token in Keychain-backed settings.
+- The recent iOS 27 screen-frame buffer, which remains in memory and is not written as a rolling recording.
 
-The local library uses the App Group container so the app can import Share-extension attachments. A pending shared file is deleted immediately after the main app consumes it.
+The app does not upload every camera frame. A still is processed after the shutter, and Live submits only an accepted automatic or manual capture.
 
-## What goes to the Stylezam backend
+## What is sent
 
-- Search text the user submits.
-- The selected/captured image for an image search.
-- A person image only after the user taps Generate try-on.
-- The chosen product-image URL and garment category for try-on.
+After on-device segmentation, Stylezam sends only the candidate garment crops required for labeling, plus their generated item IDs, local class labels, confidence values, and normalized boxes. The full original look is not part of the garment-label request.
 
-Uploads are bounded at 10 MB, decoded as images, EXIF-transposed, converted to RGB JPEG, and written under random names. This re-encoding removes normal embedded metadata, including GPS EXIF metadata.
+The request goes to the user-configured Stylezam HTTPS service using a bearer token. The service checks decoded dimensions, applies EXIF orientation, strips embedded metadata, and preserves segmented alpha masks as PNG (ordinary opaque images are re-encoded as JPEG). It then sends the crop batch as Base64 image inputs to MiniMax M3 through Fireworks.
 
-## What can go to configured providers
+Fireworks documents zero data retention by default for open-model inference: prompt and generation data are held in volatile memory for the request unless the account explicitly opts into logging features. Fireworks still retains service metadata such as token counts. Review the current policy for the account actually used: [Fireworks data handling](https://docs.fireworks.ai/guides/security_compliance/data_handling).
 
-- SerpApi Shopping receives the retrieval text. Lens receives a temporary/public Stylezam image URL and an optional text refinement.
-- eBay Browse receives the retrieval text and/or a Base64 copy of the search image.
-- The first configured OpenAI, Fireworks, or Qwen image-understanding route receives a Base64 data URL of the selected image plus an optional text refinement. These routes are backend-only and protected by separate Stylezam monthly caps.
-- Grounding DINO, SAM2, and CLIP run in the backend process and make no inference API request, although model weights are downloaded from their configured repositories.
-- YouCam receives the person image plus a merchant product-image URL for an explicit virtual try-on job. Its current API terms say user submissions are retained for one day and AI-generated content for 30 days before automatic deletion. The published Clothes v3 operations do not include an early-delete endpoint.
+## Temporary backend storage
 
-Do not enable a provider until its terms, data-processing behavior, and user disclosures fit the production product.
+Normalized crop files exist only for the duration of the label call. The route deletes them in a `finally` block on success, provider error, quota error, or cancellation. The server persists aggregate provider-call counts in SQLite so it can enforce the UTC-month limit. It does not persist MiniMax prompts or label responses as garment-analysis jobs.
 
-## Retention and deletion
+The model files are immutable and are served only through bearer-authenticated endpoints. Their hashes and provenance are public facts in the manifest, but the deployment does not expose an unauthenticated static model directory.
 
-The development backend retains original search uploads so jobs survive restarts. Temporary selected/segmentation crops are deleted after each pipeline run. For try-on, the backend person photo is deleted after a successful or failed processing run; the copied result remains only until the iPhone downloads it and sends the delete request.
+## Camera and screen consent
 
-- Deleting a capture locally also attempts `DELETE /v1/searches/{id}`.
-- Clear Library deletes local searches, saved products, and try-on previews, then requests deletion for its known backend searches.
-- `DELETE /v1/try-ons/{id}` removes the backend person image and locally copied result.
-- The iPhone automatically calls the try-on delete endpoint after it has atomically copied the completed preview into its local Library.
+- Camera access uses Apple’s camera permission.
+- Photo import uses Apple’s picker.
+- Clipboard is read only after an explicit paste action.
+- The Share extension runs only after the user chooses Stylezam.
+- iOS 27 screen capture begins only after Apple’s system content-sharing picker grants a filter.
+- A screen frame is submitted only after the user invokes the Stylezam capture control or accepts an in-app capture.
+- Protected/DRM content can be blank; Stylezam must not attempt to bypass that behavior.
+- iOS owns screen-capture indicators and privacy UI.
 
-Client-requested deletion is best-effort when the phone is offline. Provider-side YouCam deletion follows its published automatic retention because Clothes v3 currently exposes only file upload, task create, and task status operations. A production account system should still add authenticated server-side “delete all my data” and retention jobs before public launch.
+## User controls
 
-## Tracking and commerce
+The Library can delete individual scans or clear local scans. Developer Debug can remove the downloaded model pack, change the server, replace the service token, change the item limit, and disable Live automatic capture. Stopping screen capture clears the in-memory frame buffer.
 
-The app contains no ad SDK or affiliate redirect system. Ranking removes common tracking query parameters before deduplication, while the user-visible merchant action opens the provider’s original product URL. External merchant pages may conduct their own tracking under their policies.
+## Production checklist
 
-## Screen capture
+Before any public App Store distribution:
 
-Apple’s picker is mandatory for iOS 27 full-display capture. Stylezam does not start it silently. Protected content may be blank. Only an explicit Capture a Look action submits the latest authorized frame to search.
+- publish a user-facing privacy policy and support URL;
+- complete App Store privacy disclosures for photos, user content, diagnostics, and the Fireworks data path actually enabled;
+- confirm Fireworks account logging remains opt-out/default-zero-retention as expected;
+- replace the shared test bearer token with per-user/session authentication;
+- add server-side retention monitoring and a deletion audit;
+- review whether captured people, visible logos, or screen content creates additional regional privacy obligations;
+- conduct legal review of the model/dataset notices and provider terms.
 
-## Security boundaries
-
-- Provider keys belong only in backend environment variables.
-- Production transport should be HTTPS.
-- Public media ingress for Lens makes a randomized media URL fetchable; protect the deployment and delete media when no longer needed.
-- The included backend is single-operator infrastructure, not a complete public multi-tenant identity system.
+This is an engineering description, not legal advice.

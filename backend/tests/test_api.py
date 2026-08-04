@@ -1,6 +1,7 @@
 import time
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
@@ -14,13 +15,11 @@ def settings_for(tmp_path: Path) -> Settings:
         _env_file=None,
         environment="test",
         data_dir=tmp_path,
+        product_search_enabled=True,
         serpapi_api_key=None,
         ebay_client_id=None,
         ebay_client_secret=None,
-        openai_api_key=None,
         fireworks_api_key=None,
-        qwen_api_key=None,
-        local_vision_enabled=False,
         youcam_api_key=None,
     )
 
@@ -55,6 +54,48 @@ def test_health_and_capabilities(tmp_path: Path) -> None:
     assert health.json()["status"] == "ok"
     assert capabilities.status_code == 200
     assert capabilities.json()["textSearch"] is False
+
+
+def test_product_search_fails_closed_by_default(tmp_path: Path) -> None:
+    settings = Settings(_env_file=None, environment="test", data_dir=tmp_path)
+    with TestClient(create_app(settings)) as client:
+        response = client.post("/v1/searches", data={"query": "navy coat"})
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "feature_not_enabled"
+
+
+def test_production_requires_token_and_search_requires_https(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="STYLEZAM_API_TOKEN"):
+        Settings(_env_file=None, environment="production", data_dir=tmp_path)
+
+    configured = Settings(
+        _env_file=None,
+        environment="production",
+        data_dir=tmp_path,
+        api_token=SecretStr("secret"),
+    )
+    assert configured.public_base_url is None
+
+    with pytest.raises(ValueError, match="STYLEZAM_PUBLIC_BASE_URL"):
+        Settings(
+            _env_file=None,
+            environment="production",
+            data_dir=tmp_path,
+            api_token=SecretStr("secret"),
+            product_search_enabled=True,
+            public_base_url="http://stylezam.example",
+        )
+
+    search_configured = Settings(
+        _env_file=None,
+        environment="production",
+        data_dir=tmp_path,
+        api_token=SecretStr("secret"),
+        product_search_enabled=True,
+        public_base_url="https://stylezam.example",
+    )
+    assert search_configured.public_base_url == "https://stylezam.example"
 
 
 def test_optional_bearer_token_protects_jobs_and_capabilities(tmp_path: Path) -> None:

@@ -11,10 +11,11 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
-from .api.routes import searches, system, tryons
+from .api.routes import garments, searches, system, tryons
 from .config import Settings, get_settings
 from .container import Container
 from .errors import StylezamError
+from .middleware import RequestBodyLimitMiddleware
 from .schemas import ErrorDetail, ErrorResponse
 
 
@@ -39,8 +40,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     app = FastAPI(
         title="Stylezam API",
         version=__version__,
-        description="Real product discovery and YouCam virtual try-on orchestration.",
+        description="Stylezam garment capture, on-device model delivery, and bounded crop labeling.",
         lifespan=lifespan,
+    )
+    app.add_middleware(
+        RequestBodyLimitMiddleware,
+        max_bytes=resolved.request_body_max_bytes,
     )
     if resolved.allowed_origins:
         app.add_middleware(
@@ -85,6 +90,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         )
 
     app.include_router(system.router, prefix="/v1")
+    app.include_router(garments.router, prefix="/v1")
     app.include_router(searches.router, prefix="/v1")
     app.include_router(tryons.router, prefix="/v1")
     app.mount("/media", StaticFiles(directory=str(resolved.data_dir / "media")), name="media")
@@ -92,4 +98,3 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
 
 app = create_app()
-

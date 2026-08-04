@@ -80,7 +80,9 @@ struct SearchView: View {
     private var searchLanding: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
-                Text("Search products across the web. Add an image when shape, color, or styling matters.")
+                Text(productSearchAvailable
+                     ? "Search products across the web. Add an image when shape, color, or styling matters."
+                     : "Add a fashion image to separate the visible clothing and accessories. Product retrieval will connect in the next phase.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -97,7 +99,9 @@ struct SearchView: View {
                 HStack(alignment: .top, spacing: 11) {
                     Image(systemName: "checkmark.shield")
                         .foregroundStyle(StylezamDesign.cobalt)
-                    Text("Results come from configured product sources. Stylezam does not invent listings or prices.")
+                    Text(productSearchAvailable
+                         ? "Results come from configured product sources. Stylezam does not invent listings or prices."
+                         : "This build scans real images and saves real crops. It does not generate placeholder products or prices.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
@@ -127,6 +131,7 @@ struct SearchView: View {
                 .lineLimit(1)
                 .font(.body)
                 .onSubmit { submitUniversalSearch() }
+                .disabled(!productSearchAvailable)
 
                 if !textQuery.isEmpty {
                     Button {
@@ -157,7 +162,7 @@ struct SearchView: View {
                 submitUniversalSearch()
             } label: {
                 HStack(spacing: 8) {
-                    Text("Search products")
+                    Text(productSearchAvailable ? "Search products" : "Scan image")
                     Spacer()
                     Image(systemName: "arrow.right")
                 }
@@ -230,7 +235,9 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(referenceImageData == nil ? "Add an image" : "Image added")
                     .font(.headline)
-                Text("Optional · helps match color, shape, and styling")
+                Text(productSearchAvailable
+                     ? "Optional · helps match color, shape, and styling"
+                     : "Required · detects and separates up to your configured item limit")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -303,8 +310,15 @@ struct SearchView: View {
     }
 
     private var canSubmitLandingSearch: Bool {
-        referenceImageData != nil
+        if !productSearchAvailable {
+            return referenceImageData != nil
+        }
+        return referenceImageData != nil
             || !textQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var productSearchAvailable: Bool {
+        model.capabilities?.textSearch == true || model.capabilities?.imageSearch == true
     }
 
     private func progressView(_ job: SearchJobDTO) -> some View {
@@ -617,6 +631,19 @@ struct SearchView: View {
         guard referenceImageData != nil || !query.isEmpty else { return }
         let image = referenceImageData
         Task {
+            if !productSearchAvailable, let image {
+                let scan = await model.processCapture(
+                    imageData: image,
+                    origin: .photoLibrary,
+                    mode: .imported
+                )
+                if scan != nil {
+                    referenceImageData = nil
+                    referenceItem = nil
+                    referenceMessage = nil
+                }
+                return
+            }
             let identifier = await model.startSearch(
                 SearchInput(
                     query: query.isEmpty ? nil : query,

@@ -1,46 +1,53 @@
 # iOS 27 live screen capture
 
-## UX decision
+## Product decision
 
-Live screen is not an app tab. The user authorizes it through Apple’s system content-sharing picker from the capture section in Settings. Once active, Stylezam can continue receiving the selected display stream under the iOS 27 `screen-capture` background mode. The existing Control Center/Action Button control is the capture shutter.
+Live screen is a consent-based capture source, not an app tab. The user starts it from Capture & Controls using Apple’s system content-sharing picker. Once an authorized stream exists, the Stylezam Control Center or Action Button control acts as the shutter. iOS owns the privacy indicator; Stylezam does not draw a custom blue border over other apps. Stylezam also starts a local “Live screen active” Live Activity for supported Dynamic Island and Lock Screen surfaces, then ends it when the stream stops or is interrupted.
 
-This keeps two important boundaries visible:
+The feature is iOS 27-only. iOS 26 and earlier continue to support camera, Photos, Share, clipboard, Screenshot Shortcut, and Control Center entry into the normal capture sheet.
 
-- Stylezam cannot silently start a full-display stream.
-- The user does not have to return to an artificial “live screen” page for each search.
+## Existing adapter
 
-## Implemented flow
+The repository already contains a conditional `LiveScreenCaptureManager`:
 
-1. `LiveScreenCaptureManager.presentSystemPicker()` configures and presents `SCContentSharingPicker.shared`.
-2. `SCContentSharingPickerObserver` receives the user-selected `SCContentFilter`.
-3. Stylezam starts an `SCStream` with a `.screen` output on a serial queue.
-4. Frames are throttled to one JPEG roughly every 0.8 seconds and retained in a rolling in-memory buffer for at most 15 seconds.
-5. The Capture a Look App Intent writes a shared timestamp and opens the app.
-6. If a real frame exists, `AppModel` favors one captured roughly 1.8 seconds before the Control Center tap so the system overlay is less likely to cover the fashion content, then submits it to the same `/v1/searches` image pipeline. Otherwise the regular capture sheet opens.
-7. The user can stop the stream in Settings; unexpected stream termination is surfaced there.
+1. `SCContentSharingPicker.shared` presents Apple’s picker.
+2. The picker observer supplies an `SCContentFilter` after consent.
+3. An `SCStream` receives screen output on a serial queue.
+4. JPEG frames are throttled and held in a short rolling in-memory buffer.
+5. The capture App Intent writes a shared timestamp and opens Stylezam.
+6. `AppModel` consumes a recent frame and runs the same on-device segmentation/Library pipeline as a photo.
+7. Stopping or losing the stream clears state and surfaces an honest status.
 
-The implementation is conditional on `canImport(ScreenCaptureKit)`. This repository therefore builds with Xcode 26, whose iOS SDK does not expose the framework, and activates the real adapter when built with the iOS 27 SDK.
+The source is guarded by `canImport(ScreenCaptureKit)` and iOS availability checks, so Xcode 26 builds the unavailable branch rather than a ReplayKit simulation.
 
-Apple’s current sample and API entry point: [Capturing screen content on iOS](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-on-ios).
+Apple’s API and sample are the reference: [ScreenCaptureKit](https://developer.apple.com/documentation/screencapturekit), [Capturing screen content on iOS](https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-on-ios).
 
-## Required configuration
+## Why extracting Apple’s ZIP is not enough
 
-- Background mode: `screen-capture`
-- Privacy string: `NSScreenCaptureUsageDescription`
-- iOS 27 SDK to compile the ScreenCaptureKit branch
-- iOS 27 device to run it
-- App Group for the Control Widget timestamp
+The ZIP is a sample Xcode project. Extraction only makes its source files available to read. It does not install Xcode 27, install the iOS 27 SDK, change Stylezam’s build settings, add background modes, provision App Groups, sign extensions, or validate your phone.
 
-Apple’s current iOS sample documents the `screen-capture` background mode and system picker; it does not document a manually entered `com.apple.developer.screen-recording` entitlement. Configure background execution through Xcode, keep the usage description in the app plist, and let the signed iOS 27 build/system picker determine availability. Do not add a guessed entitlement key.
+The correct sequence is:
 
-## Expected limitations
+1. Update the Mac to at least macOS 26.4.
+2. Install Xcode 27 beta; Apple currently lists that combination as required for the iOS 27 SDK.
+3. Build Apple’s sample by itself on the iOS 27 phone.
+4. Build Stylezam with Xcode 27 so the existing conditional code becomes active.
+5. Resolve any beta-API signature changes against the installed SDK.
+6. Confirm the `screen-capture` background mode and `NSScreenCaptureUsageDescription` in the signed app.
+7. Test picker consent, denial, stream interruption, app backgrounding/termination, protected content, and real Control Center capture.
 
-- Protected/DRM video can be blank and should remain blank.
-- System privacy UI and indicators are controlled by iOS.
-- A capture can contain private screen information. Stylezam sends a frame only after the user invokes Capture a Look.
-- Buffered frames never go to disk. The submitted frame is normalized again by the backend, where metadata is removed.
-- If iOS suspends or terminates the app, no stale on-disk screen frame is substituted; the normal capture sheet opens.
+Do not copy the entire sample project into Stylezam. Compare the sample’s current API calls and required configuration with Stylezam’s small adapter.
 
-## Xcode 26 behavior
+## Current blocker on this Mac
 
-Camera, Photos, clipboard, Share, Control Center, Action Button, local Live Activities, and Dynamic Island all remain available. Settings explains that Xcode 27 is required. There is no ReplayKit simulation and no fake “live screen” animation.
+The installed environment is Xcode 26.6 on macOS 26.2 with the iOS 26.5 SDK. Apple lists Xcode 27 beta 4 as requiring macOS 26.4 or later. Therefore the iOS 27 branch cannot be truthfully compiled or device-verified here yet: [Xcode system requirements](https://developer.apple.com/xcode/system-requirements).
+
+## Privacy and platform limits
+
+- Stylezam cannot silently select a display or app.
+- Protected/DRM output may be blank and must remain blank.
+- The frame buffer stays in memory and is cleared when capture stops.
+- A frame leaves the phone only as accepted garment crops after a user capture action.
+- The system indicator and Dynamic Island/Live Activity are the allowed status surfaces.
+- A custom overlay surrounding another app is not part of this design.
+- If the OS suspends or terminates Stylezam and no valid recent frame exists, the normal camera sheet opens instead of fabricating a screen result.

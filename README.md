@@ -1,176 +1,119 @@
 <p align="center">
-  <img src="./App/Resources/Assets.xcassets/BrandMark.imageset/BrandMark.png" width="112" alt="Stylezam app icon">
+  <img src="./App/Resources/Assets.xcassets/BrandMark.imageset/BrandMark.png" width="112" alt="Stylezam mark">
 </p>
 
 <h1 align="center">Stylezam</h1>
 
 <p align="center">
-  <strong>Find what they’re wearing.</strong><br>
-  Native fashion discovery for iPhone—identify a look from a photo, search with words and references, compare source-backed matches, and try products on.
+  <strong>Capture a look. Separate the pieces. Keep what matters.</strong><br>
+  A native iPhone fashion-capture foundation with on-device garment segmentation and bounded cloud labeling.
 </p>
 
 <p align="center">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6.0-FA7343?style=flat-square&logo=swift&logoColor=white">
   <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-0A57FF?style=flat-square&logo=apple&logoColor=white">
-  <img alt="FastAPI" src="https://img.shields.io/badge/API-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="CPU backend" src="https://img.shields.io/badge/backend-CPU%20only-202124?style=flat-square">
   <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-111111?style=flat-square">
 </p>
 
-<p align="center">
-  <a href="./docs/SETUP.md"><strong>Get started</strong></a> ·
-  <a href="./docs/ARCHITECTURE.md">Architecture</a> ·
-  <a href="./docs/PROVIDERS.md">Providers</a> ·
-  <a href="./docs/PRIVACY.md">Privacy</a>
-</p>
+Stylezam’s first release boundary is intentionally honest: photo capture, live garment detection, crop creation, structured labeling, and the local Library are implemented. Shopping retrieval, current prices, and virtual try-on are disabled until a separate retrieval benchmark is complete. Disabled routes fail with `feature_not_enabled`; the app does not show sample products or simulated matches.
 
-<br>
+## What works now
+
+- A custom full-screen camera with rear/front switching, flash, photo mode, and hybrid Live mode.
+- Automatic Live capture when a frame is stable, plus a manual shutter at any time.
+- Up to five pieces per look by default; Developer Debug can raise the limit to 12.
+- A Wi-Fi-only, checksum-verified 59 MB Core ML model download.
+- On-device RF-DETR garment detection, masks, crops, and labels for Fashionpedia’s 27 item classes.
+- One bounded MiniMax M3 request through Fireworks to validate and enrich all crops from a look.
+- A local Library containing the original look, individual pieces, source, timestamp, and analysis state.
+- Duplicate suppression for recent Live and screen captures.
+- Photo import, clipboard input, App Intents, a Control Center control, Live Activities, and Dynamic Island state.
+- Share-extension source and handoff UI, with cross-process image handoff requiring an App Group entitlement that a free Personal Team may not provision.
+- An iOS 27 ScreenCaptureKit adapter behind SDK availability checks; the iOS 26 build shows a truthful unavailable state.
 
 <table>
   <tr>
-    <td width="33%" align="center">
-      <img src="./Artifacts/VisualQA/home-native-redesign.png" alt="Stylezam editorial home screen" width="300">
-    </td>
-    <td width="33%" align="center">
-      <img src="./Artifacts/VisualQA/search-native-redesign.png" alt="Stylezam product search screen" width="300">
-    </td>
-    <td width="33%" align="center">
-      <img src="./Artifacts/VisualQA/library-native-redesign.png" alt="Stylezam local library screen" width="300">
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><sub><strong>Home</strong> brings recent searches, saved pieces, and useful shortcuts together</sub></td>
-    <td align="center"><sub><strong>Search</strong> combines words with an optional image reference</sub></td>
-    <td align="center"><sub><strong>Library</strong> presents recent searches, saved products, and try-ons as media collections</sub></td>
+    <td width="33%" align="center"><img src="./Artifacts/VisualQA/home-native-redesign.png" alt="Stylezam Home" width="300"></td>
+    <td width="33%" align="center"><img src="./Artifacts/VisualQA/capture-final.png" alt="Stylezam capture" width="300"></td>
+    <td width="33%" align="center"><img src="./Artifacts/VisualQA/library-native-redesign.png" alt="Stylezam Library" width="300"></td>
   </tr>
 </table>
 
-The interface is deliberately content-first. A short cold-launch sequence smoothly reveals the exact icon artwork, resolves the Stylezam name, and then yields to Home, with a reduced-motion alternative. Capture is a central native tab-bar action that opens Apple’s real front/rear photo camera, while image import and typed input stay in Search and Home remains a quiet editorial overview. Liquid Glass is reserved for Apple’s native tab bar, navigation, floating search composer, and primary media controls; it is not used as decoration on content cards. Determinate work uses the native linear `ProgressView`, system lists power Settings, and motion is short, interruptible, and Reduce Motion aware. The screenshots above come from the verified iPhone 17 simulator build.
-
-## Fashion search without invented answers
-
-Stylezam turns a fashion moment into evidence you can inspect. It analyzes the item, searches real product sources, removes duplicate listings, and ranks the remaining matches by visual, textual, and upstream evidence. Every result keeps its merchant link and an honest confidence label.
-
-| Capture anywhere | Understand the look | Find real products | Try it on |
-| --- | --- | --- | --- |
-| Camera, Photos, clipboard image, text, Share sheet, Shortcut, Control Center, and Action Button | Whole-look detection, selectable item regions, hosted structured visual attributes, and optional local segmentation | Backend-managed retrieval with evidence-aware ranking and direct merchant URLs | User-initiated YouCam AI Clothes v3 previews, clearly presented as visualization—not fit prediction |
-
-No generated listings. No invented prices. No affiliate redirects disguised as matches.
-
-## From moment to match
-
-1. **Capture or search** — start with a photo, screenshot, shared image, or typed product query.
-2. **Choose** — search the full look or select a detected jacket, bag, shoe, or other region.
-3. **Retrieve** — query configured image and text search providers under backend-enforced monthly caps.
-4. **Compare** — review deduplicated offers, evidence tiers, observed prices, and source links.
-5. **Keep or try** — save the result locally or create an optional virtual try-on.
-
-Search progress follows you through a Live Activity and Dynamic Island. Live screen capture is intentionally not a permanent tab: iOS 27 uses Apple’s system picker, while iOS 26 supports a Screenshot Shortcut and the normal capture routes.
-
-## Architecture
+## Current architecture
 
 ```mermaid
 flowchart LR
-    subgraph Phone["iPhone"]
-        Input["Photo · text · Share · Shortcut · Control"]
-        App["SwiftUI app"]
-        Activity["Live Activity + Dynamic Island"]
-        Library["Recent · saved · try-ons"]
-    end
-
-    subgraph Service["Stylezam API"]
-        Jobs["Persistent jobs"]
-        Vision["Understand + segment"]
-        Search["Multi-provider retrieval"]
-        Rank["Evidence-aware ranking"]
-        Store["SQLite + sanitized media"]
-        Limits["Monthly call caps"]
-    end
-
-    subgraph Providers["Optional providers"]
-        Serp["SerpApi"]
-        Ebay["eBay Browse"]
-        Hosted["OpenAI · Fireworks · Qwen"]
-        Local["DINO · SAM2 · CLIP"]
-        YouCam["YouCam Clothes v3"]
-    end
-
-    Input --> App --> Jobs
-    Jobs --> Activity
-    Jobs --> Vision --> Search --> Rank --> Store
-    Limits --> Search
-    Vision --> Hosted
-    Vision --> Local
-    Search --> Serp
-    Search --> Ebay
-    Jobs --> YouCam
-    App <--> Library
+    Camera["Camera · Photos · Share · Screen"] --> PhoneModel["Core ML garment segmentation"]
+    PhoneModel --> Crops["Up to 5 masked crops"]
+    Crops --> Library["Local Library"]
+    Crops --> API["Authenticated Daytona API"]
+    API --> Limits["Size · concurrency · monthly caps"]
+    Limits --> M3["MiniMax M3 on Fireworks"]
+    M3 --> Labels["Validated structured labels"]
+    Labels --> Library
+    Search["Product retrieval"] -. "deferred" .-> API
 ```
 
-The iOS client is native SwiftUI. The FastAPI service owns provider credentials, durable job state, media sanitation, quota enforcement, and result normalization. See the full [architecture and search lifecycle](./docs/ARCHITECTURE.md).
+The Daytona service has no server-side inference model, PyTorch, GPU runtime, or local inference server. Detection runs on the iPhone. The 2-core/4 GB service only authenticates requests, distributes the hashed Core ML pack, normalizes temporary crops, enforces a 24 MB request cap and two-analysis concurrency cap, and calls Fireworks.
 
-## Provider stack
+Read the full [architecture](./docs/ARCHITECTURE.md), [provider decision](./docs/PROVIDERS.md), [privacy behavior](./docs/PRIVACY.md), and [vision benchmark](./docs/VISION_BENCHMARK.md).
 
-Stylezam is useful with a small stack and expands without changing the app:
+## Model decision
 
-| Capability | Recommended provider | Role |
-| --- | --- | --- |
-| Shopping + visual retrieval | SerpApi | Google Shopping and Lens results through a fixed monthly plan |
-| Secondary text/image retrieval | eBay Browse | Real marketplace listings and Base64 image search |
-| Hosted image understanding | OpenAI, Fireworks, or Qwen | Factual structured attributes with per-provider monthly hard stops |
-| Local detection and reranking | Grounding DINO, SAM2, CLIP | Optional object regions, masks, and visual similarity |
-| Virtual try-on | YouCam AI Clothes v3 | On-demand clothing visualization from a person photo |
+The selected pack is `resoa/garment-detector-seg`, an RF-DETR-Seg-Small checkpoint converted to FP16 Core ML. The model card and RF-DETR’s designated small segmentation model are Apache-2.0; Fashionpedia’s annotations and ontology are CC BY 4.0. The exact source revision, source-checkpoint SHA-256, and every shipped Core ML file hash are embedded in the model manifest.
 
-Every external route has a configurable calendar-month cap. Missing providers are reported as unavailable; the app never fills the result screen with sample products. Review configuration and limits in [Providers](./docs/PROVIDERS.md).
+The release item taxonomy includes clothing, shoes, bags/wallets, hats/head coverings, glasses, ties, gloves, watches, belts, socks/stockings, scarves, and umbrellas. Rings, bracelets, necklaces, and earrings are not reliable V1 detections because Fashionpedia does not provide those as item classes. MiniMax can label jewelry only after a real crop exists, so Stylezam does not pretend the missing detector coverage is solved.
 
-## Run it locally
-
-You need macOS with Xcode 26 or later and Python 3.9 or later.
-
-### 1. Start the API
+## Run the checks
 
 ```bash
 ./scripts/bootstrap_backend.sh
-cp backend/.env.example backend/.env
-./scripts/run_backend.sh
-```
-
-The API starts at `http://127.0.0.1:8000`. Add at least one retrieval provider to `backend/.env` for product results. Interactive OpenAPI documentation is available at `/docs`.
-
-### 2. Open the iPhone app
-
-```bash
-./scripts/generate_project.sh
-open Stylezam.xcodeproj
-```
-
-The simulator can reach the default loopback API. A physical iPhone needs an HTTPS deployment, a development tunnel, or a backend address reachable from the phone. Follow the [device and signing checklist](./docs/SETUP.md) before running on hardware.
-
-## Project map
-
-```text
-App/                    iPhone features, networking, and design system
-Extensions/Share/       image and text Share extension
-Extensions/Widgets/     Control Widget, Live Activity, and Dynamic Island
-Shared/                 app-group data, App Intents, and activity attributes
-backend/                FastAPI service, providers, persistence, and tests
-docs/                   architecture, setup, privacy, UI, and provider notes
-design-concepts/        product direction and app-icon explorations
-project.yml             XcodeGen source of truth
-render.yaml             production deployment blueprint
-```
-
-## Verify the complete project
-
-```bash
 ./scripts/check.sh
 ```
 
-This runs the backend test suite, regenerates the Xcode project, and builds all three iOS targets for the simulator with code signing disabled.
+The check script runs the backend tests, validates the published model pack, regenerates the Xcode project, and builds all iOS targets for the simulator with signing disabled.
 
-## Current release boundary
+## Deploy the CPU service
 
-This repository is a functional first version, not a production App Store release. Before TestFlight, replace the placeholder signing identifiers, configure the App Group and development team, deploy an authenticated HTTPS backend, complete provider privacy disclosures, and test camera, Share, Control Center, Dynamic Island, deletion, product links, and YouCam on physical devices. The iOS 27 screen-capture path also requires Xcode 27 and device validation.
+The production container is pinned to a Python base-image digest and installs only hash-locked Python packages. The Daytona helper deliberately requests exactly 2 CPU cores, 4096 MB RAM, 10 GB disk, no auto-stop, and no GPU:
 
-## License
+```bash
+export STYLEZAM_API_TOKEN="a-long-random-service-token"
+export STYLEZAM_FIREWORKS_API_KEY="your-fireworks-key"
+export STYLEZAM_FIREWORKS_MONTHLY_CAP=100
+./scripts/create_daytona.sh
+```
 
-Stylezam is available under the [Apache License 2.0](./LICENSE).
+The script requires an authenticated Daytona CLI and does not install it for you. After creation, copy the sandbox’s public port 8000 HTTPS preview URL and the same service token into Settings → Developer Debug. The iPhone client rejects localhost and insecure HTTP addresses.
+
+Fireworks MiniMax M3 is a serverless pay-per-token API. Stylezam’s monthly count is a hard application-side call stop, but it is not an account billing guarantee. Fireworks also documents a prepaid-credit model and an account monthly spend limit that pauses API requests when reached. Set that provider limit before adding the key; see [Setup](./docs/SETUP.md). The Fireworks limit applies to the whole account, while Stylezam’s lower call cap protects this service specifically.
+
+See [Setup](./docs/SETUP.md) for signing, physical-device installation, Daytona, and iOS 27 steps.
+
+## Repository map
+
+```text
+App/                    SwiftUI app, custom camera, Library, and Core ML runtime
+Extensions/Share/       image/text Share extension
+Extensions/Widgets/     Control Widget, Live Activity, and Dynamic Island UI
+Shared/                 App Group, App Intents, and activity attributes
+backend/                CPU-only FastAPI service and locked runtime dependencies
+backend/.data/model-packs/
+                        immutable Core ML pack published to authenticated phones
+Config/                 Fashionpedia class ordering and build configuration
+docs/                   architecture, setup, privacy, benchmark, and design notes
+scripts/                build, benchmark, package, deployment, and verification tools
+```
+
+## Known release blockers
+
+- The real iOS 27 screen path still needs Xcode 27 and an iOS 27 device test. This Mac currently has Xcode 26.6 and the iOS 26.5 SDK.
+- Daytona deployment still needs your Daytona authentication, Fireworks key, and chosen service token.
+- The real MiniMax request cannot be integration-tested without spending one provider call; the request/response contract is covered by a mocked test.
+- Physical-device App Group, Share extension, Control Widget, Live Activity, and camera behavior require signing and device verification.
+- Product retrieval, prices, and try-on remain off by design.
+
+## License and notices
+
+Stylezam source is licensed under [Apache License 2.0](./LICENSE). Model, dataset, and runtime notices are in [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md). License selection is engineering due diligence, not legal advice.

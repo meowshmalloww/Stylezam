@@ -13,7 +13,9 @@ struct ServerErrorEnvelope: Decodable, Sendable {
 
 enum APIClientError: LocalizedError, Sendable {
     case invalidBaseURL
+    case insecureBaseURL
     case invalidResponse
+    case untrustedDownloadURL
     case server(code: String, message: String, retryable: Bool)
     case transport(String)
     case decoding(String)
@@ -21,9 +23,13 @@ enum APIClientError: LocalizedError, Sendable {
     var errorDescription: String? {
         switch self {
         case .invalidBaseURL:
-            "Enter a valid Stylezam backend URL in Settings."
+            "Enter the deployed Stylezam HTTPS address in Developer Debug."
+        case .insecureBaseURL:
+            "Stylezam requires a deployed HTTPS service. Localhost and private HTTP addresses are not supported on iPhone."
         case .invalidResponse:
             "The Stylezam service returned an invalid response."
+        case .untrustedDownloadURL:
+            "The service returned a model download outside its trusted HTTPS address."
         case let .server(_, message, _):
             message
         case let .transport(message):
@@ -40,11 +46,14 @@ struct APIClient: Sendable {
 
     init(baseURLString: String, bearerToken: String? = nil) throws {
         guard let url = URL(string: baseURLString),
-              let scheme = url.scheme,
-              ["http", "https"].contains(scheme),
-              url.host != nil
+              let scheme = url.scheme?.lowercased(),
+              let host = url.host?.lowercased()
         else {
             throw APIClientError.invalidBaseURL
+        }
+        let loopbackHosts = Set(["localhost", "127.0.0.1", "::1"])
+        guard scheme == "https", !loopbackHosts.contains(host) else {
+            throw APIClientError.insecureBaseURL
         }
         baseURL = url
         self.bearerToken = bearerToken
@@ -56,6 +65,62 @@ struct APIClient: Sendable {
 
     func capabilities() async throws -> CapabilitiesDTO {
         try await send(path: "v1/capabilities")
+    }
+
+    func garmentModelPack() async throws -> ModelPackManifestDTO {
+        try await send(path: "v1/model-packs/garment-segmentation")
+    }
+
+    func modelPackDownloadRequest(for url: URL) throws -> URLRequest {
+        guard url.scheme?.lowercased() == baseURL.scheme?.lowercased(),
+              url.host?.lowercased() == baseURL.host?.lowercased(),
+              url.port == baseURL.port,
+              url.path.hasPrefix("/v1/model-pack-files/")
+        else {
+            throw APIClientError.untrustedDownloadURL
+        }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 120
+        authorize(&request)
+        return request
+    }
+
+    func analyzeGarments(_ candidates: [GarmentCandidate]) async throws -> GarmentAnalysisDTO {
+        let uploads = candidates.compactMap { candidate -> GarmentCandidate? in
+            candidate.cropData == nil ? nil : candidate
+        }
+        guard !uploads.isEmpty else {
+            throw APIClientError.invalidResponse
+        }
+        let metadata = uploads.map {
+            GarmentInputMetadataDTO(
+                itemID: $0.id,
+                localLabel: $0.localLabel,
+                localConfidence: $0.confidence,
+                box: $0.box
+            )
+        }
+        let metadataData = try JSONEncoder().encode(metadata)
+        var multipart = MultipartFormData()
+        multipart.addField(
+            name: "metadata",
+            value: String(decoding: metadataData, as: UTF8.self)
+        )
+        for (index, candidate) in uploads.enumerated() {
+            guard let data = candidate.cropData else { continue }
+            multipart.addFile(
+                name: "images",
+                filename: "garment-\(index + 1).png",
+                contentType: "image/png",
+                data: data
+            )
+        }
+        return try await send(
+            path: "v1/garment-analyses",
+            method: "POST",
+            body: multipart.finalizedBody(),
+            contentType: multipart.contentType
+        )
     }
 
     func createSearch(
@@ -236,6 +301,7 @@ struct APIClient: Sendable {
     private static let standardDateStyle = Date.ISO8601FormatStyle()
 
     private func authorize(_ request: inout URLRequest) {
+        request.setValue("true", forHTTPHeaderField: "X-Daytona-Skip-Preview-Warning")
         guard let bearerToken, !bearerToken.isEmpty else { return }
         request.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
     }

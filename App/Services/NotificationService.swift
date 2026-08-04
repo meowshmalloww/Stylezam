@@ -27,5 +27,34 @@ actor NotificationService {
         )
         try? await UNUserNotificationCenter.current().add(request)
     }
-}
 
+    func captureFinished(
+        itemCount: Int,
+        scanID: UUID,
+        detailedLabelsReady: Bool
+    ) async {
+        let content = UNMutableNotificationContent()
+        content.title = detailedLabelsReady
+            ? "Your Stylezam capture is ready"
+            : "Capture saved on this iPhone"
+        if itemCount == 0 {
+            content.body = "The look is in your Library. No distinct fashion pieces were confirmed."
+        } else if itemCount == 1 {
+            content.body = detailedLabelsReady
+                ? "1 piece is labeled and ready to review."
+                : "1 piece is saved locally; detailed labels are unavailable."
+        } else {
+            content.body = detailedLabelsReady
+                ? "\(itemCount) pieces are labeled and ready to review."
+                : "\(itemCount) pieces are saved locally; detailed labels are unavailable."
+        }
+        content.sound = .default
+        content.userInfo = ["scanID": scanID.uuidString]
+        let request = UNNotificationRequest(
+            identifier: "stylezam-capture-\(scanID.uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+}

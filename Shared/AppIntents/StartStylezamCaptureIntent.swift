@@ -3,7 +3,7 @@ import AppIntents
 struct StartStylezamCaptureIntent: AppIntent {
     static let title: LocalizedStringResource = "Capture a Look"
     static let description = IntentDescription(
-        "Open Stylezam to search clothing from the camera, photos, or shared screen content."
+        "Open Stylezam to scan clothing from the camera or authorized screen content."
     )
     static let openAppWhenRun: Bool = true
 

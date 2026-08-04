@@ -1,31 +1,18 @@
-import CoreImage
-import CoreMedia
 import Foundation
 import Observation
-import UIKit
 
 #if canImport(ScreenCaptureKit)
+import CoreImage
+import CoreMedia
+import UIKit
 @preconcurrency import ScreenCaptureKit
 #endif
 
-private final class LiveScreenFrameGate: @unchecked Sendable {
-    private let lock = NSLock()
-    private var lastFrameTime: TimeInterval = 0
-
-    func shouldEncodeFrame(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
-        lock.withLock {
-            guard now - lastFrameTime >= 0.8 else { return false }
-            lastFrameTime = now
-            return true
-        }
-    }
-}
-
-/// Owns the full-display stream that the user authorizes with Apple’s iOS 27 picker.
+/// Owns the recent frames from a full-display stream the user authorizes with Apple’s picker.
 ///
-/// ScreenCaptureKit is absent from the iOS 26 SDK. Its implementation is compiled only by an SDK
-/// that exposes the framework, while this public surface keeps the rest of Stylezam buildable and
-/// makes the unavailable state explicit instead of simulating captured content.
+/// The ScreenCaptureKit implementation lives in an iOS 27-only adapter below. Keeping those
+/// symbols out of this public manager lets the same app continue to launch on iOS 26 when it is
+/// eventually compiled with the iOS 27 SDK.
 @MainActor
 @Observable
 final class LiveScreenCaptureManager: NSObject {
@@ -40,19 +27,30 @@ final class LiveScreenCaptureManager: NSObject {
     private(set) var errorMessage: String?
     private var frameBuffer: [BufferedFrame] = []
 
-    nonisolated private let frameGate = LiveScreenFrameGate()
+    @ObservationIgnored private let screenActivityManager = CaptureActivityManager()
+    // Type-erased because the concrete adapter is unavailable to an iOS 26 runtime.
+    @ObservationIgnored private var platformAdapter: AnyObject?
 
     nonisolated static var isSupportedBySDK: Bool {
         #if canImport(ScreenCaptureKit)
-        true
+        if #available(iOS 27.0, *) {
+            return true
+        }
+        #endif
+        return false
+    }
+
+    nonisolated static var unsupportedSummary: String {
+        #if canImport(ScreenCaptureKit)
+        return "Live screen capture requires iOS 27. Camera, Photos, Share, and Control Center capture remain available."
         #else
-        false
+        return "Install Xcode 27 to compile iOS 27 ScreenCaptureKit support. Camera, Photos, Share, and Control Center capture remain available."
         #endif
     }
 
     var statusSummary: String {
         if !Self.isSupportedBySDK {
-            return "Install Xcode 27 to compile iOS 27 ScreenCaptureKit support. Camera, Photos, Share, and Control Center capture remain available."
+            return Self.unsupportedSummary
         }
         if isCapturing {
             if let latestFrameAt {
@@ -69,46 +67,151 @@ final class LiveScreenCaptureManager: NSObject {
         // A Control Center tap can momentarily cover the fashion content. Prefer a recent frame
         // from just before the tap, falling back to the newest authorized frame when the stream
         // has only just started.
-        let preferredCutoff = Date().addingTimeInterval(-1.8)
+        let preferredCutoff = Date().addingTimeInterval(-1.2)
         return frameBuffer.last(where: { $0.capturedAt <= preferredCutoff })?.data
             ?? latestFrameData
     }
 
-    #if canImport(ScreenCaptureKit)
+    func presentSystemPicker() {
+        #if canImport(ScreenCaptureKit)
+        if #available(iOS 27.0, *) {
+            let adapter: LiveScreenCaptureAdapter
+            if let existing = platformAdapter as? LiveScreenCaptureAdapter {
+                adapter = existing
+            } else {
+                adapter = LiveScreenCaptureAdapter(manager: self)
+                platformAdapter = adapter
+            }
+            adapter.presentSystemPicker()
+            return
+        }
+        #endif
+        errorMessage = Self.unsupportedSummary
+    }
+
+    func stopCapture() async {
+        #if canImport(ScreenCaptureKit)
+        if #available(iOS 27.0, *),
+           let adapter = platformAdapter as? LiveScreenCaptureAdapter
+        {
+            await adapter.stopCapture()
+            platformAdapter = nil
+            return
+        }
+        #endif
+        await captureDidStop()
+    }
+
+    fileprivate func prepareForStreamStart() {
+        isCapturing = false
+        frameBuffer.removeAll(keepingCapacity: true)
+        latestFrameData = nil
+        latestFrameAt = nil
+        errorMessage = nil
+    }
+
+    fileprivate func captureDidStart() async {
+        isCapturing = true
+        errorMessage = nil
+        await screenActivityManager.start(
+            id: UUID().uuidString,
+            source: "Authorized full display",
+            phase: "Live screen active"
+        )
+    }
+
+    fileprivate func captureDidStop() async {
+        isCapturing = false
+        frameBuffer.removeAll(keepingCapacity: false)
+        latestFrameData = nil
+        latestFrameAt = nil
+        errorMessage = nil
+        await screenActivityManager.end(phase: "Live screen stopped")
+    }
+
+    fileprivate func captureDidFail(_ error: Error) async {
+        isCapturing = false
+        frameBuffer.removeAll(keepingCapacity: false)
+        latestFrameData = nil
+        latestFrameAt = nil
+        errorMessage = error.localizedDescription
+        await screenActivityManager.end(
+            phase: "Live screen interrupted",
+            failed: true
+        )
+    }
+
+    fileprivate func acceptFrame(_ data: Data) {
+        guard isCapturing else { return }
+        let capturedAt = Date.now
+        latestFrameData = data
+        latestFrameAt = capturedAt
+        frameBuffer.append(BufferedFrame(capturedAt: capturedAt, data: data))
+        let retentionCutoff = capturedAt.addingTimeInterval(-4)
+        frameBuffer.removeAll { $0.capturedAt < retentionCutoff }
+        if frameBuffer.count > 6 {
+            frameBuffer.removeFirst(frameBuffer.count - 6)
+        }
+    }
+}
+
+#if canImport(ScreenCaptureKit)
+private final class LiveScreenFrameGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var lastFrameTime: TimeInterval = 0
+
+    func shouldEncodeFrame(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
+        lock.withLock {
+            guard now - lastFrameTime >= 0.8 else { return false }
+            lastFrameTime = now
+            return true
+        }
+    }
+}
+
+@available(iOS 27.0, *)
+private final class LiveScreenCaptureAdapter: NSObject,
+    SCStreamOutput,
+    SCStreamDelegate,
+    SCContentSharingPickerObserver,
+    @unchecked Sendable
+{
+    private weak var manager: LiveScreenCaptureManager?
     private let picker = SCContentSharingPicker.shared
-    private var pickerObserver: LiveScreenPickerObserver?
     private var stream: SCStream?
+    private let frameGate = LiveScreenFrameGate()
+    private let imageContext = CIContext(options: [.cacheIntermediates: false])
     private let sampleQueue = DispatchQueue(
         label: "com.stylezam.live-screen.frames",
         qos: .userInitiated
     )
 
-    override init() {
+    init(manager: LiveScreenCaptureManager) {
+        self.manager = manager
         super.init()
-        pickerObserver = LiveScreenPickerObserver(manager: self)
     }
 
+    @MainActor
     func presentSystemPicker() {
         guard picker.isAvailable else {
-            errorMessage = "Screen capture is not available on this device or is restricted by system policy."
+            manager?.errorMessage = "Screen capture is not available on this device or is restricted by system policy."
             return
         }
         var configuration = SCContentSharingPickerConfiguration()
         configuration.showsMicrophoneControl = false
         picker.defaultConfiguration = configuration
-        if !picker.isActive, let pickerObserver {
-            picker.add(pickerObserver)
+        if !picker.isActive {
+            picker.add(self)
             picker.isActive = true
         }
-        errorMessage = nil
+        manager?.errorMessage = nil
         picker.present()
     }
 
+    @MainActor
     func startCapture(with filter: SCContentFilter) async {
         await tearDownStream()
-        frameBuffer.removeAll(keepingCapacity: true)
-        latestFrameData = nil
-        latestFrameAt = nil
+        manager?.prepareForStreamStart()
         let configuration = SCStreamConfiguration()
         do {
             let newStream = SCStream(
@@ -123,90 +226,53 @@ final class LiveScreenCaptureManager: NSObject {
             )
             try await newStream.startCapture()
             stream = newStream
-            isCapturing = true
-            errorMessage = nil
+            await manager?.captureDidStart()
         } catch {
-            isCapturing = false
-            errorMessage = error.localizedDescription
+            await manager?.captureDidFail(error)
         }
     }
 
+    @MainActor
     func stopCapture() async {
         await tearDownStream()
-        isCapturing = false
-        frameBuffer.removeAll(keepingCapacity: false)
-        latestFrameData = nil
-        latestFrameAt = nil
         picker.isActive = false
-        if let pickerObserver {
-            picker.remove(pickerObserver)
-        }
+        picker.remove(self)
+        await manager?.captureDidStop()
     }
 
+    @MainActor
     private func tearDownStream() async {
         guard let stream else { return }
         try? await stream.stopCapture()
         self.stream = nil
     }
 
-    nonisolated private func accept(_ sampleBuffer: CMSampleBuffer) {
-        guard frameGate.shouldEncodeFrame(),
-              CMSampleBufferIsValid(sampleBuffer),
-              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-        else { return }
-
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
-        let context = CIContext(options: [.cacheIntermediates: false])
-        guard let cgImage = context.createCGImage(image, from: image.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.9)
-        else { return }
-
-        Task { @MainActor [weak self] in
-            guard let self else { return }
-            let capturedAt = Date.now
-            latestFrameData = data
-            latestFrameAt = capturedAt
-            frameBuffer.append(BufferedFrame(capturedAt: capturedAt, data: data))
-            let retentionCutoff = capturedAt.addingTimeInterval(-15)
-            frameBuffer.removeAll { $0.capturedAt < retentionCutoff }
-        }
-    }
-    #else
-    func presentSystemPicker() {
-        errorMessage = "Live screen capture requires the iOS 27 SDK and Xcode 27."
-    }
-
-    func stopCapture() async {}
-    #endif
-}
-
-#if canImport(ScreenCaptureKit)
-extension LiveScreenCaptureManager: SCStreamOutput, SCStreamDelegate {
     nonisolated func stream(
         _ stream: SCStream,
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
         of type: SCStreamOutputType
     ) {
-        guard type == .screen else { return }
-        accept(sampleBuffer)
+        guard type == .screen,
+              frameGate.shouldEncodeFrame(),
+              CMSampleBufferIsValid(sampleBuffer),
+              let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+        else { return }
+
+        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        guard let cgImage = imageContext.createCGImage(image, from: image.extent),
+              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.78)
+        else { return }
+
+        Task { @MainActor [weak manager] in
+            manager?.acceptFrame(data)
+        }
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Task { @MainActor [weak self] in
-            self?.isCapturing = false
-            self?.errorMessage = error.localizedDescription
+        Task { @MainActor [weak self, weak manager] in
+            self?.stream = nil
+            await manager?.captureDidFail(error)
         }
-    }
-}
-
-private final class LiveScreenPickerObserver: NSObject,
-    SCContentSharingPickerObserver,
-    @unchecked Sendable
-{
-    private weak var manager: LiveScreenCaptureManager?
-
-    init(manager: LiveScreenCaptureManager) {
-        self.manager = manager
     }
 
     nonisolated func contentSharingPicker(
@@ -214,8 +280,8 @@ private final class LiveScreenPickerObserver: NSObject,
         didUpdateWith filter: SCContentFilter,
         for stream: SCStream?
     ) {
-        Task { @MainActor [weak manager] in
-            await manager?.startCapture(with: filter)
+        Task { @MainActor [weak self] in
+            await self?.startCapture(with: filter)
         }
     }
 

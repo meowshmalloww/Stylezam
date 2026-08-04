@@ -1,99 +1,103 @@
 # Architecture
 
-## Product boundary
+## Release boundary
 
-Stylezam retrieves real merchant/listing data. The app may analyze pixels and rerank retrieved candidates, but it does not invent a product, price, merchant, offer, or “exact match.” Virtual try-on is presented as a visualization, never as a fit prediction.
+This architecture implements garment capture and understanding. Product retrieval, today’s prices, and virtual try-on are feature-gated off. The existing route shapes are retained for later work, but disabled calls return an explicit service error and consume no provider quota.
 
-## System flow
+## Data flow
 
 ```mermaid
-flowchart LR
-    subgraph iPhone
-        Inputs["Camera · Photos · text · Share · Screenshot Shortcut · Control"]
-        Picker["iOS 27 system screen picker"]
-        App["SwiftUI app"]
-        Live["Live Activity + Dynamic Island"]
-        Local["Local recent · saved · try-on library"]
-    end
+sequenceDiagram
+    participant User
+    participant Camera as Stylezam camera
+    participant CoreML as On-device RF-DETR
+    participant Library as Local Library
+    participant API as Daytona CPU API
+    participant Fireworks as Fireworks MiniMax M3
 
-    subgraph API["Stylezam FastAPI"]
-        Jobs["Persistent job orchestration"]
-        Understand["Crop · understand · segment"]
-        Retrieve["Product retrieval"]
-        Rank["Deduplicate · evidence-aware ranking"]
-        DB["SQLite + sanitized media"]
-        Quota["Atomic monthly caps"]
-    end
-
-    subgraph Providers
-        Serp["SerpApi Shopping + Lens"]
-        Ebay["eBay Browse"]
-        HostedVision["OpenAI · Fireworks · Qwen"]
-        LocalCV["Grounding DINO · SAM2 · CLIP"]
-        YouCam["YouCam Clothes v3"]
-    end
-
-    Inputs --> App
-    Picker --> App
-    App --> Jobs
-    Jobs --> Live
-    Jobs --> Understand --> Retrieve --> Rank --> DB
-    Quota --> Retrieve
-    Understand --> HostedVision
-    Understand --> LocalCV
-    Retrieve --> Serp
-    Retrieve --> Ebay
-    App <--> Local
-    Jobs --> YouCam
-    YouCam --> DB
+    User->>Camera: Capture photo or choose Live
+    Camera->>CoreML: Normalized frame
+    CoreML-->>Camera: Boxes, masks, classes, confidence
+    Camera->>Library: Save look and masked crops
+    Camera->>API: Authenticated multipart crop batch
+    API->>API: Validate count, bytes, token, and monthly cap
+    API->>Fireworks: One structured multimodal request
+    Fireworks-->>API: One label record per crop ID
+    API->>API: Delete temporary normalized crops
+    API-->>Library: Validated labels and visible attributes
 ```
 
-## Search lifecycle
+## iPhone responsibilities
 
-1. The client sends text, a normalized JPEG, or both to `POST /v1/searches`.
-2. The backend strips image metadata, transposes EXIF orientation, converts to RGB JPEG, and stores a randomized filename.
-3. If enabled, Grounding DINO locates fashion objects and SAM2 isolates the primary item. A user-selected region takes precedence.
-4. The first configured hosted vision route—OpenAI, Fireworks, then Qwen—emits structured attributes. Each call claims its own local monthly slot first, and failure falls through to the next configured engine. Prompts forbid unsupported brand guesses.
-5. Each external retrieval call atomically claims one unit from Stylezam’s local monthly cap before executing.
-6. SerpApi and/or eBay return actual source records. Provider failure is surfaced; zero successful routes is not treated as an empty shopping result.
-7. CLIP can rerank the first visual candidates locally. Ranking combines provider evidence, visual similarity, and lexical similarity.
-8. URLs are canonicalized, tracking parameters are removed, and duplicate listings are collapsed.
-9. Results and job state are persisted. The iPhone polls the job and mirrors progress into a Live Activity.
+### Input
 
-Temporary user-selected and segmentation crops are deleted in a `finally` cleanup after retrieval/ranking, including failed or cancelled jobs. The original search image remains attached to the persisted job until the user deletes that capture.
+The custom AVFoundation camera owns the preview, rear/front switch, flash, manual shutter, and Live mode. Photos, clipboard images, App Intents, and an authorized iOS 27 screen frame enter the same `processCapture` path. The Share extension uses that path only when all signed targets receive the same App Group entitlement; a free Personal Team may not provision that capability.
 
-## Evidence tiers
+### Live capture
 
-- `exact` requires an upstream exact-match signal plus a high combined score.
-- `likely` means strong alignment without proof of an exact SKU.
-- `similar` means important visual or textual attributes align.
-- `inspired` means partial style overlap only.
+Live mode samples preview frames instead of taking every frame. The on-device model reports candidates and a quality score using detection confidence, garment area, clipping, luminance, and sharpness. Automatic capture requires a stable candidate signature across consecutive frames, a ready-quality frame, and a cooldown. The user can always tap the shutter. Recent item crops are compared with a perceptual dHash guard to suppress obvious repeats.
 
-Every tier remains an inference. The product screen tells the user to confirm details on the merchant page.
+These quality and duplicate checks are deterministic heuristics, not identity recognition and not a calibrated guarantee.
 
-## Capture outside the app
+### Segmentation
 
-- The Control Widget and Action Button run an App Intent, write a timestamp to the shared app group, and open Stylezam.
-- The `Search Image with Stylezam` App Intent accepts the previous Shortcut action’s real image. The recommended iOS 26 Shortcut is `Take Screenshot` → `Search Image with Stylezam`.
-- The Share extension saves one real image and/or text value to the shared app-group container, then opens `stylezam://import`.
-- With iOS 27 ScreenCaptureKit active, the app keeps up to 15 seconds of throttled frames in memory and favors the frame from just before the Control Center tap. Without a valid authorized frame it opens the normal capture sheet.
-- Live screen is intentionally not a permanent app tab. Setup and status live in Settings → Capture & Controls; selection is Apple system UI.
+The downloadable Core ML package accepts a normalized `1 × 3 × 384 × 384` tensor and returns query boxes, class logits, and masks. Stylezam:
 
-## Persistence and deletion
+1. scores only Fashionpedia item classes 0–26;
+2. rejects confidence below 0.35 and very small boxes;
+3. removes high-IoU same-class duplicates;
+4. keeps the configured maximum, five by default and 12 at most;
+5. turns the winning mask and box into a PNG crop.
 
-SQLite persists job state so queued jobs can recover after a backend restart. Generated YouCam output is copied into Stylezam storage before its provider URL expires. The person photo on the Stylezam backend is removed when try-on processing completes or fails. The iPhone copies a completed preview into its durable Library and calls `DELETE /v1/try-ons/{id}` to remove the remaining Stylezam job/result. Search and try-on delete endpoints cancel active work, remove database rows, and remove associated local media. Local capture deletion calls the search delete endpoint on a best-effort basis.
+If the pack is not installed, still-photo capture can use Apple’s foreground-instance mask as a limited fallback. Automatic Live detection requires the garment model.
 
-## API surface
+### Model delivery
 
-- `GET /v1/health`
-- `GET /v1/capabilities`
-- `POST /v1/searches`
-- `GET /v1/searches/{id}`
-- `GET /v1/searches/{id}/results`
-- `DELETE /v1/searches/{id}`
-- `POST /v1/try-ons`
-- `GET /v1/try-ons/{id}`
-- `DELETE /v1/try-ons/{id}`
-- `GET /media/{filename}`
+The app requests an authenticated manifest, verifies every relative path, byte count, and SHA-256, compiles the `.mlpackage` locally, and atomically switches to the completed version. Downloads start only on a satisfied Wi-Fi interface. A partial staging directory is removed on cancellation or failure.
 
-The generated OpenAPI interface is available at `/docs`.
+### Local persistence
+
+The Library owns original captures, individual crop files, structured item records, and analysis state. It does not insert demo products. Deleting a scan removes its local media. Live screen preview frames remain in a short in-memory rolling buffer until the user invokes capture.
+
+## Daytona responsibilities
+
+The production API is intentionally small enough for 2 CPU cores, 4 GB RAM, and 10 GB disk:
+
+- authenticate all non-health endpoints with a bearer service token;
+- serve and validate the immutable Core ML manifest/files;
+- reject unsafe paths, request bodies over 24 MB, normalized crop batches over 20 MB, excess item counts, and quota exhaustion;
+- decode with a 20-million-pixel ceiling, apply EXIF orientation, strip metadata, and preserve segmented alpha masks as PNG (ordinary images become JPEG);
+- permit at most two complete crop normalization-and-labeling operations per process;
+- make one MiniMax M3 request for a crop batch;
+- delete normalized crop files in a `finally` block;
+- expose product and try-on routes only when their separate feature flags are enabled.
+
+No GPU flag, PyTorch, RF-DETR runtime, Grounding DINO, SAM2, CLIP, Ollama, or device-localhost dependency is present in the production service.
+
+## Provider boundary
+
+MiniMax is a validation and labeling stage, not the source of crop geometry. The prompt requires visible facts, rejects body/background fragments, forbids unsupported brand guesses, and requests a strict JSON schema. The backend verifies that every submitted item ID appears exactly once before returning the response.
+
+The default app-side quota is 100 crop-batch requests per UTC month. A failed provider attempt still consumes the locally claimed slot because it may already have reached Fireworks. This prevents retry storms from bypassing the cap.
+
+## Item coverage
+
+The detector’s V1 item set is:
+
+- shirts/blouses, tops, sweaters, cardigans, jackets, vests, pants, shorts, skirts, coats, dresses, jumpsuits, and capes;
+- glasses, hats/head coverings, ties, gloves, watches, belts, leg warmers, tights/stockings, socks, shoes, bags/wallets, scarves, and umbrellas.
+
+Fashionpedia garment-part classes such as sleeves, collars, pockets, zippers, and sequins are intentionally not emitted as separate Library pieces. Rings, bracelets, necklaces, and earrings need a future compact-accessory detector or user-selected crop.
+
+## iOS 27 screen path
+
+ScreenCaptureKit is compiled only when the SDK exposes it. Apple’s system content-sharing picker supplies the filter; Stylezam cannot silently begin a full-display stream. Frames are throttled and buffered in memory. The Control Center or Action Button intent requests a capture from the recent buffer. iOS owns the system privacy indicator. Stylezam does not draw a fake border over other apps.
+
+## Failure behavior
+
+- No model pack: manual photo/import can use the Apple foreground fallback; Live explains why auto detection is unavailable.
+- No backend address or token: the look remains saved locally and detailed labels show unavailable.
+- No Fireworks key: the API returns `provider_configuration_required`; no substitute labels are invented.
+- Monthly cap reached: the API returns a non-retryable 429.
+- Product or try-on request: the API returns `feature_not_enabled` while those flags are off.
+- iOS 26 build: screen capture reports unavailable; camera and import continue working.

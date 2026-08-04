@@ -3,6 +3,7 @@ import UserNotifications
 
 extension Notification.Name {
     static let stylezamOpenSearch = Notification.Name("stylezam.open-search")
+    static let stylezamOpenScan = Notification.Name("stylezam.open-scan")
 }
 
 final class StylezamAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
@@ -25,11 +26,17 @@ final class StylezamAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        guard let searchID = response.notification.request.content.userInfo["searchID"] as? String
-        else { return }
-        StylezamShared.defaults.set(searchID, forKey: StylezamShared.pendingSearchIDKey)
-        await MainActor.run {
-            NotificationCenter.default.post(name: .stylezamOpenSearch, object: searchID)
+        let userInfo = response.notification.request.content.userInfo
+        if let scanID = userInfo["scanID"] as? String {
+            StylezamShared.defaults.set(scanID, forKey: StylezamShared.pendingScanIDKey)
+            await MainActor.run {
+                NotificationCenter.default.post(name: .stylezamOpenScan, object: scanID)
+            }
+        } else if let searchID = userInfo["searchID"] as? String {
+            StylezamShared.defaults.set(searchID, forKey: StylezamShared.pendingSearchIDKey)
+            await MainActor.run {
+                NotificationCenter.default.post(name: .stylezamOpenSearch, object: searchID)
+            }
         }
     }
 }

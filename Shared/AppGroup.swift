@@ -7,6 +7,7 @@ enum StylezamShared {
     static let pendingTextKey = "stylezam.pending-text"
     static let pendingOriginKey = "stylezam.pending-origin"
     static let pendingSearchIDKey = "stylezam.pending-search-id"
+    static let pendingScanIDKey = "stylezam.pending-scan-id"
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroupIdentifier) ?? .standard
@@ -16,6 +17,17 @@ enum StylezamShared {
         FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         )
+    }
+
+    /// App Intents that execute in the main app can still hand off files when a
+    /// free Personal Team profile cannot provision App Groups. Share-extension
+    /// handoff across separate sandboxes continues to require the App Group.
+    static var handoffContainerURL: URL {
+        if let containerURL { return containerURL }
+        return FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0].appending(path: "StylezamHandoff", directoryHint: .isDirectory)
     }
 
     static func requestCapture() {
@@ -30,9 +42,7 @@ enum StylezamShared {
         _ data: Data,
         origin: String = "shareExtension"
     ) throws -> String {
-        guard let containerURL else {
-            throw CocoaError(.fileNoSuchFile)
-        }
+        let containerURL = handoffContainerURL
         let directory = containerURL.appending(path: "Pending", directoryHint: .isDirectory)
         try FileManager.default.createDirectory(
             at: directory,

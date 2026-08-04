@@ -43,6 +43,13 @@ class MediaStorage:
             raise StylezamError("empty_image", "The uploaded image is empty.", status_code=422)
         try:
             with Image.open(io.BytesIO(raw)) as source:
+                source_width, source_height = source.size
+                if source_width * source_height > self.settings.max_image_pixels:
+                    raise StylezamError(
+                        "image_dimensions_too_large",
+                        "The decoded image dimensions exceed the configured pixel limit.",
+                        status_code=413,
+                    )
                 source.load()
                 image = ImageOps.exif_transpose(source)
                 width, height = image.size
@@ -52,13 +59,37 @@ class MediaStorage:
                         "The image must be at least 64 by 64 pixels.",
                         status_code=422,
                     )
-                filename = "%s-%s.jpg" % (prefix, secrets.token_hex(12))
+                has_alpha = "A" in image.getbands() or (
+                    image.mode == "P" and "transparency" in image.info
+                )
+                extension = "png" if has_alpha else "jpg"
+                filename = "%s-%s.%s" % (
+                    prefix,
+                    secrets.token_hex(12),
+                    extension,
+                )
                 destination = self.root / filename
-                rgb = image.convert("RGB")
-                rgb.save(destination, format="JPEG", quality=92, optimize=True)
+                if has_alpha:
+                    image.convert("RGBA").save(
+                        destination,
+                        format="PNG",
+                        optimize=True,
+                    )
+                else:
+                    image.convert("RGB").save(
+                        destination,
+                        format="JPEG",
+                        quality=92,
+                        optimize=True,
+                    )
         except StylezamError:
             raise
-        except (UnidentifiedImageError, OSError, ValueError) as exc:
+        except (
+            Image.DecompressionBombError,
+            UnidentifiedImageError,
+            OSError,
+            ValueError,
+        ) as exc:
             raise StylezamError(
                 "invalid_image",
                 "The upload is not a readable JPEG, PNG, HEIC, or WebP image.",
@@ -67,7 +98,7 @@ class MediaStorage:
         return StoredMedia(
             path=destination,
             relative_name=filename,
-            content_type="image/jpeg",
+            content_type="image/png" if has_alpha else "image/jpeg",
             width=width,
             height=height,
         )

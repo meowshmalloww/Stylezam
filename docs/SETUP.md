@@ -1,125 +1,154 @@
 # Setup and device checklist
 
-## 1. Backend
+## Current toolchain boundary
+
+The repository builds its iOS 26 feature set with Xcode 26.6 and the iOS 26.5 SDK. Apple’s current requirements say Xcode 27 beta 4 needs macOS Tahoe 26.4 or later and supplies the iOS 27 SDK: [Xcode system requirements](https://developer.apple.com/xcode/system-requirements).
+
+This Mac is currently on macOS 26.2, so the real ScreenCaptureKit-for-iOS branch cannot be compiled here yet. Camera, Photos, Share, App Intents, local Live Activities, Dynamic Island UI, model download, segmentation, crop labeling, and Library behavior remain buildable on iOS 26.
+
+## 1. Verify the backend and model pack
 
 From the repository root:
 
 ```bash
 ./scripts/bootstrap_backend.sh
-cp backend/.env.example backend/.env
+./scripts/check.sh
 ```
 
-Edit `backend/.env`. The API can start without credentials, but at least SerpApi or eBay must be configured to return product results. Keep every monthly cap at or below the budget you intend to allow.
+The verified model pack lives at:
 
-Run it:
+```text
+backend/.data/model-packs/garment-rfdetr-seg-small/1.0.1/
+```
+
+It is an iPhone Core ML artifact, not a server inference dependency. The production container serves the pack but never loads it into memory.
+
+Local backend execution exists for tests and API development:
 
 ```bash
+cp backend/.env.example backend/.env
 ./scripts/run_backend.sh
 ```
 
-Verify:
+The iPhone app intentionally does not accept this localhost address. A physical phone must use the deployed HTTPS service.
+
+## 2. Create the Daytona CPU sandbox
+
+Install and authenticate Daytona only when you are ready to deploy. The official CLI install on macOS is:
 
 ```bash
-curl http://127.0.0.1:8000/v1/health
-curl http://127.0.0.1:8000/v1/capabilities
+brew install daytonaio/cli/daytona
 ```
 
-If `STYLEZAM_API_TOKEN` is set, include `Authorization: Bearer <token>` for every `/v1` endpoint except `/v1/health`. Enter the same token in Stylezam Settings; the app stores it in the iPhone Keychain.
-
-Optional GPU-backed segmentation and reranking:
+Then choose secrets in your shell. Do not commit them:
 
 ```bash
-.venv/bin/pip install -e 'backend[vision]'
+export STYLEZAM_API_TOKEN="a-long-random-value-you-will-also-enter-on-the-phone"
+export STYLEZAM_FIREWORKS_API_KEY="your-fireworks-api-key"
+export STYLEZAM_FIREWORKS_MONTHLY_CAP=100
+./scripts/create_daytona.sh
 ```
 
-Then set `STYLEZAM_LOCAL_VISION_ENABLED=true`. Grounding DINO, SAM2, and CLIP weights are downloaded by their runtimes and can require several gigabytes. Hosted image understanding uses any configured `STYLEZAM_OPENAI_API_KEY`, `STYLEZAM_FIREWORKS_API_KEY`, or `STYLEZAM_QWEN_API_KEY`; the iPhone never receives these keys.
+Before adding the Fireworks key to Daytona, set and confirm a small provider-side monthly budget. Fireworks documents that reaching this limit pauses API requests across the account:
 
-## 2. Generate the Xcode project
+```bash
+firectl quota update monthly-spend-usd --value 5
+firectl quota list
+```
+
+Use a value no larger than the prepaid credit you intend to spend. The example `$5` limit is deliberately conservative and affects the entire Fireworks account, not only Stylezam. Keep `STYLEZAM_FIREWORKS_MONTHLY_CAP` as the separate, lower-level call-count guard. See [Fireworks account quotas](https://docs.fireworks.ai/guides/quotas_usage/account-quotas).
+
+The helper requests:
+
+- 2 CPU cores;
+- 4096 MB RAM;
+- 10 GB disk;
+- public sandbox ingress for the iPhone;
+- auto-stop disabled and auto-delete disabled;
+- no GPU allocation;
+- product search and virtual try-on disabled.
+
+Daytona documents `--auto-stop 0` as disabled and exposes the CPU, memory, disk, public, Dockerfile, and environment flags used by the script: [Daytona CLI](https://www.daytona.io/docs/en/tools/cli/). A public preview link is intentionally protected by Stylezam’s own bearer token. The client also sends Daytona’s documented warning-skip header on manifest, file, and API calls: [Daytona preview URLs](https://www.daytona.io/docs/en/preview/).
+
+After creation:
+
+1. Open the sandbox in Daytona.
+2. Copy the public HTTPS preview URL for port 8000.
+3. Confirm `<url>/v1/health` returns `status: ok`.
+4. In Stylezam, open Settings → Developer Debug.
+5. Enter that URL and the same `STYLEZAM_API_TOKEN`.
+6. Tap the service test.
+7. On Wi-Fi, download the garment model when the app offers setup.
+
+Do not use a signed preview URL for a ten-day test: Daytona currently limits signed preview URLs to 24 hours. Use a public sandbox plus the Stylezam bearer token.
+
+For Daytona billing safety, open Wallet and set automatic top-up Threshold and Target to `0`. Daytona documents that this disables automatic top-up, but it does not document an account spend-limit pause equivalent to Fireworks. Treat the `$200` credit as a wallet balance, watch the per-sandbox spend, and explicitly delete the sandbox at the end of the ten-day test. Stopping alone still reserves billable disk; archiving or deleting stops sandbox billing. See [Daytona billing](https://www.daytona.io/docs/billing).
+
+### What cannot be completed without your accounts
+
+The repository does not contain your Daytona login, Fireworks key, or service token. Therefore an actual sandbox and a real MiniMax response cannot be created by source code alone. The mocked provider test verifies request structure without spending a call.
+
+## 3. Generate and sign the iOS project
 
 ```bash
 ./scripts/generate_project.sh
 open Stylezam.xcodeproj
 ```
 
-`project.yml` is the project source of truth. Do not make structural target changes only in the generated `.xcodeproj`, because regeneration will replace them.
-
-## 3. Replace signing identifiers
-
-The repository uses placeholders:
+`project.yml` is the source of truth for target structure. Set a Development Team for the app, Share extension, and widget extension. Replace the placeholder identifiers if your team cannot claim them:
 
 - App: `com.stylezam.app`
-- Widget extension: `com.stylezam.app.widgets`
-- Share extension: `com.stylezam.app.share`
-- App Group: `group.com.stylezam.shared`
+- Widget: `com.stylezam.app.widgets`
+- Share: `com.stylezam.app.share`
+- Intended App Group: `group.com.stylezam.shared`
 
-Choose unique identifiers in `project.yml`, then replace the app-group ID in:
+The checked-in entitlement files are empty so the main app can remain signable by a free Personal Team. If an eligible team is available, add the App Groups capability to all three targets in Xcode, select the exact identifier in `Shared/AppGroup.swift`, and confirm Xcode writes `com.apple.security.application-groups` into all three entitlement files. Those files survive project regeneration because `project.yml` references them directly.
 
-- `Shared/AppGroup.swift`
-- `App/Stylezam.entitlements`
-- `Extensions/Widgets/StylezamWidgets.entitlements`
-- `Extensions/Share/StylezamShare.entitlements`
+Apple permits free Personal Team device testing, but says App IDs, devices, and provisioning profiles expire after seven days and must be periodically rebuilt/reinstalled: [Apple membership comparison](https://developer.apple.com/support/compare-memberships/). Advanced capabilities and distribution belong to the paid program, so App Group/extension provisioning may still be the limiting part of a free-signing build. The main app can be device-tested without paying; all extension behavior must be verified against the capabilities Xcode actually grants your Personal Team.
 
-Regenerate the project, select your Apple development team for all three targets, and enable the matching App Group in Certificates, Identifiers & Profiles.
+## 4. Physical-device checks
 
-## Production backend deployment
+On the connected iPhone, verify:
 
-The repository includes `backend/Dockerfile` and a Render Blueprint at `render.yaml`. The Blueprint attaches `/data` as a persistent disk because SQLite jobs and sanitized media must survive restarts. Create the Blueprint from the repository, then provide the prompted secrets:
+- rear and front camera switching;
+- flash availability on the active camera;
+- manual Photo capture;
+- Live mode guidance, automatic capture, manual override, and cooldown;
+- five-item default and Developer Debug slider;
+- model download refuses cellular and succeeds on Wi-Fi;
+- checksum failure leaves no active partial pack;
+- crop overlays align with portrait and landscape source images;
+- scan deletion removes the original and crop files;
+- imported Photos and clipboard input;
+- Share extension input only if the same App Group successfully provisions on the app and extension;
+- Live Activity Lock Screen and Dynamic Island presentations;
+- Control Center/Action Button intent, if the App Group provisions;
+- backend-unavailable behavior still saves the scan locally.
 
-- `STYLEZAM_API_TOKEN` — a long random value shared only with your iPhone app.
-- `STYLEZAM_PUBLIC_BASE_URL` — the final `https://...` origin, with no trailing slash.
-- At least one product retrieval credential: SerpApi, eBay, or both.
-- At least one optional hosted vision credential—OpenAI, Fireworks, or Qwen—if structured clothing attributes should enrich image search.
-- `STYLEZAM_YOUCAM_API_KEY` if virtual try-on should be enabled.
+## 5. The Apple ScreenCaptureKit ZIP
 
-The standard container intentionally leaves Grounding DINO/SAM2/CLIP disabled. Those local models require a separate GPU-capable deployment and several large model downloads; enabling their flag on the standard CPU container is not production-safe. Hosted OpenAI, Fireworks, and Qwen understanding works over HTTPS. Image search still works through eBay image search and/or SerpApi Lens, and the API always accepts, normalizes, stores, and deletes photo uploads independently of optional ML.
+Extracting Apple’s sample ZIP is only the first reference step. It does not install an SDK, add the framework to Stylezam, copy entitlements, or enable the feature on the phone.
 
-## 4. Backend address
+To finish iOS 27 screen support later:
 
-Simulator can use the default `http://127.0.0.1:8000`. A real phone cannot use the Mac’s loopback address.
+1. Update this Mac to macOS 26.4 or later.
+2. Install Xcode 27 beta and select it with `xcode-select` or Xcode Settings.
+3. Open and run Apple’s sample separately to confirm the phone/SDK combination.
+4. Regenerate and open Stylezam with Xcode 27.
+5. Compile the existing conditional ScreenCaptureKit adapter against the iOS 27 SDK.
+6. Confirm the `screen-capture` background mode and `NSScreenCaptureUsageDescription` are accepted by Xcode.
+7. Sign and run on the iOS 27 phone.
+8. Use Apple’s content-sharing picker, leave Stylezam, invoke the Control Center capture, and confirm a real recent frame becomes a Library scan.
+9. Test stop, denial, interruption, protected-content, memory-pressure, and app-termination behavior.
 
-For device development, use one of:
+See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). The extracted sample should remain reference code; do not drop the whole sample project into Stylezam.
 
-- A production/staging HTTPS deployment.
-- An HTTPS tunnel to the Mac development server.
-- The Mac’s LAN IP if the phone and Mac are on the same trusted network.
+## 6. Release checks
 
-Open Stylezam → Settings → Developer Debug and replace the service URL, then tap Test. Production should use HTTPS; do not add broad App Transport Security exceptions.
-
-## 5. Screenshot Shortcut, Control Center, Action Button, and Share
-
-After installing a signed build:
-
-1. In Shortcuts, create a Shortcut with `Take Screenshot` followed by `Search Image with Stylezam`. The image parameter connects to the previous action automatically.
-2. Open Control Center and add Stylezam’s Capture a Look control.
-3. On an Action Button device, choose Controls in the Action Button settings and assign Capture a Look.
-4. In another app’s Share sheet, use Edit Actions if Search with Stylezam is not initially visible.
-
-The App Intent and Share extension depend on the App Group being present in all provisioning profiles.
-
-## 6. Live Activity and Dynamic Island
-
-Live Activities are local and do not require APNs. The app starts one after a backend search job is accepted, updates it while polling, and ends it after completion or failure. Test on a Dynamic Island device for compact/minimal presentation and on a non-Island device for Lock Screen presentation.
-
-## 7. iOS 27 live screen
-
-The current Xcode 26 build compiles a truthful unavailable state. To enable live screen capture:
-
-1. Open with Xcode 27 and compile against the iOS 27 SDK.
-2. Use a physical iPhone on iOS 27; Simulator is not sufficient for final capture validation.
-3. Keep the `screen-capture` background mode and `NSScreenCaptureUsageDescription` privacy string. Apple’s current sample does not document a manually entered screen-recording entitlement key.
-4. Open Stylezam → Settings → Capture & Controls → Choose a screen, then select content in Apple’s picker.
-5. From another app, invoke the Stylezam Control Center/Action Button control to search a recent authorized frame.
-
-See [iOS 27 screen capture](IOS27_SCREEN_CAPTURE.md) for behavior and limitations.
-
-## 8. Release checklist
-
-- Deploy the backend over HTTPS behind authentication/rate limiting appropriate to your audience.
-- Set exact CORS origins if a web client is added; the iOS app does not need CORS.
-- Back up the SQLite database and media directory or replace them with managed persistence/object storage before multi-instance deployment.
-- Confirm provider licenses, quotas, and caps.
-- Test deletion and account/data-retention behavior.
-- Complete App Store privacy labels based on the exact providers enabled in production.
-- Add support and privacy-policy URLs to App Store Connect.
-- Archive a Release build and run Apple’s validation.
-- Test camera, Photos, clipboard permission behavior, Share, Control Center, Action Button, Live Activity, Dynamic Island, product links, and YouCam on physical devices.
+- Run `./scripts/check.sh`.
+- Run the Python dependency vulnerability audit described in `THIRD_PARTY_NOTICES.md`.
+- Build the pinned production Dockerfile in Daytona and inspect its final image scan.
+- Test the real Fireworks request with non-sensitive clothing photos and a very low monthly cap.
+- Rotate test service tokens before sharing the app.
+- Confirm no API key is in the Xcode project, Git history, or app bundle.
+- Complete privacy disclosures and legal/license review before public distribution.

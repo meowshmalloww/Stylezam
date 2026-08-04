@@ -23,7 +23,7 @@ struct SettingsView: View {
                     SettingsLinkLabel(
                         icon: "bell",
                         title: "Notifications",
-                        detail: model.settings.notificationsEnabled ? "Search completion alerts are on" : "Search completion alerts are off"
+                        detail: model.settings.notificationsEnabled ? "Capture completion alerts are on" : "Capture completion alerts are off"
                     )
                 }
 
@@ -33,7 +33,7 @@ struct SettingsView: View {
                     SettingsLinkLabel(
                         icon: "hand.raised",
                         title: "Privacy",
-                        detail: "Uploads, local storage, retention, and deletion"
+                        detail: "On-device vision, crop uploads, storage, and deletion"
                     )
                 }
             }
@@ -45,7 +45,7 @@ struct SettingsView: View {
                     SettingsLinkLabel(
                         icon: "hammer",
                         title: "Developer Debug",
-                        detail: "Backend address, service token, and server engines"
+                        detail: "Service connection, model pack, and capture limits"
                     )
                 }
             }
@@ -99,11 +99,11 @@ private struct ControlSetupView: View {
             }
 
             Section {
-                Text("This route passes the actual screenshot into Stylezam and works on iOS 26.")
+                Text("This route passes the actual screenshot into Stylezam for garment detection and works on iOS 26.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 setupStep("1", "Add Take Screenshot")
-                setupStep("2", "Add Search Image with Stylezam")
+                setupStep("2", "Add Scan Image with Stylezam")
                 ShortcutsLink()
                     .shortcutsLinkStyle(.automaticOutline)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -122,7 +122,7 @@ private struct ControlSetupView: View {
             }
 
             Section {
-                Text("Open the Share sheet on an image or product page and choose Search with Stylezam.")
+                Text("Open the Share sheet on a fashion image and choose Stylezam to scan its visible pieces.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } header: {
@@ -191,8 +191,8 @@ private struct NotificationSettingsView: View {
             Section {
                 Toggle(isOn: $settings.notificationsEnabled) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Search finished")
-                        Text("Send a local alert when matches are ready.")
+                        Text("Capture finished")
+                        Text("Send a local alert when garment labels are ready.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -204,7 +204,7 @@ private struct NotificationSettingsView: View {
 
             Section("Live Activity") {
                 Label {
-                    Text("Search progress can appear on the Lock Screen and Dynamic Island independently of completion alerts.")
+                    Text("Capture and live-screen status can appear on the Lock Screen and Dynamic Island independently of completion alerts.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 } icon: {
@@ -227,17 +227,17 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "On this iPhone",
                 icon: "iphone",
-                detail: "Search history, saved products, and downloaded try-on previews are stored in Stylezam’s local Library."
+                detail: "Captured photos, segmented garment crops, saved products, and appearance previews are stored in Stylezam’s local Library. The downloadable garment model runs here too."
             )
             privacySection(
                 title: "Sent when you ask",
                 icon: "arrow.up.doc",
-                detail: "A photo leaves your iPhone only after you start a search or request a try-on. The configured backend processes that action."
+                detail: "The full capture stays on your iPhone during garment detection. Up to your configured item limit of segmented crops can be sent for detailed labels; the server deletes its temporary copies after the response."
             )
             privacySection(
                 title: "Server credentials",
                 icon: "key",
-                detail: "OpenAI, Fireworks, Qwen, retrieval, and try-on keys stay on the server. The optional Stylezam service token is stored in Keychain."
+                detail: "The Fireworks credential stays on the CPU-only server. The Stylezam production service token is stored in Keychain. Stylezam does not put provider keys in the app."
             )
 
             Section {
@@ -247,7 +247,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Your data")
             } footer: {
-                Text("This removes local searches, saved products, and try-on previews, then asks the configured backend to delete related jobs and uploaded images. Provider retention can differ by service.")
+                Text("This removes local captures, garment crops, legacy searches, saved products, and appearance previews. Crop-label uploads are already deleted by the Stylezam server after each request; provider retention can differ by service.")
             }
         }
         .navigationTitle("Privacy")
@@ -257,7 +257,7 @@ private struct PrivacySettingsView: View {
             isPresented: $isConfirmingClear,
             titleVisibility: .visible
         ) {
-            Button("Clear searches, saved products, and try-ons", role: .destructive) {
+            Button("Clear captures, saved products, and try-ons", role: .destructive) {
                 model.clearLibrary()
             }
         } message: {
@@ -285,27 +285,16 @@ private struct DeveloperSettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var isTesting = false
 
-    private var visibleProviders: [ProviderCapabilityDTO] {
-        let ids = Set([
-            "openai-vision",
-            "fireworks-vision",
-            "qwen-vision",
-            "grounded-sam2",
-            "youcam-clothes-v3",
-        ])
-        return model.capabilities?.providers.filter { ids.contains($0.id) } ?? []
-    }
-
     var body: some View {
         @Bindable var settings = model.settings
         Form {
             Section {
-                TextField("Backend address", text: $settings.backendURLString)
+                TextField("https://your-stylezam-service.example", text: $settings.backendURLString)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
 
-                SecureField("Service token (optional)", text: $settings.backendToken)
+                SecureField("Service token", text: $settings.backendToken)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .privacySensitive()
@@ -314,6 +303,7 @@ private struct DeveloperSettingsView: View {
                     isTesting = true
                     Task {
                         await model.refreshCapabilities()
+                        await model.modelPack.refresh(using: try? model.settings.client())
                         isTesting = false
                     }
                 } label: {
@@ -329,62 +319,105 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Connection")
             } footer: {
-                Text(model.serverMessage ?? "The optional service token is stored in Keychain.")
+                Text(model.serverMessage ?? "Use the deployed HTTPS address. Localhost is intentionally rejected on iPhone; the production service token is stored in Keychain.")
             }
 
-            Section("API engines · backend only") {
-                if visibleProviders.isEmpty {
-                    Text("Connect to a backend to inspect OpenAI, Fireworks, Qwen, local vision, and YouCam.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(visibleProviders, id: \.id) { provider in
-                        ProviderStatusRow(provider: provider)
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Garment model")
+                        Text(model.modelPack.status.shortLabel)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
+                    Spacer()
+                    Image(systemName: model.modelPack.isInstalled ? "checkmark.circle.fill" : "arrow.down.circle")
+                        .foregroundStyle(model.modelPack.isInstalled ? StylezamDesign.cobalt : .secondary)
                 }
+
+                if model.modelPack.isInstalled {
+                    Button("Remove downloaded model", role: .destructive) {
+                        do {
+                            try model.modelPack.removeInstalledPack()
+                        } catch {
+                            model.lastError = error.localizedDescription
+                        }
+                    }
+                } else {
+                    Button("Download on Wi-Fi") {
+                        guard let client = try? model.settings.client() else {
+                            model.lastError = APIClientError.invalidBaseURL.localizedDescription
+                            return
+                        }
+                        model.modelPack.download(using: client)
+                    }
+                    .disabled(isModelBusy)
+                }
+            } header: {
+                Text("On-device vision")
+            } footer: {
+                Text("The current verified Core ML pack is about 59 MB. It is integrity-checked, compiled on this iPhone, and never runs on Daytona.")
             }
 
-            Section("Provider configuration") {
-                Text("Add STYLEZAM_OPENAI_API_KEY, STYLEZAM_FIREWORKS_API_KEY, or STYLEZAM_QWEN_API_KEY to the backend environment and restart it. Model names and monthly caps are configured beside each server key.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                Text("Grounding DINO, SAM2, and CLIP are optional GPU-backed server workers. YouCam remains optional until virtual try-on is enabled for the deployment.")
-                    .font(.subheadline)
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Text("Maximum pieces per scan")
+                        Spacer()
+                        Text(settings.maxDetectedItems, format: .number)
+                            .font(.body.monospacedDigit().weight(.semibold))
+                    }
+                    Slider(
+                        value: Binding(
+                            get: { Double(settings.maxDetectedItems) },
+                            set: { settings.maxDetectedItems = Int($0.rounded()) }
+                        ),
+                        in: 1...12,
+                        step: 1
+                    )
+                    .tint(StylezamDesign.cobalt)
+                }
+
+                Toggle("Automatic capture in Live mode", isOn: $settings.liveAutoCaptureEnabled)
+                    .tint(StylezamDesign.cobalt)
+            } header: {
+                Text("Capture behavior")
+            } footer: {
+                Text("Five is the safe default. Increasing the limit uses more memory, produces more crop uploads, and can make labeling slower.")
+            }
+
+            Section("Service roles") {
+                serviceRow(
+                    title: "Detailed crop labels",
+                    ready: model.capabilities?.garmentLabeling == true
+                )
+                serviceRow(
+                    title: "Model-pack delivery",
+                    ready: model.capabilities?.modelPackAvailable == true
+                )
+                Text("The deployed service is CPU-only. Product retrieval, price lookup, YouCam, and GPU vision workers are not active in this phase.")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
         .navigationTitle("Developer Debug")
         .navigationBarTitleDisplayMode(.inline)
     }
-}
 
-private struct ProviderStatusRow: View {
-    let provider: ProviderCapabilityDTO
+    private var isModelBusy: Bool {
+        switch model.modelPack.status {
+        case .downloading, .compiling: true
+        default: false
+        }
+    }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: provider.configured ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(provider.configured ? StylezamDesign.cobalt : .secondary)
-                .frame(width: 22)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack {
-                    Text(provider.name)
-                    Spacer()
-                    Text(provider.configured ? "Ready" : "Off")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let detail = provider.detail {
-                    Text(detail)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if let limit = provider.monthlyLimitNote {
-                    Text(limit)
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                }
-            }
+    private func serviceRow(title: String, ready: Bool) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(ready ? "Ready" : "Off")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(ready ? StylezamDesign.cobalt : .secondary)
         }
     }
 }

@@ -10,6 +10,5 @@ fi
 
 cd "$project_root/backend"
 exec "$project_root/.venv/bin/python" -m uvicorn stylezam_api.main:app \
-    --host "${STYLEZAM_HOST:-127.0.0.1}" \
+    --host "${STYLEZAM_HOST:-0.0.0.0}" \
     --port "${STYLEZAM_PORT:-8000}"
-

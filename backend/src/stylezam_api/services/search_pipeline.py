@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Protocol, Sequence, Tuple
 
 from PIL import Image
 
@@ -12,12 +12,27 @@ from ..database import Database, dump_json
 from ..errors import ProviderConfigurationError, ProviderUpstreamError, StylezamError
 from ..providers.base import ProviderProduct
 from ..providers.ebay import EbayProvider
-from ..providers.local_vision import CLIPReranker, LocalGarmentVision
-from ..providers.vision import CompatibleChatVisionAnalyzer, OpenAIResponsesVisionAnalyzer
+from ..providers.vision import FireworksVisionAnalyzer
 from ..providers.serpapi import SerpAPIProvider
 from ..schemas import BoundingBox, VisualAttributes
 from ..storage import MediaStorage, StoredMedia
 from .ranking import rank_products
+
+
+class DisabledLocalVision:
+    configured = False
+
+
+class DisabledVisualReranker:
+    configured = False
+
+
+class LocalVisionLike(Protocol):
+    configured: bool
+
+
+class VisualRerankerLike(Protocol):
+    configured: bool
 
 
 class SearchPipeline:
@@ -29,11 +44,9 @@ class SearchPipeline:
         storage: MediaStorage,
         serpapi: SerpAPIProvider,
         ebay: EbayProvider,
-        vision_analyzers: Sequence[
-            Union[OpenAIResponsesVisionAnalyzer, CompatibleChatVisionAnalyzer]
-        ],
-        local_vision: LocalGarmentVision,
-        clip: CLIPReranker,
+        vision_analyzers: Sequence[FireworksVisionAnalyzer],
+        local_vision: LocalVisionLike,
+        clip: VisualRerankerLike,
     ) -> None:
         self.settings = settings
         self.database = database
@@ -226,16 +239,13 @@ class SearchPipeline:
         self, image_path: Path, user_query: Optional[str]
     ) -> Tuple[Optional[VisualAttributes], List[str]]:
         warnings: List[str] = []
-        caps = {
-            "openai": self.settings.openai_monthly_cap,
-            "fireworks": self.settings.fireworks_monthly_cap,
-            "qwen": self.settings.qwen_monthly_cap,
-        }
         for analyzer in self.vision_analyzers:
             if not analyzer.configured:
                 continue
-            cap = caps[analyzer.id]
-            if not self._claim("%s-vision" % analyzer.id, cap):
+            if not self._claim(
+                "%s-vision" % analyzer.id,
+                self.settings.fireworks_monthly_cap,
+            ):
                 warnings.append("%s image-understanding monthly cap reached." % analyzer.name)
                 continue
             try:

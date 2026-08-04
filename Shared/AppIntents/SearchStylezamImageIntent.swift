@@ -2,15 +2,15 @@ import AppIntents
 import UniformTypeIdentifiers
 
 struct SearchStylezamImageIntent: AppIntent {
-    static let title: LocalizedStringResource = "Search Image with Stylezam"
+    static let title: LocalizedStringResource = "Scan Image with Stylezam"
     static let description = IntentDescription(
-        "Open Stylezam and search the clothing visible in an image from a previous Shortcut action."
+        "Open Stylezam and separate the clothing visible in an image from a previous Shortcut action."
     )
     static let openAppWhenRun = true
 
     @Parameter(
         title: "Image",
-        description: "A screenshot or fashion image to search.",
+        description: "A screenshot or fashion image to scan.",
         supportedContentTypes: [.image],
         inputConnectionBehavior: .connectToPreviousIntentResult
     )

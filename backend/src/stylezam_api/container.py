@@ -1,21 +1,23 @@
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 
 from .config import Settings
 from .database import Database
 from .providers.ebay import EbayProvider
-from .providers.local_vision import CLIPReranker, LocalGarmentVision
+from .providers.garment_labeling import FireworksGarmentLabeler
 from .providers.serpapi import SerpAPIProvider
-from .providers.vision import (
-    OpenAIResponsesVisionAnalyzer,
-    fireworks_analyzer,
-    qwen_analyzer,
-)
+from .providers.vision import fireworks_analyzer
 from .providers.youcam import YouCamClothesProvider
 from .schemas import CapabilitiesResponse, ProviderCapability
 from .services.job_runner import JobRunner
-from .services.search_pipeline import SearchPipeline
+from .services.search_pipeline import (
+    DisabledLocalVision,
+    DisabledVisualReranker,
+    SearchPipeline,
+)
 from .services.tryon_service import TryOnService
 from .storage import MediaStorage
 
@@ -27,22 +29,24 @@ class Container:
         self.database = Database(settings.data_dir / "stylezam.sqlite3")
         self.database.initialize()
         self.storage = MediaStorage(settings)
+        # Bound the complete upload/normalization/provider operation so a small
+        # 2-core, 4 GB container cannot accumulate many decoded images at once.
+        self.garment_analysis_slots = asyncio.Semaphore(
+            settings.garment_analysis_concurrency
+        )
         self.http = httpx.AsyncClient(
             headers={"User-Agent": "Stylezam/0.1"},
             follow_redirects=True,
         )
         self.serpapi = SerpAPIProvider(settings, self.http)
         self.ebay = EbayProvider(settings, self.http)
-        self.openai_vision = OpenAIResponsesVisionAnalyzer(settings, self.http)
         self.fireworks_vision = fireworks_analyzer(settings, self.http)
-        self.qwen_vision = qwen_analyzer(settings, self.http)
-        self.vision_analyzers = [
-            self.openai_vision,
-            self.fireworks_vision,
-            self.qwen_vision,
-        ]
-        self.local_vision = LocalGarmentVision(settings, self.storage)
-        self.clip = CLIPReranker(settings, self.http)
+        self.garment_labeler = FireworksGarmentLabeler(settings, self.http)
+        # Product retrieval is intentionally deferred. If it is enabled later,
+        # MiniMax M3 is the only configured image-understanding provider.
+        self.vision_analyzers = [self.fireworks_vision]
+        self.local_vision = DisabledLocalVision()
+        self.clip = DisabledVisualReranker()
         self.youcam = YouCamClothesProvider(settings, self.http)
         self.search_pipeline = SearchPipeline(
             settings=settings,
@@ -76,92 +80,41 @@ class Container:
 
     def capabilities(self) -> CapabilitiesResponse:
         public_ingress = bool(self.settings.public_base_url)
-        image_search = self.ebay.configured or (self.serpapi.configured and public_ingress)
-        serpapi_usage = self.database.provider_usage("serpapi")
-        ebay_usage = self.database.provider_usage("ebay")
-        youcam_usage = self.database.provider_usage("youcam")
-        openai_usage = self.database.provider_usage("openai-vision")
-        fireworks_usage = self.database.provider_usage("fireworks-vision")
-        qwen_usage = self.database.provider_usage("qwen-vision")
+        product_search = self.settings.product_search_enabled
+        image_search = product_search and (
+            self.ebay.configured or (self.serpapi.configured and public_ingress)
+        )
+        fireworks_usage = self.database.provider_usage("fireworks-garment-labeler")
+        model_pack_available = (
+            self.settings.resolved_model_pack_dir / "garment-segmentation.json"
+        ).is_file()
         return CapabilitiesResponse(
-            text_search=self.serpapi.configured or self.ebay.configured,
+            text_search=product_search and (self.serpapi.configured or self.ebay.configured),
             image_search=image_search,
-            image_understanding=any(provider.configured for provider in self.vision_analyzers),
-            garment_segmentation=self.local_vision.configured,
-            visual_reranking=self.clip.configured,
-            virtual_try_on=self.youcam.configured,
+            image_understanding=self.garment_labeler.configured,
+            garment_segmentation=model_pack_available,
+            visual_reranking=False,
+            virtual_try_on=self.settings.virtual_tryon_enabled and self.youcam.configured,
             public_image_ingress=public_ingress,
+            garment_labeling=self.garment_labeler.configured,
+            model_pack_available=model_pack_available,
             providers=[
                 ProviderCapability(
-                    id="serpapi-shopping",
-                    name="SerpApi Shopping",
-                    capability="text_search",
-                    configured=self.serpapi.configured,
-                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month. SerpApi has its own account quota."
-                    % (serpapi_usage, self.settings.serpapi_monthly_cap),
-                    detail="Structured shopping results for text queries.",
-                ),
-                ProviderCapability(
-                    id="serpapi-lens",
-                    name="SerpApi Google Lens",
-                    capability="image_search",
-                    configured=self.serpapi.configured and public_ingress,
-                    monthly_limit_note="Shares Stylezam’s %s-call SerpApi cap; each Lens request is one call."
-                    % self.settings.serpapi_monthly_cap,
-                    detail="Requires STYLEZAM_PUBLIC_BASE_URL so Lens can fetch the image.",
-                ),
-                ProviderCapability(
-                    id="ebay-browse",
-                    name="eBay Browse",
-                    capability="text_and_image_search",
-                    configured=self.ebay.configured,
-                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month; eBay also applies its app quota."
-                    % (ebay_usage, self.settings.ebay_monthly_cap),
-                    detail="Keyword and Base64 image search; image support varies by marketplace.",
-                ),
-                ProviderCapability(
-                    id="openai-vision",
-                    name="OpenAI",
-                    capability="image_understanding",
-                    configured=self.openai_vision.configured,
-                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
-                    % (openai_usage, self.settings.openai_monthly_cap),
-                    detail="Responses API image understanding with structured attributes.",
-                ),
-                ProviderCapability(
-                    id="fireworks-vision",
-                    name="Fireworks AI",
-                    capability="image_understanding",
-                    configured=self.fireworks_vision.configured,
+                    id="fireworks-minimax-m3",
+                    name="MiniMax M3 via Fireworks",
+                    capability="garment_crop_validation",
+                    configured=self.garment_labeler.configured,
                     monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
                     % (fireworks_usage, self.settings.fireworks_monthly_cap),
-                    detail="OpenAI-compatible multimodal inference with structured output.",
+                    detail="One bounded multimodal request validates and labels up to the configured crop limit.",
                 ),
                 ProviderCapability(
-                    id="qwen-vision",
-                    name="Qwen",
-                    capability="image_understanding",
-                    configured=self.qwen_vision.configured,
-                    monthly_limit_note="Stylezam cap: %s/%s calls this UTC month."
-                    % (qwen_usage, self.settings.qwen_monthly_cap),
-                    detail="OpenAI-compatible Qwen vision inference through Model Studio.",
-                ),
-                ProviderCapability(
-                    id="grounded-sam2",
-                    name="Grounding DINO + SAM2 + CLIP",
-                    capability="segmentation_and_reranking",
-                    configured=self.local_vision.configured,
-                    monthly_limit_note="Local inference; no per-call bill.",
-                    detail="Optional heavyweight local vision extra.",
-                ),
-                ProviderCapability(
-                    id="youcam-clothes-v3",
-                    name="YouCam AI Clothes v3",
-                    capability="virtual_try_on",
-                    configured=self.youcam.configured,
-                    monthly_limit_note="Stylezam cap: %s/%s try-on jobs this UTC month; each job also consumes YouCam units."
-                    % (youcam_usage, self.settings.youcam_monthly_cap),
-                    detail="Server-side upload, asynchronous generation, and persisted result.",
+                    id="garment-coreml-pack",
+                    name="On-device garment model",
+                    capability="segmentation",
+                    configured=model_pack_available,
+                    monthly_limit_note="Downloaded on Wi-Fi; inference stays on the iPhone.",
+                    detail="RF-DETR-Seg-Small model pack with Fashionpedia garment and accessory classes.",
                 ),
             ],
         )

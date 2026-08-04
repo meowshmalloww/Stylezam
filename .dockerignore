@@ -4,7 +4,14 @@
 DerivedData
 Artifacts
 design-concepts
-backend/.data
+backend/.data/*
+!backend/.data/model-packs/
+backend/.data/model-packs/*
+!backend/.data/model-packs/garment-segmentation.json
+!backend/.data/model-packs/garment-rfdetr-seg-small/
+backend/.data/model-packs/garment-rfdetr-seg-small/*
+!backend/.data/model-packs/garment-rfdetr-seg-small/1.0.1/
+!backend/.data/model-packs/garment-rfdetr-seg-small/1.0.1/**
 backend/.env
 __pycache__
 *.pyc

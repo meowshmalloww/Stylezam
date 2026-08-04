@@ -1,69 +1,50 @@
 # UI direction
 
-Research checked on 2026-08-03. This is the implementation rationale for the first native iPhone version, not a mood-board-only deliverable.
+Research checked on 2026-08-03. The current visual direction stays in place; this release adds functional camera and model states without turning the app into a scanning gimmick.
 
-## Direction
+## Principles
 
-Stylezam uses an editorial fashion layer for content and an iOS-native Liquid Glass layer for actions. The visual system is intentionally narrow:
+- Editorial fashion content on white, with cobalt used sparingly for identity and primary state.
+- Native San Francisco typography and semantic system symbols.
+- Liquid Glass for navigation and compact action chrome, not as a decorative card texture.
+- Real imagery is the visual focus; empty states never impersonate results.
+- Motion is short, interruptible, and tied to user action or real state.
+- Reduce Motion replaces the cold-launch reveal with a brief fade and removes nonessential transitions.
 
-- Cobalt is a small brand accent; content uses black, white, and semantic system colors.
-- San Francisco system type carries the entire hierarchy, with restrained tracking only for small editorial labels.
-- Large real capture/product imagery with restrained labels.
-- Liquid Glass only on navigation, floating composers, and media action bars—not in the content layer.
-- Two product columns on iPhone, preserving useful image scale and readable names.
-- Empty states use native `ContentUnavailableView` and direct copy; they never impersonate products, merchants, or search results.
-- Idle pages perform no continuous animation. Motion is short, native, and tied to touch, navigation, or real job-state changes.
+Apple’s guidance treats Liquid Glass as a control/navigation material that remains distinct from content, and recommends restraint with color: [materials](https://developer.apple.com/design/human-interface-guidelines/materials), [color](https://developer.apple.com/design/human-interface-guidelines/color), [layout](https://developer.apple.com/design/human-interface-guidelines/layout).
 
-## Research translated into UI decisions
-
-Apple describes Liquid Glass as a material for controls and navigation that lets the content layer remain visually distinct. Apple also advises applying color to glass sparingly. That is why cobalt marks the primary action and active state while most glass remains neutral: [Apple materials](https://developer.apple.com/design/human-interface-guidelines/materials), [Apple color](https://developer.apple.com/design/human-interface-guidelines/color), [Apple layout](https://developer.apple.com/design/human-interface-guidelines/layout), [Apple toolbars](https://developer.apple.com/design/human-interface-guidelines/toolbars).
-
-The commerce hierarchy takes cues from current editorial fashion apps rather than generic dashboard cards:
-
-- SSENSE emphasizes search/filtering and a restrained product grid. Its current App Store feedback also explicitly favors the more legible two-column presentation over a denser grid: [SSENSE on the App Store](https://apps.apple.com/us/app/ssense-shop-designer-fashion/id1418754101).
-- Mytheresa emphasizes curated discovery plus practical search and filtering: [Mytheresa on the App Store](https://apps.apple.com/us/app/mytheresa-shop-luxury-brands/id484615570).
-- Vogue’s fashion/runway experience supports the large-image, low-chrome editorial treatment used for Stylezam’s capture and Look Stack: [Vogue on the App Store](https://apps.apple.com/us/app/vogue-fashion-shopping/id289380413).
-
-These are references for hierarchy and restraint, not screens copied into the app.
-
-Capture is a central native tab-bar action rather than Home’s visual identity. This keeps the camera immediately available from anywhere while allowing Home to work as a useful editorial overview instead of imitating a camera app or music-recognition screen.
-
-## Implemented screen system
+## Implemented pages
 
 ### Launch
 
-Apple’s static launch color hands off to a brief in-app identity sequence: overlapping soft reveals draw the exact selected icon artwork into place, the Stylezam name resolves in one continuous motion, and the editorial tagline fades in before Home appears. The animation never substitutes a traced shape or a second color treatment, runs only during a cold process launch, contains no fake progress indicator, and collapses to a short fade when Reduce Motion is enabled.
+The exact selected app mark resolves into the Stylezam wordmark, using the same cobalt/white palette as the icon. It has no percentage, fake loading bar, traced substitute logo, or endlessly looping shape.
 
 ### Home
 
-A compact brand header appears once above a restrained editorial banner, direct Photos and Search shortcuts, a horizontal Recent shelf, and saved-piece previews when the user has them. The artwork is static, geometric, and subordinate to the content. Home contains no viewfinder, radial scan button, connection dot, Settings shortcut, provider copy, gradient, or continuously animated decoration.
+Home is a calm overview with a compact identity header, a restrained editorial introduction, direct entry points, recent scans, and saved pieces when they exist. It is not a camera viewfinder and does not imitate Shazam’s circle.
 
 ### Capture
 
-The center Camera item opens Apple’s full-screen photo camera with the physical iPhone’s rear/front switch, shutter, flash, retake, and Use Photo controls. Accepting the photo starts understanding automatically and moves into Search; there is no intermediate import canvas or “Find products” button. Photos, clipboard images, and text remain in Search rather than appearing in the Camera route.
+The center tab action opens a custom full-screen camera. Photo/Live modes, flash, automatic Live toggle, shutter, front/rear switch, garment outlines, and one-line guidance are reachable without Apple’s legacy image-picker camera chrome. Controls use dark translucent media chrome so the scene stays legible; no decorative scan waves or random circles are added.
 
-### Search and Look Stack
+### Search
 
-The landing page is one universal composer: product text plus an optional image from Photos, Camera, or Paste. The image input is a dedicated vector add-image tile rather than a text-heavy “Reference” control. It contains no “describe an item” instruction and no duplicate photo-search card. Search progress uses the native determinate linear indicator and real backend phases, without gradient fill, phase dots, or glass content panels. The toolbar uses the system compose action for a new search instead of a floating plus. When vision returns multiple boxes, the original capture becomes a tappable Look Stack. Selecting a box submits another real search using that normalized region. Results use a two-column grid with explicit evidence tiers.
+Search is the future product-retrieval workspace. Today it can accept an image and route it through the real capture/understanding pipeline into Library. Text product retrieval remains visibly unavailable until implemented; the page must not show fake listings, prices, or progress.
 
-### Product evidence
+### Library
 
-The product page separates upstream identity evidence from visual similarity. “Exact,” “likely,” “similar,” and “inspired” remain evidence labels, never guarantees. Direct merchant URLs and observed offers remain visible.
+Library groups recent scans and their detected pieces as media, with meaningful empty states. Relative age uses minutes, days, weeks, and months—never second-by-second counters or year labels. A scan reveals its source look, analysis state, crops, and visible labels.
 
-### Appearance preview
+### Settings
 
-Try-on is a full-screen visual stage with glass controls. The result is called an appearance preview and explicitly does not predict size or fit. A completed preview is downloaded to the iPhone for share/save before Stylezam requests deletion of its backend copy.
+Consumer-facing rows cover Capture & Controls, Notifications, Privacy, model setup, and help. Backend address, bearer token, server capability state, item-limit slider, automatic Live behavior, and model removal live in Developer Debug. Qwen, OpenAI, eBay, SerpApi, YouCam, local model servers, and GPU switches are not presented as active consumer choices.
 
-### Archive and Setup
+## Accessibility and performance
 
-Library has three explicit collections—Recent, Saved, and Try-ons—presented as a native category bar and two-column media grids. Relative dates use minutes, days, weeks, and months only, avoiding noisy second-level updates and year labels. It stays empty until the user performs real actions, and completed try-ons are copied into durable local storage automatically.
-
-Consumer Settings is a native grouped list linking to Capture & Controls, Notifications, and Privacy. Screenshot Shortcut, Control Center/Action Button, Share, and consent-based iOS 27 live screen have their own tutorial page. Backend address, service token, OpenAI/Fireworks/Qwen state, local DINO/SAM2/CLIP state, and optional YouCam state live only in Developer Debug. Retrieval-provider infrastructure is not presented as an iPhone preference.
-
-## Accessibility and platform behavior
-
-- Controls use semantic SwiftUI buttons, labels, headings, and system symbols.
-- Text content supports Dynamic Type; editorial titles can wrap vertically rather than scale to illegibility.
-- Match meaning is written in text and is never conveyed by color alone.
-- System permission/picker UI remains system-owned.
-- Tab bar and glass behavior use native iOS 26 APIs, including scroll minimization.
+- Semantic buttons and accessibility labels cover camera controls.
+- Dynamic Type is allowed to wrap instead of shrinking important copy into illegibility.
+- Information is not encoded by color alone.
+- Preview inference is throttled and never runs continuously while a capture analysis is active.
+- Core ML is cached after its first load.
+- Candidate crops are created only for the accepted capture, not every preview frame.
+- Idle Home, Search, Library, and Settings pages perform no continuous animation.
