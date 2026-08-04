@@ -1,0 +1,3 @@
+// Copy to Firebase.local.xcconfig and paste REVERSED_CLIENT_ID from
+// App/Resources/GoogleService-Info.plist. This local file is gitignored.
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.YOUR_REVERSED_CLIENT_ID

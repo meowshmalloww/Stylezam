@@ -1,3 +1,4 @@
+import FirebaseCore
 import UIKit
 import UserNotifications
 
@@ -10,6 +11,13 @@ final class StylezamAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        if FirebaseApp.app() == nil,
+           let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+           let options = FirebaseOptions(contentsOfFile: path),
+           options.bundleID == Bundle.main.bundleIdentifier
+        {
+            FirebaseApp.configure(options: options)
+        }
         UNUserNotificationCenter.current().delegate = self
         return true
     }

@@ -37,7 +37,7 @@ actor GarmentDuplicateGuard {
 
         var accepted: [(candidate: GarmentCandidate, fingerprint: UInt64)] = []
         for candidate in candidates {
-            guard let crop = candidate.cropData,
+            guard let crop = candidate.boxCropData ?? candidate.cropData,
                   let fingerprint = Self.differenceHash(crop)
             else {
                 accepted.append((candidate, 0))

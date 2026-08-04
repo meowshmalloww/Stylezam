@@ -40,12 +40,43 @@ struct GarmentCandidate: Identifiable, Hashable, Sendable {
     let localLabel: String
     let confidence: Double
     let box: BoundingBoxDTO
+    /// Reliable, unmasked pixels from the detector's bounding box.
+    let boxCropData: Data?
+    /// Experimental transparent segmentation output retained for diagnostics.
     let cropData: Data?
 }
 
 struct GarmentDetectionBatch: Hashable, Sendable {
     let method: GarmentDetectionMethod
     let candidates: [GarmentCandidate]
+    let metrics: GarmentPipelineMetrics?
+}
+
+struct GarmentPipelineMetrics: Codable, Hashable, Sendable {
+    let sourceWidth: Int
+    let sourceHeight: Int
+    let modelInputResolution: Int
+    let modelLoadMilliseconds: Double
+    let decodeMilliseconds: Double
+    let inputPreparationMilliseconds: Double
+    let inferenceMilliseconds: Double
+    let outputDecodingMilliseconds: Double
+    let cropEncodingMilliseconds: Double
+    let totalMilliseconds: Double
+    /// One full-frame prediction plus any bounded high-detail tile predictions.
+    let inferencePassCount: Int?
+    /// Approximate long-edge detector detail after tile projection. Each model
+    /// invocation still uses the model's fixed tensor size.
+    let effectiveDetectionResolution: Int?
+    let inferenceStrategy: String?
+    let processingBudgetMilliseconds: Double?
+    let budgetLimited: Bool?
+    let thermalState: String?
+    let lowPowerMode: Bool?
+
+    var sourceMegapixels: Double {
+        Double(sourceWidth * sourceHeight) / 1_000_000
+    }
 }
 
 enum LiveCaptureGuidance: String, Hashable, Sendable {
@@ -119,6 +150,7 @@ struct SavedScan: Codable, Identifiable, Hashable, Sendable {
     let origin: CaptureOrigin
     let mode: CaptureMode
     let detectionMethod: GarmentDetectionMethod
+    let visionMetrics: GarmentPipelineMetrics?
     var labelState: ScanLabelState
     var items: [SavedGarment]
 }
@@ -159,12 +191,14 @@ struct SavedTryOn: Codable, Identifiable, Hashable, Sendable {
 struct LibrarySnapshot: Codable, Sendable {
     var scans: [SavedScan] = []
     var captures: [SavedCapture] = []
+    var searches: [SavedProductSearch] = []
     var products: [SavedProduct] = []
     var tryOns: [SavedTryOn] = []
 
     private enum CodingKeys: String, CodingKey {
         case scans
         case captures
+        case searches
         case products
         case tryOns
     }
@@ -175,6 +209,7 @@ struct LibrarySnapshot: Codable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         scans = try container.decodeIfPresent([SavedScan].self, forKey: .scans) ?? []
         captures = try container.decodeIfPresent([SavedCapture].self, forKey: .captures) ?? []
+        searches = try container.decodeIfPresent([SavedProductSearch].self, forKey: .searches) ?? []
         products = try container.decodeIfPresent([SavedProduct].self, forKey: .products) ?? []
         tryOns = try container.decodeIfPresent([SavedTryOn].self, forKey: .tryOns) ?? []
     }

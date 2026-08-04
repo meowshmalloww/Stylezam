@@ -3,10 +3,12 @@ import Foundation
 enum StylezamShared {
     static let appGroupIdentifier = "group.com.stylezam.shared"
     static let captureRequestKey = "stylezam.capture-requested-at"
+    static let liveScreenRequestKey = "stylezam.live-screen-requested-at"
     static let pendingImageKey = "stylezam.pending-image-name"
     static let pendingTextKey = "stylezam.pending-text"
     static let pendingOriginKey = "stylezam.pending-origin"
     static let pendingScanIDKey = "stylezam.pending-scan-id"
+    static let externalRequestNotification = Notification.Name("stylezam.external-request")
 
     static var defaults: UserDefaults {
         UserDefaults(suiteName: appGroupIdentifier) ?? .standard
@@ -31,6 +33,14 @@ enum StylezamShared {
 
     static func requestCapture() {
         defaults.set(Date().timeIntervalSince1970, forKey: captureRequestKey)
+    }
+
+    static func requestLiveScreen() {
+        defaults.set(Date().timeIntervalSince1970, forKey: liveScreenRequestKey)
+    }
+
+    static func signalExternalRequest() {
+        NotificationCenter.default.post(name: externalRequestNotification, object: nil)
     }
 
     /// Persists an image for the main app to consume after an App Intent or extension handoff.

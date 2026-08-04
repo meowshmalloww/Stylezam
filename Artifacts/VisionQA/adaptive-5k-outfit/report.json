@@ -1,0 +1,107 @@
+{
+  "createdAt" : "2026-08-04T19:09:05Z",
+  "detectionMethod" : "coreml",
+  "deviceModel" : "iPhone",
+  "elapsedMilliseconds" : 1109.778958343668,
+  "inputBytes" : 1217267,
+  "items" : [
+    {
+      "box" : {
+        "height" : 0.08251953125,
+        "width" : 0.0823974609375,
+        "x" : 0.48223876953125,
+        "y" : 0.892822265625
+      },
+      "boxCropBytes" : 17906,
+      "boxCropFilename" : "box-crop-01.jpg",
+      "boxCropHeight" : 423,
+      "boxCropWidth" : 239,
+      "categoryID" : 23,
+      "confidence" : 0.91610961358942,
+      "label" : "shoe"
+    },
+    {
+      "box" : {
+        "height" : 0.346923828125,
+        "width" : 0.2646484375,
+        "x" : 0.54443359375,
+        "y" : 0.6204833984375
+      },
+      "boxCropBytes" : 262122,
+      "boxCropFilename" : "box-crop-02.jpg",
+      "boxCropHeight" : 1778,
+      "boxCropWidth" : 764,
+      "categoryID" : 21,
+      "confidence" : 0.9127477534452755,
+      "label" : "tights, stockings"
+    },
+    {
+      "box" : {
+        "height" : 0.291748046875,
+        "width" : 0.166748046875,
+        "x" : 0.3841552734375,
+        "y" : 0.6324462890625
+      },
+      "boxCropBytes" : 171553,
+      "boxCropFilename" : "box-crop-03.jpg",
+      "boxCropHeight" : 1494,
+      "boxCropWidth" : 481,
+      "categoryID" : 21,
+      "confidence" : 0.9066531214804244,
+      "label" : "tights, stockings"
+    },
+    {
+      "box" : {
+        "height" : 0.37353515625,
+        "width" : 0.509765625,
+        "x" : 0.231689453125,
+        "y" : 0.268798828125
+      },
+      "boxCropBytes" : 337770,
+      "boxCropFilename" : "box-crop-04.jpg",
+      "boxCropHeight" : 1913,
+      "boxCropWidth" : 1469,
+      "categoryID" : 10,
+      "confidence" : 0.8980534791726937,
+      "label" : "dress"
+    },
+    {
+      "box" : {
+        "height" : 0.09942626953125,
+        "width" : 0.0958251953125,
+        "x" : 0.72454833984375,
+        "y" : 0.899505615234375
+      },
+      "boxCropBytes" : 26030,
+      "boxCropFilename" : "box-crop-05.jpg",
+      "boxCropHeight" : 510,
+      "boxCropWidth" : 277,
+      "categoryID" : 23,
+      "confidence" : 0.8918110454379297,
+      "label" : "shoe"
+    }
+  ],
+  "modelID" : "garment-rfdetr-seg-small",
+  "modelVersion" : "1.0.1",
+  "pipeline" : {
+    "budgetLimited" : false,
+    "cropEncodingMilliseconds" : 22.215333330677822,
+    "decodeMilliseconds" : 65.32262501423247,
+    "effectiveDetectionResolution" : 1029,
+    "inferenceMilliseconds" : 756.1077500286046,
+    "inferencePassCount" : 7,
+    "inferenceStrategy" : "Full frame + 6 detail tiles",
+    "inputPreparationMilliseconds" : 237.88812503335066,
+    "lowPowerMode" : false,
+    "modelInputResolution" : 384,
+    "modelLoadMilliseconds" : 0.020124978618696332,
+    "outputDecodingMilliseconds" : 26.98512506322004,
+    "processingBudgetMilliseconds" : 9000,
+    "sourceHeight" : 5120,
+    "sourceWidth" : 2880,
+    "thermalState" : "Nominal",
+    "totalMilliseconds" : 1108.8676250074059
+  },
+  "scanID" : "215E7619-949E-4F9E-81ED-FD77224A74AB",
+  "systemVersion" : "27.0"
+}

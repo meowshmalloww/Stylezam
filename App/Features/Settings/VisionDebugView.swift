@@ -7,6 +7,7 @@ struct VisionDebugView: View {
 
     @State private var photoItem: PhotosPickerItem?
     @State private var sourceData: Data?
+    @State private var sourceImage: UIImage?
     @State private var sourceName: String?
     @State private var detection: GarmentDetectionBatch?
     @State private var elapsedMilliseconds: Double?
@@ -114,10 +115,56 @@ struct VisionDebugView: View {
                     symbol: "shippingbox"
                 )
             }
+            if let metrics = detection?.metrics {
+                debugValue(
+                    "Detection plan",
+                    value: "\(metrics.sourceWidth) × \(metrics.sourceHeight) source · "
+                        + "\(metrics.inferencePassCount ?? 1) passes",
+                    symbol: "arrow.down.right.and.arrow.up.left"
+                )
+                debugValue(
+                    "Model tile",
+                    value: "\(metrics.modelInputResolution) × \(metrics.modelInputResolution) each · fixed tensor",
+                    symbol: "square.dashed"
+                )
+                if let effectiveResolution = metrics.effectiveDetectionResolution {
+                    debugValue(
+                        "Effective detector detail",
+                        value: "≈ \(effectiveResolution) px long edge",
+                        symbol: "scope"
+                    )
+                }
+                if let strategy = metrics.inferenceStrategy {
+                    debugValue(
+                        "Detail strategy",
+                        value: strategy,
+                        symbol: "square.grid.3x3"
+                    )
+                }
+                debugValue(
+                    "Source detail",
+                    value: metrics.sourceMegapixels.formatted(
+                        .number.precision(.fractionLength(2))
+                    ) + " MP",
+                    symbol: "camera.aperture"
+                )
+            }
             debugValue(
                 "Pieces",
                 value: "\(detection?.candidates.count ?? 0) / \(model.settings.maxDetectedItems)",
                 symbol: "square.stack.3d.up"
+            )
+            if let sourceImage {
+                debugValue(
+                    "Inspector preview",
+                    value: "\(Int(sourceImage.size.width)) × \(Int(sourceImage.size.height)) px",
+                    symbol: "photo"
+                )
+            }
+            debugValue(
+                "Box crops",
+                value: boxCropCountDescription,
+                symbol: "crop"
             )
             debugValue(
                 "Transparent crops",
@@ -125,8 +172,61 @@ struct VisionDebugView: View {
                 symbol: "scissors"
             )
             debugValue(
-                "Local time",
-                value: elapsedMilliseconds.map { "\($0.formatted(.number.precision(.fractionLength(1)))) ms" }
+                "Class labeling",
+                value: detection == nil ? "Not run" : "Included in model inference",
+                symbol: "tag"
+            )
+            if let metrics = detection?.metrics {
+                debugValue(
+                    "Decode source",
+                    value: milliseconds(metrics.decodeMilliseconds),
+                    symbol: "photo.badge.arrow.down"
+                )
+                debugValue(
+                    "Prepare model input",
+                    value: milliseconds(metrics.inputPreparationMilliseconds),
+                    symbol: "square.resize.down"
+                )
+                debugValue(
+                    "Core ML inference",
+                    value: milliseconds(metrics.inferenceMilliseconds),
+                    symbol: "cpu"
+                )
+                debugValue(
+                    "Decode boxes + labels + masks",
+                    value: milliseconds(metrics.outputDecodingMilliseconds),
+                    symbol: "viewfinder"
+                )
+                debugValue(
+                    "Encode full-detail crops",
+                    value: milliseconds(metrics.cropEncodingMilliseconds),
+                    symbol: "crop"
+                )
+                debugValue(
+                    "Vision engine total",
+                    value: milliseconds(metrics.totalMilliseconds),
+                    symbol: "stopwatch"
+                )
+                if let budget = metrics.processingBudgetMilliseconds {
+                    debugValue(
+                        "Still-photo budget",
+                        value: "\(milliseconds(budget)) · "
+                            + ((metrics.budgetLimited ?? false) ? "limited" : "within budget"),
+                        symbol: "hourglass"
+                    )
+                }
+                if let thermalState = metrics.thermalState {
+                    debugValue(
+                        "Device protection",
+                        value: thermalState
+                            + ((metrics.lowPowerMode ?? false) ? " · Low Power Mode" : ""),
+                        symbol: "thermometer.medium"
+                    )
+                }
+            }
+            debugValue(
+                "Inspector wall time",
+                value: elapsedMilliseconds.map(milliseconds)
                     ?? (isInspecting ? "Running" : "Not run"),
                 symbol: "timer"
             )
@@ -160,16 +260,20 @@ struct VisionDebugView: View {
 
     private func piecesSection(candidates: [GarmentCandidate]) -> some View {
         Section {
-            ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
-                VisionCandidateDebugRow(
-                    index: index + 1,
-                    candidate: candidate
-                )
+            if let sourceImage {
+                ForEach(Array(candidates.enumerated()), id: \.element.id) { index, candidate in
+                    VisionCandidateDebugRow(
+                        index: index + 1,
+                        candidate: candidate,
+                        sourceImage: sourceImage,
+                        metrics: detection?.metrics
+                    )
+                }
             }
         } header: {
             Text("Segmented pieces")
         } footer: {
-            Text("Each crop is drawn across white and black so bad mask edges, missing regions, and transparent backgrounds are easy to see.")
+            Text("Box crop shows the complete detected region without a mask. Isolated cutout shows the saved transparent PNG. Alpha mask makes holes and rough edges explicit.")
         }
     }
 
@@ -185,14 +289,10 @@ struct VisionDebugView: View {
                 )
             }
 
-            Text("The report contains model state, timings, item IDs, confidences, boxes, and crop byte counts. It does not include image bytes.")
+            Text("The report contains model state, timing, source and crop dimensions, normalized and pixel-space boxes, Fashionpedia IDs, confidence, PNG sizes, and alpha-pixel diagnostics. It does not include image bytes.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
-    }
-
-    private var sourceImage: UIImage? {
-        sourceData.flatMap(UIImage.init(data:))
     }
 
     private var detectorName: String {
@@ -207,6 +307,11 @@ struct VisionDebugView: View {
     private var cropCountDescription: String {
         guard let candidates = detection?.candidates else { return "0" }
         return "\(candidates.filter { $0.cropData != nil }.count) / \(candidates.count)"
+    }
+
+    private var boxCropCountDescription: String {
+        guard let candidates = detection?.candidates else { return "0" }
+        return "\(candidates.filter { $0.boxCropData != nil }.count) / \(candidates.count)"
     }
 
     private func debugValue(_ title: String, value: String, symbol: String) -> some View {
@@ -224,14 +329,19 @@ struct VisionDebugView: View {
         .font(.subheadline)
     }
 
+    private func milliseconds(_ value: Double) -> String {
+        value.formatted(.number.precision(.fractionLength(1))) + " ms"
+    }
+
     private func loadPhoto(_ item: PhotosPickerItem) async {
         do {
             guard let data = try await item.loadTransferable(type: Data.self),
-                  UIImage(data: data) != nil
+                  let image = UIImage(data: data)
             else {
                 throw VisionDebugError.unreadablePhoto
             }
             sourceData = data
+            sourceImage = preparedDebugImage(image)
             sourceName = "Selected photo · \(ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file))"
             await runInspection()
         } catch {
@@ -243,10 +353,11 @@ struct VisionDebugView: View {
     private func loadLatestScan(_ scan: SavedScan) async {
         do {
             let data = try Data(contentsOf: model.library.imageURL(for: scan))
-            guard UIImage(data: data) != nil else {
+            guard let image = UIImage(data: data) else {
                 throw VisionDebugError.unreadablePhoto
             }
             sourceData = data
+            sourceImage = preparedDebugImage(image)
             sourceName = "Library · \(scan.createdAt.formatted(date: .abbreviated, time: .shortened))"
             await runInspection()
         } catch {
@@ -281,6 +392,7 @@ struct VisionDebugView: View {
     private func resetResults() {
         inspectionID = UUID()
         sourceData = nil
+        sourceImage = nil
         sourceName = nil
         detection = nil
         elapsedMilliseconds = nil
@@ -294,19 +406,47 @@ struct VisionDebugView: View {
             createdAt: .now,
             source: sourceName,
             sourceBytes: sourceData?.count,
+            sourceWidth: detection?.metrics?.sourceWidth
+                ?? sourceImage.map { Int($0.size.width) },
+            sourceHeight: detection?.metrics?.sourceHeight
+                ?? sourceImage.map { Int($0.size.height) },
             detector: detection?.method.rawValue,
             modelID: model.modelPack.manifest?.modelID,
             modelVersion: model.modelPack.manifest?.version,
             modelStatus: model.modelPack.status.shortLabel,
             maxItems: model.settings.maxDetectedItems,
             elapsedMilliseconds: elapsedMilliseconds,
-            items: candidates.map {
-                VisionDiagnosticItem(
-                    id: $0.id,
-                    localLabel: $0.localLabel,
-                    confidence: $0.confidence,
-                    box: $0.box,
-                    cropBytes: $0.cropData?.count
+            pipeline: detection?.metrics,
+            items: candidates.map { candidate in
+                let boxCrop = candidate.boxCropData.flatMap(UIImage.init(data:))
+                    ?? sourceImage.flatMap { boundingBoxCrop(from: $0, box: candidate.box) }
+                return VisionDiagnosticItem(
+                    id: candidate.id,
+                    categoryID: model.modelPack.manifest?.classNames.firstIndex(
+                        of: candidate.localLabel
+                    ),
+                    localLabel: candidate.localLabel,
+                    confidence: candidate.confidence,
+                    box: candidate.box,
+                    boxPixels: detection?.metrics.flatMap {
+                        sourcePixelBox(
+                            for: candidate.box,
+                            width: $0.sourceWidth,
+                            height: $0.sourceHeight
+                        )
+                    } ?? sourceImage.flatMap {
+                        sourcePixelBox(for: candidate.box, image: $0)
+                    },
+                    boxCrop: boxCrop.map {
+                        VisionRasterSummary(
+                            width: Int($0.size.width),
+                            height: Int($0.size.height),
+                            bytes: candidate.boxCropData?.count
+                        )
+                    },
+                    segmentedCrop: candidate.cropData.flatMap {
+                        cropAlphaArtifacts($0)?.summary
+                    }
                 )
             }
         )
@@ -368,8 +508,22 @@ private struct VisionSourceDebugPreview: View {
 private struct VisionCandidateDebugRow: View {
     let index: Int
     let candidate: GarmentCandidate
+    let sourceImage: UIImage
+    let metrics: GarmentPipelineMetrics?
+    @State private var isCropExpanded = false
 
     var body: some View {
+        let boxCrop = candidate.boxCropData.flatMap(UIImage.init(data:))
+            ?? boundingBoxCrop(from: sourceImage, box: candidate.box)
+        let sourceWidth = metrics?.sourceWidth ?? Int(sourceImage.size.width)
+        let sourceHeight = metrics?.sourceHeight ?? Int(sourceImage.size.height)
+        let pixelBox = sourcePixelBox(
+            for: candidate.box,
+            width: sourceWidth,
+            height: sourceHeight
+        )
+        let alphaArtifacts = candidate.cropData.flatMap(cropAlphaArtifacts)
+
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Text("\(index). \(candidate.localLabel)")
@@ -380,32 +534,130 @@ private struct VisionCandidateDebugRow: View {
                     .foregroundStyle(.secondary)
             }
 
+            DebugArtifactTitle(
+                title: "Bounding-box crop",
+                detail: "Saved user crop · tap to expand"
+            )
+            if let boxCrop {
+                Button {
+                    isCropExpanded = true
+                } label: {
+                    VisionBoxCropPreview(image: boxCrop)
+                        .overlay(alignment: .bottomTrailing) {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(9)
+                                .background(.black.opacity(0.62), in: Circle())
+                                .padding(10)
+                        }
+                }
+                .buttonStyle(.plain)
+            } else {
+                debugArtifactError("Bounding-box crop could not be created")
+            }
+
             if let cropData = candidate.cropData,
                let image = UIImage(data: cropData)
             {
-                VisionCropDebugPreview(image: image)
-                HStack {
-                    Text("PNG with alpha")
-                    Spacer()
-                    Text("\(Int(image.size.width)) × \(Int(image.size.height)) · \(ByteCountFormatter.string(fromByteCount: Int64(cropData.count), countStyle: .file))")
+                DebugArtifactTitle(
+                    title: "Isolated cutout",
+                    detail: "Saved transparent PNG"
+                )
+                VisionCutoutDebugPreview(image: image)
+
+                if let alphaArtifacts {
+                    DebugArtifactTitle(
+                        title: "Alpha mask",
+                        detail: "White kept · black removed"
+                    )
+                    VisionMaskDebugPreview(image: alphaArtifacts.maskImage)
                 }
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
             } else {
-                Label("No crop data returned", systemImage: "exclamationmark.triangle")
-                    .font(.subheadline)
-                    .foregroundStyle(.red)
+                debugArtifactError("No transparent cutout was returned")
             }
 
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 7) {
                 debugGridRow("Item ID", candidate.id)
+                if let categoryID = StylezamCategory.index(of: candidate.localLabel) {
+                    debugGridRow("Category", "Fashionpedia \(categoryID)")
+                }
+                debugGridRow(
+                    "Confidence",
+                    "\(candidate.confidence.formatted(.percent.precision(.fractionLength(2)))) · "
+                        + candidate.confidence.formatted(.number.precision(.fractionLength(6)))
+                )
+                debugGridRow(
+                    "Source pixels",
+                    "\(sourceWidth) × \(sourceHeight)"
+                )
                 debugGridRow("Box x/y", coordinate(candidate.box.x, candidate.box.y))
                 debugGridRow("Box w/h", coordinate(candidate.box.width, candidate.box.height))
+                if let pixelBox {
+                    debugGridRow(
+                        "Box pixels",
+                        "x \(pixelBox.x), y \(pixelBox.y), w \(pixelBox.width), h \(pixelBox.height)"
+                    )
+                }
+                if let boxCrop {
+                    debugGridRow(
+                        "Box crop",
+                        "\(Int(boxCrop.size.width)) × \(Int(boxCrop.size.height)) px · "
+                            + ByteCountFormatter.string(
+                                fromByteCount: Int64(candidate.boxCropData?.count ?? 0),
+                                countStyle: .file
+                            )
+                    )
+                }
+                if let cropData = candidate.cropData,
+                   let alpha = alphaArtifacts?.summary
+                {
+                    debugGridRow(
+                        "Cutout PNG",
+                        "\(alpha.width) × \(alpha.height) · "
+                            + ByteCountFormatter.string(
+                                fromByteCount: Int64(cropData.count),
+                                countStyle: .file
+                            )
+                    )
+                    debugGridRow(
+                        "Mask coverage",
+                        alpha.foregroundFraction.formatted(
+                            .percent.precision(.fractionLength(2))
+                        )
+                    )
+                    debugGridRow("Transparent α0", "\(alpha.transparentPixels)")
+                    debugGridRow("Soft edge α1–254", "\(alpha.softEdgePixels)")
+                    debugGridRow("Opaque α255", "\(alpha.opaquePixels)")
+                }
             }
             .font(.caption)
 
         }
         .padding(.vertical, 8)
+        .fullScreenCover(isPresented: $isCropExpanded) {
+            if let boxCrop {
+                NavigationStack {
+                    ZStack {
+                        Color.black.ignoresSafeArea()
+                        Image(uiImage: boxCrop)
+                            .resizable()
+                            .scaledToFit()
+                            .padding(12)
+                    }
+                    .navigationTitle(candidate.localLabel)
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
+                    .toolbarBackground(.black, for: .navigationBar)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") { isCropExpanded = false }
+                                .foregroundStyle(.white)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func debugGridRow(_ title: String, _ value: String) -> some View {
@@ -422,41 +674,120 @@ private struct VisionCandidateDebugRow: View {
         "\(first.formatted(.number.precision(.fractionLength(4)))) / \(second.formatted(.number.precision(.fractionLength(4))))"
     }
 
+    private func debugArtifactError(_ message: String) -> some View {
+        Label(message, systemImage: "exclamationmark.triangle")
+            .font(.subheadline)
+            .foregroundStyle(.red)
+    }
 }
 
-private struct VisionCropDebugPreview: View {
+private struct DebugArtifactTitle: View {
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct VisionBoxCropPreview: View {
     let image: UIImage
 
     var body: some View {
         ZStack {
-            HStack(spacing: 0) {
-                Color.white
-                    .overlay(alignment: .bottomLeading) {
-                        Text("LIGHT")
-                            .foregroundStyle(.black.opacity(0.46))
-                            .padding(8)
-                    }
-                Color.black
-                    .overlay(alignment: .bottomTrailing) {
-                        Text("DARK")
-                            .foregroundStyle(.white.opacity(0.58))
-                            .padding(8)
-                    }
-            }
-
+            Color(uiColor: .secondarySystemBackground)
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
-                .padding(12)
+                .padding(8)
         }
-        .font(.system(size: 9, weight: .bold))
-        .frame(height: 210)
+        .frame(height: 220)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(StylezamDesign.hairline, lineWidth: 1)
         }
-        .accessibilityLabel("Transparent segmented crop shown on light and dark backgrounds")
+        .accessibilityLabel("Original image cropped to the detected bounding box")
+    }
+}
+
+private struct VisionCutoutDebugPreview: View {
+    let image: UIImage
+
+    var body: some View {
+        ZStack {
+            TransparencyCheckerboard()
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .padding(10)
+        }
+        .frame(height: 220)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 1)
+        }
+        .accessibilityLabel("Transparent segmented garment cutout on a checkerboard")
+    }
+}
+
+private struct VisionMaskDebugPreview: View {
+    let image: UIImage
+
+    var body: some View {
+        ZStack {
+            Color.black
+            Image(uiImage: image)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .padding(10)
+        }
+        .frame(height: 180)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 1)
+        }
+        .accessibilityLabel("Black and white segmentation alpha mask")
+    }
+}
+
+private struct TransparencyCheckerboard: View {
+    var body: some View {
+        Canvas { context, size in
+            let tile: CGFloat = 14
+            let columns = Int(ceil(size.width / tile))
+            let rows = Int(ceil(size.height / tile))
+            for row in 0..<rows {
+                for column in 0..<columns {
+                    let color = (row + column).isMultiple(of: 2)
+                        ? Color(uiColor: .systemBackground)
+                        : Color(uiColor: .systemGray5)
+                    context.fill(
+                        Path(
+                            CGRect(
+                                x: CGFloat(column) * tile,
+                                y: CGFloat(row) * tile,
+                                width: tile,
+                                height: tile
+                            )
+                        ),
+                        with: .color(color)
+                    )
+                }
+            }
+        }
+        .accessibilityHidden(true)
     }
 }
 
@@ -464,21 +795,200 @@ private struct VisionDiagnosticReport: Codable {
     let createdAt: Date
     let source: String?
     let sourceBytes: Int?
+    let sourceWidth: Int?
+    let sourceHeight: Int?
     let detector: String?
     let modelID: String?
     let modelVersion: String?
     let modelStatus: String
     let maxItems: Int
     let elapsedMilliseconds: Double?
+    let pipeline: GarmentPipelineMetrics?
     let items: [VisionDiagnosticItem]
 }
 
 private struct VisionDiagnosticItem: Codable {
     let id: String
+    let categoryID: Int?
     let localLabel: String
     let confidence: Double
     let box: BoundingBoxDTO
-    let cropBytes: Int?
+    let boxPixels: VisionPixelBox?
+    let boxCrop: VisionRasterSummary?
+    let segmentedCrop: VisionCropAlphaSummary?
+}
+
+private struct VisionPixelBox: Codable {
+    let x: Int
+    let y: Int
+    let width: Int
+    let height: Int
+}
+
+private struct VisionRasterSummary: Codable {
+    let width: Int
+    let height: Int
+    let bytes: Int?
+}
+
+private struct VisionCropAlphaSummary: Codable {
+    let width: Int
+    let height: Int
+    let bytes: Int
+    let transparentPixels: Int
+    let softEdgePixels: Int
+    let opaquePixels: Int
+
+    var foregroundFraction: Double {
+        Double(softEdgePixels + opaquePixels) / Double(max(1, width * height))
+    }
+
+    var softEdgeFraction: Double {
+        Double(softEdgePixels) / Double(max(1, width * height))
+    }
+}
+
+private enum StylezamCategory {
+    private static let names = [
+        "shirt, blouse", "top, t-shirt, sweatshirt", "sweater", "cardigan", "jacket",
+        "vest", "pants", "shorts", "skirt", "coat", "dress", "jumpsuit", "cape",
+        "glasses", "hat", "headband, head covering, hair accessory", "tie", "glove",
+        "watch", "belt", "leg warmer", "tights, stockings", "sock", "shoe",
+        "bag, wallet", "scarf", "umbrella",
+    ]
+
+    static func index(of label: String) -> Int? {
+        names.firstIndex(of: label)
+    }
+}
+
+private struct VisionCropAlphaArtifacts {
+    let summary: VisionCropAlphaSummary
+    let maskImage: UIImage
+}
+
+private func preparedDebugImage(_ image: UIImage) -> UIImage {
+    let maximumDimension: CGFloat = 2_000
+    let longestSide = max(1, max(image.size.width, image.size.height))
+    let scale = min(1, maximumDimension / longestSide)
+    let target = CGSize(
+        width: max(1, (image.size.width * scale).rounded()),
+        height: max(1, (image.size.height * scale).rounded())
+    )
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = true
+    return UIGraphicsImageRenderer(size: target, format: format).image { context in
+        UIColor.black.setFill()
+        context.fill(CGRect(origin: .zero, size: target))
+        image.draw(in: CGRect(origin: .zero, size: target))
+    }
+}
+
+private func sourcePixelBox(
+    for box: BoundingBoxDTO,
+    image: UIImage
+) -> VisionPixelBox? {
+    sourcePixelBox(
+        for: box,
+        width: Int(image.size.width),
+        height: Int(image.size.height)
+    )
+}
+
+private func sourcePixelBox(
+    for box: BoundingBoxDTO,
+    width: Int,
+    height: Int
+) -> VisionPixelBox? {
+    guard width > 1, height > 1 else { return nil }
+    let left = max(0, min(width - 1, Int(floor(box.x * Double(width)))))
+    let top = max(0, min(height - 1, Int(floor(box.y * Double(height)))))
+    let right = max(left + 1, min(width, Int(ceil((box.x + box.width) * Double(width)))))
+    let bottom = max(top + 1, min(height, Int(ceil((box.y + box.height) * Double(height)))))
+    return VisionPixelBox(
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top
+    )
+}
+
+private func boundingBoxCrop(
+    from image: UIImage,
+    box: BoundingBoxDTO
+) -> UIImage? {
+    guard let pixels = sourcePixelBox(for: box, image: image),
+          let source = image.cgImage,
+          let cropped = source.cropping(
+              to: CGRect(
+                  x: pixels.x,
+                  y: pixels.y,
+                  width: pixels.width,
+                  height: pixels.height
+              )
+          )
+    else { return nil }
+    return UIImage(cgImage: cropped, scale: 1, orientation: .up)
+}
+
+private func cropAlphaArtifacts(_ data: Data) -> VisionCropAlphaArtifacts? {
+    guard let image = UIImage(data: data)?.cgImage else { return nil }
+    let width = image.width
+    let height = image.height
+    let bytesPerRow = width * 4
+    var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+    guard let context = CGContext(
+        data: &pixels,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: bytesPerRow,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            | CGBitmapInfo.byteOrder32Big.rawValue
+    ) else { return nil }
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    var transparent = 0
+    var softEdge = 0
+    var opaque = 0
+    var alphaPixels = [UInt8](repeating: 0, count: width * height)
+    for alphaIndex in stride(from: 3, to: pixels.count, by: 4) {
+        let alpha = pixels[alphaIndex]
+        alphaPixels[alphaIndex / 4] = alpha
+        switch alpha {
+        case 0: transparent += 1
+        case 255: opaque += 1
+        default: softEdge += 1
+        }
+    }
+    guard let provider = CGDataProvider(data: Data(alphaPixels) as CFData),
+          let mask = CGImage(
+              width: width,
+              height: height,
+              bitsPerComponent: 8,
+              bitsPerPixel: 8,
+              bytesPerRow: width,
+              space: CGColorSpaceCreateDeviceGray(),
+              bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
+              provider: provider,
+              decode: nil,
+              shouldInterpolate: true,
+              intent: .defaultIntent
+          )
+    else { return nil }
+    let summary = VisionCropAlphaSummary(
+        width: width,
+        height: height,
+        bytes: data.count,
+        transparentPixels: transparent,
+        softEdgePixels: softEdge,
+        opaquePixels: opaque
+    )
+    return VisionCropAlphaArtifacts(
+        summary: summary,
+        maskImage: UIImage(cgImage: mask)
+    )
 }
 
 private enum VisionDebugError: LocalizedError {

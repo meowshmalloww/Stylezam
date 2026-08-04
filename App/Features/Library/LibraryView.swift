@@ -5,7 +5,15 @@ struct LibraryView: View {
     @State private var section: LibrarySection = .recent
     @State private var selectedTryOn: SavedTryOn?
     @State private var selectedScan: SavedScan?
+    @State private var selectedSearch: SavedProductSearch?
     @Namespace private var productTransition
+
+    private var galleryColumns: [GridItem] {
+        [
+            GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: 12),
+            GridItem(.flexible(minimum: 0, maximum: .infinity), spacing: 12),
+        ]
+    }
 
     var body: some View {
         ScrollView {
@@ -26,6 +34,8 @@ struct LibraryView: View {
                     switch section {
                     case .recent:
                         recentScans
+                    case .matches:
+                        searchHistory
                     case .saved:
                         savedProducts
                     case .tryOns:
@@ -51,6 +61,10 @@ struct LibraryView: View {
         }
         .sheet(item: $selectedScan) { scan in
             ScanDetailView(scanID: scan.id)
+                .environment(model)
+        }
+        .sheet(item: $selectedSearch) { search in
+            SearchArchiveDetail(search: search)
                 .environment(model)
         }
         .animation(.easeInOut(duration: 0.2), value: section)
@@ -99,6 +113,7 @@ struct LibraryView: View {
     private func count(for item: LibrarySection) -> Int {
         switch item {
         case .recent: model.library.scans.count
+        case .matches: model.library.searches.count
         case .saved: model.library.products.count
         case .tryOns: model.library.tryOns.count
         }
@@ -118,29 +133,40 @@ struct LibraryView: View {
                     message: "Camera, imported, shared, and live-screen scans will appear here."
                 )
             } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12),
-                    ],
-                    alignment: .leading,
-                    spacing: 24
-                ) {
+                LazyVGrid(columns: galleryColumns, alignment: .leading, spacing: 24) {
                     ForEach(model.library.scans) { scan in
-                        Button {
-                            selectedScan = scan
-                        } label: {
-                            RecentScanTile(
-                                scan: scan,
-                                imageURL: model.library.imageURL(for: scan)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Delete capture", role: .destructive) {
-                                model.deleteScan(scan)
-                            }
-                        }
+                        RecentScanCard(
+                            scan: scan,
+                            imageURL: model.library.imageURL(for: scan),
+                            onOpen: { selectedScan = scan },
+                            onDelete: { model.deleteScan(scan) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var searchHistory: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            EditorialSectionHeader(
+                title: "Product matches",
+                detail: countLabel(model.library.searches.count, singular: "search")
+            )
+            if model.library.searches.isEmpty {
+                emptyState(
+                    icon: "magnifyingglass",
+                    title: "No searches yet",
+                    message: "Completed product searches will remain here until you delete them."
+                )
+            } else {
+                LazyVGrid(columns: galleryColumns, alignment: .leading, spacing: 24) {
+                    ForEach(model.library.searches) { search in
+                        SearchHistoryCard(
+                            search: search,
+                            onOpen: { selectedSearch = search },
+                            onDelete: { model.library.deleteSearch(search) }
+                        )
                     }
                 }
             }
@@ -162,19 +188,23 @@ struct LibraryView: View {
                 )
             } else {
                 LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12),
-                    ],
+                    columns: galleryColumns,
                     alignment: .leading,
                     spacing: 26
                 ) {
                     ForEach(model.library.products) { saved in
-                        NavigationLink(value: saved.product) {
-                            SavedProductCard(saved: saved)
+                        ZStack(alignment: .topTrailing) {
+                            NavigationLink(value: saved.product) {
+                                SavedProductCard(saved: saved)
+                            }
+                            .buttonStyle(.plain)
+                            .matchedTransitionSource(id: saved.product.id, in: productTransition)
+
+                            LibraryOverflowMenu(title: "Remove from saved") {
+                                model.library.toggleSaved(saved.product)
+                            }
+                            .padding(8)
                         }
-                        .buttonStyle(.plain)
-                        .matchedTransitionSource(id: saved.product.id, in: productTransition)
                         .contextMenu {
                             Button("Remove from saved", role: .destructive) {
                                 model.library.toggleSaved(saved.product)
@@ -201,33 +231,37 @@ struct LibraryView: View {
                 )
             } else {
                 LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 12),
-                        GridItem(.flexible(), spacing: 12),
-                    ],
+                    columns: galleryColumns,
                     alignment: .leading,
                     spacing: 24
                 ) {
                     ForEach(model.library.tryOns) { tryOn in
-                        Button {
-                            selectedTryOn = tryOn
-                        } label: {
-                            VStack(alignment: .leading, spacing: 8) {
-                                LocalFileImage(url: model.library.imageURL(for: tryOn))
-                                    .frame(maxWidth: .infinity)
-                                    .aspectRatio(0.78, contentMode: .fit)
-                                    .clipped()
-                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                Text(tryOn.product.title)
-                                    .font(.subheadline.weight(.semibold))
-                                    .lineLimit(2)
-                                    .foregroundStyle(.primary)
-                                Text(tryOn.createdAt.formatted(date: .abbreviated, time: .omitted))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        ZStack(alignment: .topTrailing) {
+                            Button {
+                                selectedTryOn = tryOn
+                            } label: {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    LocalFileImage(url: model.library.imageURL(for: tryOn))
+                                        .frame(maxWidth: .infinity)
+                                        .aspectRatio(0.78, contentMode: .fit)
+                                        .clipped()
+                                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    Text(tryOn.product.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(2)
+                                        .foregroundStyle(.primary)
+                                    Text(tryOn.createdAt.formatted(date: .abbreviated, time: .omitted))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .buttonStyle(.plain)
+
+                            LibraryOverflowMenu(title: "Delete try-on") {
+                                model.library.deleteTryOn(tryOn)
+                            }
+                            .padding(8)
                         }
-                        .buttonStyle(.plain)
                         .contextMenu {
                             Button("Delete try-on", role: .destructive) {
                                 model.library.deleteTryOn(tryOn)
@@ -259,6 +293,7 @@ struct LibraryView: View {
 
 private enum LibrarySection: String, CaseIterable, Identifiable {
     case recent
+    case matches
     case saved
     case tryOns
 
@@ -267,39 +302,274 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .recent: "Recent"
+        case .matches: "Matches"
         case .saved: "Saved"
         case .tryOns: "Try-ons"
         }
     }
 }
 
-private struct RecentScanTile: View {
+private struct RecentScanCard: View {
     let scan: SavedScan
     let imageURL: URL
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    private var acceptedCount: Int { scan.items.filter(\.accepted).count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack(alignment: .topTrailing) {
+                Button(action: onOpen) {
+                    Color(uiColor: .secondarySystemBackground)
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(0.82, contentMode: .fit)
+                        .overlay {
+                            LocalFileImage(url: imageURL, contentMode: .fill)
+                        }
+                        .clipped()
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(
+                                colors: [.clear, .black.opacity(0.56)],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
+                            .allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(scan.origin.libraryLabel.uppercased())
+                                    .font(.system(size: 9, weight: .bold))
+                                    .tracking(1.1)
+                                Text(StylezamRelativeTime.string(since: scan.createdAt))
+                                    .font(.caption.weight(.medium))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(12)
+                        }
+                }
+                .buttonStyle(.plain)
+
+                LibraryOverflowMenu(title: "Delete capture", onDelete: onDelete)
+                    .padding(10)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+            }
+
+            Button(action: onOpen) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(acceptedCount == 1 ? "1 piece" : "\(acceptedCount) pieces")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    Text(scan.createdAt.formatted(date: .abbreviated, time: .omitted))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .contextMenu {
+            Button("Delete capture", role: .destructive, action: onDelete)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+}
+
+private struct SearchHistoryCard: View {
+    @Environment(AppModel.self) private var model
+    let search: SavedProductSearch
+    let onOpen: () -> Void
+    let onDelete: () -> Void
+
+    private var cropURL: URL? {
+        guard let scan = model.library.scans.first(where: { $0.id == search.scanID }),
+              let garment = scan.items.first(where: { $0.id == search.garmentID })
+        else { return nil }
+        return model.library.cropURL(for: garment)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ZStack(alignment: .topTrailing) {
+                Button(action: onOpen) {
+                    Color(uiColor: .secondarySystemBackground)
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(0.82, contentMode: .fit)
+                        .overlay {
+                            Group {
+                                if let cropURL {
+                                    LocalFileImage(url: cropURL, contentMode: .fill)
+                                } else {
+                                    ProductImage(url: search.results.first?.imageURL, contentMode: .fill)
+                                }
+                            }
+                        }
+                        .clipped()
+                        .overlay(alignment: .bottom) {
+                            LinearGradient(
+                                colors: [.clear, .black.opacity(0.58)],
+                                startPoint: .center,
+                                endPoint: .bottom
+                            )
+                            .allowsHitTesting(false)
+                        }
+                        .overlay(alignment: .bottomLeading) {
+                            Text("\(search.results.count) MATCHES")
+                                .font(.system(size: 9, weight: .bold))
+                                .tracking(1.1)
+                                .foregroundStyle(.white)
+                                .padding(12)
+                        }
+                }
+                .buttonStyle(.plain)
+
+                LibraryOverflowMenu(title: "Delete search", onDelete: onDelete)
+                    .padding(10)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+            }
+
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(search.generatedQuery ?? "Visual product search")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                    HStack(spacing: 4) {
+                        Text(search.providerSummary).lineLimit(1)
+                        Text("·")
+                        Text(StylezamRelativeTime.string(since: search.createdAt))
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .contextMenu {
+            Button("Delete search", role: .destructive, action: onDelete)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipped()
+    }
+}
+
+private struct LibraryOverflowMenu: View {
+    let title: String
+    let onDelete: () -> Void
+
+    var body: some View {
+        Menu {
+            Button(title, systemImage: "trash", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 34, height: 34)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay { Circle().stroke(.white.opacity(0.5), lineWidth: 0.75) }
+        }
+        .accessibilityLabel("More actions")
+    }
+}
+
+private struct SearchArchiveDetail: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let search: SavedProductSearch
+    @Namespace private var transition
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    if let query = search.generatedQuery {
+                        Text(query)
+                            .font(.title3.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    HStack {
+                        Text(search.providerSummary)
+                        Spacer()
+                        Text(search.createdAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
+                        alignment: .leading,
+                        spacing: 24
+                    ) {
+                        ForEach(search.results) { product in
+                            NavigationLink(value: product) {
+                                ArchiveProductCard(product: product)
+                            }
+                            .buttonStyle(.plain)
+                            .matchedTransitionSource(id: product.id, in: transition)
+                        }
+                    }
+                }
+                .padding(StylezamDesign.pageInset)
+                .padding(.bottom, 28)
+            }
+            .background(StylezamDesign.canvas)
+            .navigationTitle("Matches")
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(for: ProductResultDTO.self) { product in
+                ProductDetailView(product: product)
+                    .navigationTransition(.zoom(sourceID: product.id, in: transition))
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Delete", role: .destructive) {
+                        model.library.deleteSearch(search)
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct ArchiveProductCard: View {
+    let product: ProductResultDTO
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            LocalFileImage(url: imageURL)
-            .frame(maxWidth: .infinity)
-            .aspectRatio(0.95, contentMode: .fit)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-
-            let acceptedCount = scan.items.filter(\.accepted).count
-            Text(acceptedCount == 1 ? "1 piece" : "\(acceptedCount) pieces")
+            ProductImage(url: product.imageURL)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(0.82, contentMode: .fit)
+                .padding(8)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+            Text(product.merchant.uppercased())
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(product.title)
                 .font(.subheadline.weight(.semibold))
-                .lineLimit(2)
                 .foregroundStyle(.primary)
-
-            HStack(spacing: 5) {
-                Text(scan.origin.libraryLabel)
-                Text("·")
-                Text(StylezamRelativeTime.string(since: scan.createdAt))
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Text(product.price?.formatted ?? "Price unavailable")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
-        .contentShape(Rectangle())
     }
 }
 
@@ -310,6 +580,20 @@ private struct ScanDetailView: View {
 
     private var scan: SavedScan? {
         model.library.scans.first { $0.id == scanID }
+    }
+
+    private func metricsSummary(_ metrics: GarmentPipelineMetrics) -> String {
+        let passCount = metrics.inferencePassCount ?? 1
+        let tileLabel = passCount == 1 ? "model tile" : "model tiles"
+        let source = "\(metrics.sourceWidth) × \(metrics.sourceHeight) source"
+        let model = "\(passCount) × \(metrics.modelInputResolution) \(tileLabel)"
+        let effective = passCount > 1
+            ? " · ≈ \(metrics.effectiveDetectionResolution ?? metrics.modelInputResolution) px effective"
+            : ""
+        let elapsed = metrics.totalMilliseconds.formatted(
+            .number.precision(.fractionLength(0))
+        )
+        return "\(source) · \(model)\(effective) · \(elapsed) ms"
     }
 
     var body: some View {
@@ -332,6 +616,11 @@ private struct ScanDetailView: View {
                                 Text(scan.createdAt.formatted(date: .long, time: .shortened))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+                                if let metrics = scan.visionMetrics {
+                                    Text(metricsSummary(metrics))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                }
                             }
                             Spacer()
                             labelState(scan)
@@ -397,8 +686,8 @@ private struct ScanDetailView: View {
     private func labelState(_ scan: SavedScan) -> some View {
         switch scan.labelState {
         case .local:
-            Label("Labeling", systemImage: "ellipsis")
-                .foregroundStyle(.secondary)
+            Label("Detected", systemImage: "checkmark")
+                .foregroundStyle(StylezamDesign.cobalt)
         case .enriched:
             Label("Ready", systemImage: "checkmark")
                 .foregroundStyle(StylezamDesign.cobalt)

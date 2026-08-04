@@ -21,9 +21,63 @@ The model source lives at:
 App/Resources/Models/StylezamGarmentSegmentation.mlpackage
 ```
 
-It is compiled by Xcode and included with the application. There is no separate model download or service configuration.
+It is compiled by Xcode and included with the application. There is no separate model download. Local capture works without search credentials.
 
-## 2. Generate and sign the iOS project
+## 2. Configure required Firebase Google Sign-In
+
+Stylezam requires a Firebase-authenticated Google account after first-run onboarding. Authentication identity and signed role claims live in Firebase Auth; the editable Stylezam profile and Library remain local. Stylezam does not use Firestore for profiles.
+
+1. Create a Firebase project and add an Apple app with bundle ID `com.stylezam.app`.
+2. In Firebase **Authentication → Sign-in method**, enable **Google**.
+3. After saving the Google provider, download a fresh `GoogleService-Info.plist`. Confirm it contains `CLIENT_ID`, `REVERSED_CLIENT_ID`, and `IS_SIGNIN_ENABLED = YES`, then place it at:
+
+   ```text
+   App/Resources/GoogleService-Info.plist
+   ```
+
+4. Copy the local URL-scheme template:
+
+   ```bash
+   cp Config/Firebase.local.xcconfig.example Config/Firebase.local.xcconfig
+   ```
+
+5. Open the plist, copy `REVERSED_CLIENT_ID`, and set it as `GOOGLE_REVERSED_CLIENT_ID` in `Config/Firebase.local.xcconfig`.
+6. Regenerate the project with `./scripts/generate_project.sh` and rebuild.
+
+Firebase Core, Auth, Google Sign-In, and Analytics Core are managed through Swift Package Manager in `project.yml`. The Analytics variant has no IDFA collection capability, and `Info.plist` disables IDFV collection. Both local configuration files are ignored by Git. Firebase documents that the plist contains project/app identifiers rather than a server secret, but Stylezam keeps the developer-specific file local to prevent accidental cross-project configuration. Never place a Firebase Admin service-account key in the app.
+
+For a second developer, follow [`TEAMMATE_HANDOFF.md`](TEAMMATE_HANDOFF.md).
+Share the repository through Git and the Firebase client plist privately. Do not
+send the Firebase Admin service-account JSON or Apple signing credentials.
+
+### Grant the two internal developer accounts
+
+Each approved Google account must sign in once before Firebase has a UID for it. Then use the local utility under `tools/firebase-admin`:
+
+```bash
+cd tools/firebase-admin
+npm install
+export GOOGLE_APPLICATION_CREDENTIALS=/absolute/path/to/service-account.json
+chmod 600 "$GOOGLE_APPLICATION_CREDENTIALS"
+export STYLEZAM_DEVELOPER_EMAILS='approved-one@example.com,approved-two@example.com'
+npm run grant-developer -- approved-one@example.com
+npm run grant-developer -- approved-two@example.com
+```
+
+Use the two addresses approved for this project in the environment variable. The script checks the allowlist, preserves existing claims, and assigns `developer: true` plus `plan: "developer"`. It writes no Firestore record. Sign out/in afterward or tap **Refresh developer access**. Debug and Release builds reveal Developer Debug only for a refreshed Firebase ID token containing the signed custom claim.
+
+## 3. Configure private developer search
+
+```bash
+cp .env.example .env
+chmod 600 .env
+```
+
+Add only the providers you intend to test. `.env` is ignored by Git and is not bundled into the app. `scripts/install_on_device.sh` passes the values into one Debug launch; Stylezam immediately stores them in the device-only Keychain. You can also paste, rotate, or remove each key under Settings → Developer Debug → Provider credentials.
+
+The default exact-image path uses Lykdat, which accepts the selected crop bytes directly. Fireworks powers the separate Stylezam AI chat; Serper is used only when the user asks that AI request to search similar products. SearchAPI.io and SerpApi Google Lens require a public HTTPS image URL. Bright Data requires both a token and a compatible SERP zone; the currently configured zone authenticates but returns an inner Lens HTTP 502, so do not select it until Bright Data confirms Lens access.
+
+## 4. Generate and sign the iOS project
 
 ```bash
 ./scripts/generate_project.sh
@@ -41,7 +95,7 @@ The checked-in entitlement files remain minimal so the main app can be signed by
 
 A free Personal Team can install the main app for seven-day device testing, but profiles expire and some extension capabilities may be unavailable. The final signed entitlements—not the source declarations alone—determine whether cross-process Share, Control Widget, and App Group handoff work.
 
-## 3. Local vision inspection
+## 5. Local vision inspection
 
 Open Settings → Developer Debug → Vision Inspector. Choose a real photo or reuse the newest Library capture. The inspector runs the same bundled detector and crop generator used by production capture and shows:
 
@@ -49,27 +103,41 @@ Open Settings → Developer Debug → Vision Inspector. Choose a real photo or r
 - model ID/version and bundle state;
 - class labels and confidence;
 - normalized geometry;
-- transparent crops on light and dark backgrounds;
-- crop dimensions and byte counts;
+- the complete saved bounding-box crop;
+- the raw transparent cutout on a checkerboard and its black/white alpha mask;
+- source, box-crop, and cutout dimensions and byte counts;
 - measured local execution time;
 - copyable diagnostic JSON without image bytes.
 
 No inspector action uploads the photo or crops.
 
-## 4. Physical-device checks
+## 6. Physical-device checks
 
 On the connected iPhone, verify:
 
 - the app launches without a model-setup sheet or network configuration;
+- the five-page first-run experience cannot enter the main app without Google authentication;
+- **Replay First Run** under Settings → Developer shows onboarding again without deleting Library data;
+- Google Sign-In restores the account after relaunch;
+- profile edits survive relaunch locally and sign-out returns to the required login screen;
+- Free is the active public plan; Plus/Pro are non-purchasable previews;
+- Debug and Release builds require a Firebase `developer: true` custom claim for Developer Debug and unlimited usage;
 - Developer Debug reports the model as Built in;
 - rear/front camera switching and flash availability;
 - manual Photo capture;
 - Live mode guidance, automatic capture, manual override, and cooldown;
+- Live labels remain hidden until the same region/category agrees across frames,
+  overlays do not flicker between near-identical competing boxes, and an
+  automatic save uses a full-quality still rather than a preview JPEG;
 - five-item default and the 1–12 developer limit;
 - crop overlays align with portrait and landscape sources;
-- transparent crop edges look correct on both light and dark backgrounds;
+- the box crop contains the complete detected region and the separate raw mask
+  makes any missing or incorrect region visible;
 - repeated Live captures are suppressed;
 - scan deletion removes source and crop files;
+- one selected garment produces one persisted product-search attempt by default;
+- Search diagnostics records the actual provider-call count, latency, outcome, and result count;
+- completed searches remain under Library → Matches and can be deleted;
 - Photos and clipboard import;
 - offline capture works with Wi-Fi and cellular disabled;
 - Live Activity and Dynamic Island presentations;
@@ -77,23 +145,24 @@ On the connected iPhone, verify:
 
 Measure first-run and warm inference time, memory, battery, and thermals on the oldest supported device you intend to ship.
 
-## 5. iOS 27 screen support
+## 7. iOS 27 screen support
 
 Extracting Apple’s ScreenCaptureKit sample ZIP is only a reference step. It does not install an SDK, add a framework to Stylezam, or enable the feature on a phone.
 
 To finish verification:
 
-1. install an Xcode version containing the iOS 27 SDK;
-2. run Apple’s sample separately on the intended device;
-3. regenerate and open Stylezam with that Xcode;
-4. compile the conditional ScreenCaptureKit adapter;
-5. confirm the screen-capture usage description/background behavior accepted by Xcode;
-6. use Apple’s system picker and confirm a recent real frame becomes a Library scan;
-7. test stop, denial, interruption, protected content, memory pressure, and app termination.
+1. move the extracted beta to `/Applications/Xcode-beta.app`, open it once, and install its required components;
+2. select it with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` or set the command-line tools inside Xcode Settings;
+3. run Apple’s sample separately on the intended device;
+4. regenerate and open Stylezam with that Xcode;
+5. compile the conditional ScreenCaptureKit adapter;
+6. add both **Capture a Look** and **Live Screen** from the Control Center gallery;
+7. use Live Screen and confirm Apple’s picker appears before a recent real frame becomes a Library scan;
+8. test stop, denial, interruption, protected content, memory pressure, and app termination.
 
 See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). Keep Apple’s sample as reference code rather than copying its entire project into Stylezam.
 
-## 6. Release checks
+## 8. Release checks
 
 - Run `./scripts/check.sh` from a clean checkout.
 - Build Debug and Release for simulator and physical-device SDKs.

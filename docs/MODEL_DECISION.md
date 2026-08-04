@@ -8,7 +8,9 @@ Decision recorded on 2026-08-03 and updated for the bundled local architecture o
 | --- | --- | --- | --- |
 | Boxes, masks, and item classes | RF-DETR-Seg-Small garment checkpoint | Core ML on iPhone | No inference API call |
 | Thresholding and duplicate suppression | Native Swift | iPhone | Local CPU |
-| Transparent crop generation | Core Graphics | iPhone | Local CPU |
+| High-resolution box-crop generation | ImageIO/Core Graphics | iPhone | Local CPU |
+| Adaptive detail detection | Bounded overlapping square tiles | iPhone still photos | 4–6 additional sequential predictions when permitted |
+| Transparent mask diagnostics | Core Graphics | Vision Inspector only | Local CPU |
 | Persistence and inspection | Native SwiftUI/Foundation | iPhone | Local storage |
 
 There is no active processing host, model server, GPU worker, image-language API, or laptop dependency.
@@ -38,11 +40,22 @@ Fashionpedia supplies useful clothing, footwear, bag, watch, and accessory item 
 
 - Default item limit: 5.
 - Developer maximum: 12.
-- Source image normalization ceiling: 1600 pixels on the longest side.
+- Live-preview source ceiling: 1600 pixels on the longest side.
+- Accepted-image source ceiling: 5120 pixels on the longest side.
 - Model input: 384 × 384 FP32 normalized tensor.
+- Accepted still-photo detail: one full-frame prediction plus four tiles for
+  roughly 1080p–3K sources, or six tiles for 4K–5K sources at nominal thermal
+  state. This yields approximately 686 px and 1029 px of effective long-edge
+  detector detail respectively while every individual tensor remains 384×384.
+- Processing scheduler: 9-second internal still-photo budget with crop reserve.
+- Power and heat protection: no detail tiles in Low Power Mode; reduced tiling
+  at fair thermal pressure; no tiling at serious or critical pressure.
+- Live and screen modes: always single-pass to bound sustained CPU use.
 - Class confidence threshold: 0.35.
 - Same-class duplicate suppression: IoU above 0.74.
 - Preview mode: boxes/classes only; no crop or mask-byte materialization.
-- Accepted capture: masks and transparent crops generated once and persisted locally.
+- Accepted capture: readable 94%-quality JPEG box crops are persisted locally.
+- Vision Inspector: raw transparent masks are generated on demand and are not
+  part of normal capture latency or Library art.
 
 The app stores no model-provider credentials because the active model is bundled.

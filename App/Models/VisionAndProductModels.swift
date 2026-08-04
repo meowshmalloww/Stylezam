@@ -28,6 +28,32 @@ struct ModelPackFileDTO: Codable, Hashable, Sendable {
     let url: URL?
     let sha256: String
     let bytes: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case path
+        case url
+        case sha256
+        case bytes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        sha256 = try container.decode(String.self, forKey: .sha256)
+        bytes = try container.decode(Int.self, forKey: .bytes)
+
+        let rawURL = try container.decodeIfPresent(String.self, forKey: .url)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        url = rawURL.flatMap { $0.isEmpty ? nil : URL(string: $0) }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(path, forKey: .path)
+        try container.encodeIfPresent(url?.absoluteString, forKey: .url)
+        try container.encode(sha256, forKey: .sha256)
+        try container.encode(bytes, forKey: .bytes)
+    }
 }
 
 struct ModelPackManifestDTO: Codable, Hashable, Sendable {

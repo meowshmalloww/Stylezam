@@ -6,7 +6,7 @@ struct SearchStylezamImageIntent: AppIntent {
     static let description = IntentDescription(
         "Open Stylezam and separate the clothing visible in an image from a previous Shortcut action."
     )
-    static let openAppWhenRun = true
+    static let supportedModes: IntentModes = [.foreground(.immediate)]
 
     @Parameter(
         title: "Image",
@@ -19,6 +19,7 @@ struct SearchStylezamImageIntent: AppIntent {
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
         try StylezamShared.storePendingImage(image.data, origin: "screenCapture")
+        StylezamShared.signalExternalRequest()
         return .result(dialog: "Opening Stylezam with this image.")
     }
 }

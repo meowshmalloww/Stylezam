@@ -1,0 +1,11 @@
+{
+  "name": "stylezam-firebase-admin-local",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "grant-developer": "node assign_developer_claim.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "14.2.0"
+  }
+}

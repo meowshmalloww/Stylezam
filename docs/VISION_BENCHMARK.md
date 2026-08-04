@@ -17,7 +17,7 @@ Decision date: 2026-08-03.
 
 Fashionpedia’s official license page confirms CC BY 4.0 for annotations and ontology: [Fashionpedia data license](https://fashionpedia.github.io/home/data_license.html). The attribution is embedded in the bundled model manifest.
 
-## Qualification result
+## Initial qualification result
 
 The source checkpoint was run on eight evenly spaced Fashionpedia validation rows at a 0.35 confidence threshold, 384 resolution, and a five-item cap.
 
@@ -31,7 +31,20 @@ The source checkpoint was run on eight evenly spaced Fashionpedia validation row
 | Native Core ML cold prediction on this Mac | 0.1336 s |
 | Native Core ML warm median on this Mac | 0.0250 s |
 
-This is a smoke benchmark, not a production accuracy claim. Eight linearly sampled validation images are too small to characterize demographic, lighting, camera-motion, jewelry, occlusion, or real-world distribution performance. The Core ML timings are from a six-run verification of the packaged `1.0.1` artifact on this Mac with `ComputeUnit.ALL`; the verifier now uses the same best-class-per-query, minimum-box, same-class IoU suppression, and five-item selection rules as the Swift runtime. They are not iPhone timings. Physical-device thermal, memory, battery, and latency testing remains required.
+This was the model-selection smoke benchmark, not a production accuracy claim.
+The packaged `1.0.1` artifact has since been tested on the entire 1,158-image
+Fashionpedia validation split and executed through the production engine on an
+iPhone 15 Pro Max. See the [full validation report](VISION_VALIDATION.md) for
+per-category accuracy, mask quality, transparent-crop diagnostics, iPhone
+latency, and limitations. Sustained camera thermals, memory, and battery testing
+remain release work.
+
+The production iOS model is loaded with `MLComputeUnits.cpuOnly`. On iOS 26.5
+and iOS 27.0, this export returned all-zero class logits with `.all` and
+`.cpuAndGPU`; CPU-only execution returned the expected detections. The full
+validation below therefore uses CPU-only Core ML as well. Raw mask quality still
+differs between macOS and iOS, so the current Library stores the reliable box
+crop while the mask remains visible in Developer Debug.
 
 ## Why this candidate won
 
@@ -65,12 +78,15 @@ python scripts/export_garment_coreml.py \
   --classes 46
 
 python scripts/verify_coreml_garment_model.py \
-  --model /tmp/stylezam-coreml/rfdetr-seg-small.mlpackage \
-  --image /path/to/representative-look.jpg \
-  --output /tmp/stylezam-coreml-overlay.jpg \
-  --report /tmp/stylezam-coreml-report.json \
-  --classes Config/FashionpediaClasses.json \
-  --runs 6
+  --model App/Resources/Models/StylezamGarmentSegmentation.mlpackage \
+  --manifest App/Resources/Models/garment-segmentation.json \
+  --input /path/to/fashionpedia-validation-images \
+  --fashionpedia-annotations /path/to/instances_attributes_val2020.json \
+  --output /tmp/stylezam-coreml-validation \
+  --threshold 0.35 \
+  --max-items 5 \
+  --runs 1 \
+  --metrics-only
 
 python3 scripts/verify_model_pack_catalog.py
 ```

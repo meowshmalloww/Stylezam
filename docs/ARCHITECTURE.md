@@ -2,7 +2,7 @@
 
 ## Current boundary
 
-Stylezam currently implements local fashion capture, garment instance detection, segmentation, crop creation, inspection, and persistence. Product retrieval, current prices, and virtual try-on are explicitly deferred and have no active runtime client.
+Stylezam implements local fashion capture, garment instance detection, crop creation, inspection, persistence, and explicitly triggered product retrieval. Virtual try-on remains deferred.
 
 ## Capture data flow
 
@@ -15,15 +15,31 @@ sequenceDiagram
     participant Library as Local Library
 
     User->>Input: Choose or accept a frame
-    Input->>CoreML: 384 × 384 normalized tensor
-    CoreML-->>Post: Query boxes, class logits, mask logits
+    Input->>CoreML: 384 × 384 global prediction
+    Input->>CoreML: Bounded square detail tiles for accepted still photos
+    CoreML-->>Post: Query boxes, class logits, mask logits per pass
     Post->>Post: Threshold, item-class filter, IoU suppression, cap
-    Post->>Post: Materialize masks and transparent crops
-    Post->>Library: Save source image, records, and crop PNGs
+    Post->>Post: Materialize readable full-detail box crops
+    Post->>Library: Save source image, records, and box-crop JPEGs
     Library-->>User: Show captured look and individual pieces
 ```
 
-No camera frame, accepted photo, garment crop, prompt, or model input is sent to a processing service.
+No camera frame or accepted photo is sent during detection. A selected garment crop leaves the device only after the user starts a product search or asks the image-aware assistant.
+
+## Product search data flow
+
+The default private developer route is:
+
+1. persist a logical search reservation before networking;
+2. send the selected crop directly to Lykdat Global Search;
+3. select the provider result group that best matches the chosen local garment label;
+4. normalize, cap, display, and persist the real provider results.
+
+Stylezam AI is separate: a question sends the selected crop and user prompt to Fireworks Qwen 3.7 Plus. Only when the user explicitly converts a question or suggestion into a similar-product search does Stylezam send one generated text query—not the photo—to Serper shopping.
+
+The default is one successful product search per garment. Logical reservations and provider counts survive relaunches. Failed requests remain in the diagnostic ledger because providers may still count them, but they do not consume the user's successful-search allowance and can be retried.
+
+Lykdat Global Search accepts binary image data. SearchAPI.io and SerpApi Google Lens accept public image URLs, so Stylezam refuses to publish a private crop automatically. The Bright Data adapter requires a user-created compatible SERP zone and token and remains unavailable until both exist.
 
 ## Inputs
 
@@ -41,19 +57,39 @@ The model accepts a `1 × 3 × 384 × 384` normalized tensor and produces query 
 2. rejects confidence below 0.35 and very small boxes;
 3. suppresses high-IoU duplicate boxes of the same class;
 4. keeps the configured maximum, five by default and 12 at most;
-5. creates a transparent PNG crop from the winning mask and source box.
+5. creates a high-quality JPEG directly from the accepted source image for
+   Library. Vision Inspector can separately materialize the raw transparent
+   mask cutout for diagnosis.
 
-The model object is cached by `GarmentVisionEngine` and configured with `MLComputeUnits.all`. Live preview skips mask-array materialization and crop creation; accepted captures perform that work once.
+The model object is cached by `GarmentVisionEngine` and configured with
+`MLComputeUnits.cpuOnly`. Device verification found that this model export
+returns all-zero class logits through the iOS GPU/Neural Engine path; CPU-only
+execution returns the expected boxes and classes. Live preview and continuous
+screen capture stay single-pass and skip mask-array materialization and crop
+creation. Live preview uses a stricter 0.55 confidence threshold, rejects
+near-identical competing boxes, and requires the same region and label to agree
+across consecutive sampled frames. Once Live consensus is reached, AVFoundation
+takes a full-quality still rather than saving the compact preview JPEG. Accepted
+Photo and Live images add overlapping square detail passes when the source
+resolution, power mode, thermal state, and remaining 9-second budget allow it.
+Tile detections are projected into source coordinates, edge-clipped tile
+results are rejected, and cross-scale duplicates are suppressed before the
+configured item cap is applied.
 
 ## Live capture
 
-Live mode samples preview frames rather than processing every camera frame. Candidate confidence, garment area, clipping, luminance, and sharpness contribute to capture guidance. Automatic capture requires stable candidate signatures, a ready frame, and a cooldown. The shutter remains available at all times.
+Live mode samples preview frames rather than processing every camera frame. Candidate confidence, garment area, clipping, luminance, and sharpness contribute to capture guidance. A lightweight temporal tracker smooths boxes and only displays a category after two agreeing observations on the same region. Automatic capture requires three stable tracked signatures, a ready frame, and a cooldown. The shutter remains available at all times.
 
-Recent Live and screen crops use a perceptual dHash guard to suppress obvious repeats. These are deterministic capture heuristics, not biometric or identity recognition and not calibrated accuracy guarantees.
+Recent Live and screen box crops use a perceptual dHash guard to suppress obvious repeats. These are deterministic capture heuristics, not biometric or identity recognition and not calibrated accuracy guarantees.
 
 ## Local persistence
 
-The Library stores source JPEGs, transparent garment PNGs, class/confidence/box records, capture source, and time under the app container. A bounded snapshot keeps the most recent media. Deleting a scan removes its source and crop files; clearing Library removes all local media and saved legacy records.
+The Library stores source images, readable garment box-crop JPEGs,
+class/confidence/box records, capture source, and time under the app container.
+The current raw mask is diagnostic-only because its iOS regions are not reliable
+enough for a product-facing cutout. A bounded snapshot keeps the most recent
+media. Deleting a scan removes its source and crop files; clearing Library
+removes all local media and saved legacy records.
 
 Live screen preview frames remain in a short in-memory rolling buffer. Stopping capture clears that buffer.
 
@@ -72,5 +108,7 @@ ScreenCaptureKit code is compiled only when the installed SDK exposes it. Apple�
 - Missing or invalid bundled model: capture stops with a clear reinstall/build error; it does not silently switch to fabricated labels.
 - No garment above threshold: the source can still be saved with zero pieces.
 - Duplicate Live/screen item: no duplicate scan is added.
-- Deferred text/product request: Search explains that product retrieval is not part of this build.
+- Missing provider key/zone: no request is reserved or dispatched; Search names the missing configuration.
+- Per-piece or monthly local limit reached: the request stops before networking.
+- Dispatched provider failure: the attempt remains visible in Search Diagnostics and is not silently retried.
 - iOS 26: screen capture reports unavailable; camera, Photos, clipboard, and Share paths continue.

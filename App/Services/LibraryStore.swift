@@ -45,6 +45,7 @@ final class LibraryStore {
 
     var scans: [SavedScan] { snapshot.scans }
     var captures: [SavedCapture] { snapshot.captures }
+    var searches: [SavedProductSearch] { snapshot.searches }
     var products: [SavedProduct] { snapshot.products }
     var tryOns: [SavedTryOn] { snapshot.tryOns }
 
@@ -67,8 +68,10 @@ final class LibraryStore {
 
             let items = try detection.candidates.map { candidate in
                 var cropFilename: String?
-                if let cropData = candidate.cropData {
-                    let filename = "\(id.uuidString)-\(candidate.id).png"
+                let preferredCrop = candidate.boxCropData ?? candidate.cropData
+                if let cropData = preferredCrop {
+                    let fileExtension = candidate.boxCropData == nil ? "png" : "jpg"
+                    let filename = "\(id.uuidString)-\(candidate.id).\(fileExtension)"
                     let destination = garmentsURL.appending(path: filename)
                     createdURLs.append(destination)
                     try cropData.write(to: destination, options: .atomic)
@@ -98,6 +101,7 @@ final class LibraryStore {
                 origin: origin,
                 mode: mode,
                 detectionMethod: detection.method,
+                visionMetrics: detection.metrics,
                 labelState: .local,
                 items: items
             )
@@ -183,6 +187,45 @@ final class LibraryStore {
         return capturesURL.appending(path: filename)
     }
 
+    func search(for garmentKey: String) -> SavedProductSearch? {
+        snapshot.searches.first { $0.garmentKey == garmentKey }
+    }
+
+    func saveSearch(_ search: SavedProductSearch) throws {
+        let previousSnapshot = snapshot
+        snapshot.searches.removeAll { $0.id == search.id || $0.garmentKey == search.garmentKey }
+        snapshot.searches.insert(search, at: 0)
+        snapshot.searches = Array(snapshot.searches.prefix(120))
+        do {
+            try persist()
+        } catch {
+            snapshot = previousSnapshot
+            throw error
+        }
+    }
+
+    func applyUnderstanding(
+        _ understanding: GarmentUnderstanding,
+        scanID: UUID,
+        garmentID: String
+    ) {
+        guard let scanIndex = snapshot.scans.firstIndex(where: { $0.id == scanID }),
+              let itemIndex = snapshot.scans[scanIndex].items.firstIndex(where: { $0.id == garmentID })
+        else { return }
+        snapshot.scans[scanIndex].items[itemIndex].displayName = understanding.summary
+        snapshot.scans[scanIndex].items[itemIndex].category = understanding.category
+        snapshot.scans[scanIndex].items[itemIndex].colors = understanding.colors
+        snapshot.scans[scanIndex].items[itemIndex].materials = understanding.materials
+        snapshot.scans[scanIndex].items[itemIndex].patterns = understanding.patterns
+        snapshot.scans[scanIndex].labelState = .enriched
+        do { try persist() } catch { loadError = error.localizedDescription }
+    }
+
+    func deleteSearch(_ search: SavedProductSearch) {
+        snapshot.searches.removeAll { $0.id == search.id }
+        do { try persist() } catch { loadError = error.localizedDescription }
+    }
+
     func imageURL(for tryOn: SavedTryOn) -> URL {
         tryOnsURL.appending(path: tryOn.imageFilename)
     }
@@ -258,6 +301,7 @@ final class LibraryStore {
     func deleteScan(_ scan: SavedScan) {
         let previousSnapshot = snapshot
         snapshot.scans.removeAll { $0.id == scan.id }
+        snapshot.searches.removeAll { $0.scanID == scan.id }
         do {
             try persist()
             removeFiles(for: scan)

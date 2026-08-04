@@ -24,6 +24,7 @@ enum ModelPackError: LocalizedError {
     case invalidManifest
     case missingModel
     case compilationFailed(String)
+    case unavailable(String)
 
     var errorDescription: String? {
         switch self {
@@ -35,6 +36,8 @@ enum ModelPackError: LocalizedError {
             "The bundled garment model could not be found. Reinstall this build of Stylezam."
         case let .compilationFailed(message):
             "The bundled garment model could not be prepared. \(message)"
+        case let .unavailable(message):
+            message
         }
     }
 }
@@ -111,10 +114,7 @@ final class ModelPackManager {
     }
 
     private nonisolated static func resolveModelURL() async throws -> URL {
-        if let compiled = firstBundleURL(
-            resource: "StylezamGarmentSegmentation",
-            extension: "mlmodelc"
-        ) {
+        if let compiled = bundledCompiledModelURL() {
             return compiled
         }
 
@@ -133,14 +133,87 @@ final class ModelPackManager {
         }
     }
 
+    /// Compiled Core ML resources are directories. On physical devices,
+    /// `Bundle.url(forResource:withExtension:)` can omit directory resources,
+    /// even though the signed bundle contains them. Resolve the exact Xcode
+    /// output path first, then enumerate as a defensive fallback.
+    private nonisolated static func bundledCompiledModelURL() -> URL? {
+        let expectedFilename = "StylezamGarmentSegmentation.mlmodelc"
+        let candidates = [
+            Bundle.main.bundleURL.appendingPathComponent(
+                expectedFilename,
+                isDirectory: true
+            ),
+            Bundle.main.resourceURL?.appendingPathComponent(
+                expectedFilename,
+                isDirectory: true
+            ),
+            Bundle.main.bundleURL
+                .appendingPathComponent("Models", isDirectory: true)
+                .appendingPathComponent(expectedFilename, isDirectory: true),
+        ].compactMap { $0 }
+
+        if let exactMatch = candidates.first(where: isCompiledModelDirectory) {
+            return exactMatch
+        }
+
+        let resourceKeys: [URLResourceKey] = [.isDirectoryKey, .nameKey]
+        if let enumerator = FileManager.default.enumerator(
+            at: Bundle.main.bundleURL,
+            includingPropertiesForKeys: resourceKeys,
+            options: [.skipsHiddenFiles],
+            errorHandler: nil
+        ) {
+            for case let url as URL in enumerator where
+                url.lastPathComponent == expectedFilename
+                && isCompiledModelDirectory(url)
+            {
+                return url
+            }
+        }
+
+#if DEBUG
+        let visibleBundleItems = (
+            try? FileManager.default.contentsOfDirectory(
+                at: Bundle.main.bundleURL,
+                includingPropertiesForKeys: resourceKeys
+            )
+        )?.map(\.lastPathComponent).sorted() ?? []
+        print("STYLEZAM_MODEL_BUNDLE \(Bundle.main.bundleURL.path)")
+        print("STYLEZAM_MODEL_CANDIDATES \(candidates.map(\.path))")
+        print("STYLEZAM_MODEL_BUNDLE_ITEMS \(visibleBundleItems)")
+#endif
+        return nil
+    }
+
+    private nonisolated static func isCompiledModelDirectory(_ url: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(
+            atPath: url.path,
+            isDirectory: &isDirectory
+        ) && isDirectory.boolValue
+    }
+
     private nonisolated static func firstBundleURL(
         resource: String,
         extension fileExtension: String
     ) -> URL? {
-        Bundle.main.url(
+        if let resolved = Bundle.main.url(
             forResource: resource,
             withExtension: fileExtension,
             subdirectory: "Models"
-        ) ?? Bundle.main.url(forResource: resource, withExtension: fileExtension)
+        ) ?? Bundle.main.url(forResource: resource, withExtension: fileExtension) {
+            return resolved
+        }
+        let filename = "\(resource).\(fileExtension)"
+        let candidates = [
+            Bundle.main.bundleURL
+                .appending(path: "Models", directoryHint: .isDirectory)
+                .appending(path: filename, directoryHint: .isDirectory),
+            Bundle.main.bundleURL.appending(path: filename, directoryHint: .isDirectory),
+        ]
+        return candidates.first {
+            FileManager.default.fileExists(atPath: $0.path)
+        }
     }
 }

@@ -11,12 +11,21 @@
     <key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
     <key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
     <key>CFBundleURLTypes</key>
-    <array><dict>
-        <key>CFBundleTypeRole</key><string>Editor</string>
-        <key>CFBundleURLName</key><string>com.stylezam.app</string>
-        <key>CFBundleURLSchemes</key><array><string>stylezam</string></array>
-    </dict></array>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>CFBundleURLName</key><string>com.stylezam.app</string>
+            <key>CFBundleURLSchemes</key><array><string>stylezam</string></array>
+        </dict>
+        <dict>
+            <key>CFBundleTypeRole</key><string>Editor</string>
+            <key>CFBundleURLName</key><string>Google Sign-In</string>
+            <key>CFBundleURLSchemes</key><array><string>$(GOOGLE_REVERSED_CLIENT_ID)</string></array>
+        </dict>
+    </array>
     <key>ITSAppUsesNonExemptEncryption</key><false/>
+    <key>FirebaseAppDelegateProxyEnabled</key><false/>
+    <key>GOOGLE_ANALYTICS_IDFV_COLLECTION_ENABLED</key><false/>
     <key>LSRequiresIPhoneOS</key><true/>
     <key>NSCameraUsageDescription</key>
     <string>Stylezam uses the camera only when you choose to capture a fashion look.</string>

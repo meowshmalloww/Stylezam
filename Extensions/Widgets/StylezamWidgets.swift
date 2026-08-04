@@ -6,5 +6,6 @@ struct StylezamWidgets: WidgetBundle {
     var body: some Widget {
         StylezamCaptureLiveActivity()
         StylezamCaptureControl()
+        StylezamLiveScreenControl()
     }
 }

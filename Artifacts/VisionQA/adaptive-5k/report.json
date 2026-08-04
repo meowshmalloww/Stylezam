@@ -1,0 +1,92 @@
+{
+  "createdAt" : "2026-08-04T19:07:34Z",
+  "detectionMethod" : "coreml",
+  "deviceModel" : "iPhone",
+  "elapsedMilliseconds" : 1147.653583320789,
+  "inputBytes" : 1314569,
+  "items" : [
+    {
+      "box" : {
+        "height" : 0.07864324060517326,
+        "width" : 0.14282552083333336,
+        "x" : 0.22098307291666672,
+        "y" : 0.13122010736944853
+      },
+      "boxCropBytes" : 43621,
+      "boxCropFilename" : "box-crop-01.jpg",
+      "boxCropHeight" : 269,
+      "boxCropWidth" : 732,
+      "categoryID" : 13,
+      "confidence" : 0.9246876936763765,
+      "label" : "glasses"
+    },
+    {
+      "box" : {
+        "height" : 0.682861328125,
+        "width" : 0.75146484375,
+        "x" : 0.08447265625,
+        "y" : 0.317138671875
+      },
+      "boxCropBytes" : 1160733,
+      "boxCropFilename" : "box-crop-02.jpg",
+      "boxCropHeight" : 2332,
+      "boxCropWidth" : 3848,
+      "categoryID" : 4,
+      "confidence" : 0.9230391643039738,
+      "label" : "jacket"
+    },
+    {
+      "box" : {
+        "height" : 0.0657958984375,
+        "width" : 0.096435546875,
+        "x" : 0.3018798828125,
+        "y" : 0.37188720703125
+      },
+      "boxCropBytes" : 29664,
+      "boxCropFilename" : "box-crop-03.jpg",
+      "boxCropHeight" : 226,
+      "boxCropWidth" : 495,
+      "categoryID" : 16,
+      "confidence" : 0.863851684976284,
+      "label" : "tie"
+    },
+    {
+      "box" : {
+        "height" : 0.68798828125,
+        "width" : 0.196044921875,
+        "x" : 0.2164306640625,
+        "y" : 0.308349609375
+      },
+      "boxCropBytes" : 388834,
+      "boxCropFilename" : "box-crop-04.jpg",
+      "boxCropHeight" : 2350,
+      "boxCropWidth" : 1004,
+      "categoryID" : 0,
+      "confidence" : 0.8582440095395809,
+      "label" : "shirt, blouse"
+    }
+  ],
+  "modelID" : "garment-rfdetr-seg-small",
+  "modelVersion" : "1.0.1",
+  "pipeline" : {
+    "budgetLimited" : false,
+    "cropEncodingMilliseconds" : 48.179166653426364,
+    "decodeMilliseconds" : 186.57658333540894,
+    "effectiveDetectionResolution" : 1029,
+    "inferenceMilliseconds" : 687.4512499780394,
+    "inferencePassCount" : 7,
+    "inferenceStrategy" : "Full frame + 6 detail tiles",
+    "inputPreparationMilliseconds" : 201.01625003735535,
+    "lowPowerMode" : false,
+    "modelInputResolution" : 384,
+    "modelLoadMilliseconds" : 0.015291676390916109,
+    "outputDecodingMilliseconds" : 21.94495833828114,
+    "processingBudgetMilliseconds" : 9000,
+    "sourceHeight" : 3415,
+    "sourceWidth" : 5120,
+    "thermalState" : "Nominal",
+    "totalMilliseconds" : 1146.2533333397005
+  },
+  "scanID" : "158266CA-F5E3-4AFC-BEE0-5AB9AF4CDCBF",
+  "systemVersion" : "27.0"
+}

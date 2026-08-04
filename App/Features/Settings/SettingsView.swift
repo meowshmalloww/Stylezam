@@ -3,9 +3,46 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @AppStorage("stylezam.onboarding.completed") private var onboardingCompleted = false
 
     var body: some View {
         List {
+            if let account = model.account.account {
+                Section {
+                    NavigationLink {
+                        AccountView()
+                    } label: {
+                        AccountIdentityHeader(account: account)
+                    }
+
+                    NavigationLink {
+                        SubscriptionPlansView()
+                    } label: {
+                        SettingsLinkLabel(
+                            icon: "creditcard",
+                            title: "Membership",
+                            detail: account.plan == .developer ? "Developer · unlimited internal usage" : "Free · Plus and Pro previews"
+                        )
+                    }
+                } header: {
+                    Text("Account")
+                }
+            } else {
+                Section {
+                    NavigationLink {
+                        LoginView()
+                    } label: {
+                        SettingsLinkLabel(
+                            icon: "person.crop.circle",
+                            title: "Sign in",
+                            detail: "Required · continue with your Google account"
+                        )
+                    }
+                } header: {
+                    Text("Account")
+                }
+            }
+
             Section {
                 NavigationLink {
                     ControlSetupView()
@@ -38,20 +75,35 @@ struct SettingsView: View {
                 }
             }
 
-            Section("Advanced") {
-                NavigationLink {
-                    DeveloperSettingsView()
-                } label: {
-                    SettingsLinkLabel(
-                        icon: "hammer",
-                        title: "Developer Debug",
-                        detail: "Bundled model, vision inspector, and capture limits"
-                    )
+            if developerToolsAvailable {
+                Section("Developer") {
+                    NavigationLink {
+                        DeveloperSettingsView()
+                    } label: {
+                        SettingsLinkLabel(
+                            icon: "hammer",
+                            title: "Developer Debug",
+                            detail: "Verified role · vision, providers, quotas, credentials, and request logs"
+                        )
+                    }
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.28)) {
+                            onboardingCompleted = false
+                        }
+                    } label: {
+                        SettingsLinkLabel(
+                            icon: "sparkles.rectangle.stack",
+                            title: "Replay First Run",
+                            detail: "Preview the new-user welcome screen without deleting your Library"
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
             Section {
-                Text("Stylezam 0.1 · iOS 26+")
+                Text("Stylezam · Private developer build")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -61,6 +113,10 @@ struct SettingsView: View {
         .contentMargins(.top, 12, for: .scrollContent)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var developerToolsAvailable: Bool {
+        model.account.isDeveloper
     }
 }
 
@@ -94,8 +150,11 @@ private struct ControlSetupView: View {
     var body: some View {
         List {
             Section {
-                Text("Use Apple’s system entry points when Stylezam is not already open.")
+                Text("Add both Stylezam controls from Control Center’s edit gallery. Capture a Look opens the camera. Live Screen opens Stylezam and immediately asks Apple to show its screen picker.")
                     .foregroundStyle(.secondary)
+                setupStep("1", "Open Control Center and tap +")
+                setupStep("2", "Choose Add a Control")
+                setupStep("3", "Add Capture a Look and Live Screen")
             }
 
             Section {
@@ -114,11 +173,11 @@ private struct ControlSetupView: View {
             }
 
             Section {
-                Text("Edit Control Center, add Stylezam’s Capture a Look control, then assign it to the Action Button for one-press access.")
+                Text("Capture a Look opens Stylezam’s front/back camera. Live Screen is a separate control because iOS requires explicit system consent before Stylezam can view another app’s screen.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } header: {
-                Label("Control Center & Action Button", systemImage: "button.programmable")
+                Label("Two controls", systemImage: "button.programmable")
             }
 
             Section {
@@ -227,17 +286,17 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "On this iPhone",
                 icon: "iphone",
-                detail: "The garment model, detection, segmentation, captured photos, and transparent garment crops all stay on this iPhone. The model is included with the app."
+                detail: "Garment detection and cropping run on this iPhone. Captures, crops, searches, saved products, and previews are stored locally."
             )
             privacySection(
-                title: "No processing server",
-                icon: "network.slash",
-                detail: "Stylezam does not upload captures or crops for detection and does not require a server, service token, or AI-provider key."
+                title: "Only when you search",
+                icon: "network",
+                detail: "Stylezam sends only the selected garment crop to the provider you configured after you tap Find. The Qwen route sends the crop to Fireworks; Serper receives generated text keywords, not the photo."
             )
             privacySection(
-                title: "Network access",
-                icon: "safari",
-                detail: "This local vision build does not perform product retrieval or virtual try-on. Older saved product cards can still open their merchant links when you choose them."
+                title: "Developer credentials",
+                icon: "key",
+                detail: "Provider keys are stored in the device-only Keychain and never written to the Library. Direct provider keys are intended for your private developer build, not a public App Store release."
             )
 
             Section {
@@ -325,13 +384,18 @@ private struct DeveloperSettingsView: View {
                             )
                         )
                     }
-                    LabeledContent("Input", value: "\(manifest.inputResolution) × \(manifest.inputResolution)")
+                    LabeledContent(
+                        "Model tile",
+                        value: "\(manifest.inputResolution) × \(manifest.inputResolution) · fixed"
+                    )
+                    LabeledContent("Still-photo source", value: "Up to 5120 px")
+                    LabeledContent("Detail passes", value: "1 global + up to 6 tiles")
                     LabeledContent("Classes", value: "\(manifest.classNames.count)")
                 }
             } header: {
                 Text("On-device vision")
             } footer: {
-                Text("The verified Core ML model is part of the app bundle and uses Apple’s local compute path. There is no model download and no processing server.")
+                Text("384 × 384 is one model tile, not the saved-photo or crop resolution. Still photos retain up to a 5120 px long edge and use overlapping detail tiles before boxes are projected back onto the high-resolution source.")
             }
 
             Section {
@@ -361,15 +425,111 @@ private struct DeveloperSettingsView: View {
                 Text("Five is the safe default. Increasing the limit uses more memory and can make local segmentation and crop generation slower.")
             }
 
+            Section {
+                LabeledContent("Exact product search") {
+                    Text("Visual provider")
+                        .foregroundStyle(.secondary)
+                }
+
+                Picker("Image provider", selection: $settings.imageSearchProvider) {
+                    ForEach(ImageSearchProvider.allCases) { provider in
+                        Text(provider.title).tag(provider)
+                    }
+                }
+
+                if !settings.imageSearchProvider.acceptsPrivateImageData {
+                    TextField("Public HTTPS garment image URL", text: $settings.publicImageURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                }
+
+                if settings.imageSearchProvider == .brightData {
+                    TextField("Bright Data SERP zone", text: $settings.brightDataZone)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+
+                Stepper(
+                    "Searches per piece: \(settings.productSearchesPerPiece)",
+                    value: $settings.productSearchesPerPiece,
+                    in: 1...5
+                )
+                Stepper(
+                    "Results shown: \(settings.productResultLimit)",
+                    value: $settings.productResultLimit,
+                    in: 1...20
+                )
+
+                NavigationLink("Monthly safety limits") {
+                    SearchLimitsDebugView()
+                }
+            } header: {
+                Text("Product search")
+            } footer: {
+                Text("The main Search button sends the selected crop directly to the visual provider. Fireworks is used only by Stylezam AI and AI-guided refinements. Failed requests remain retryable; provider request diagnostics are still retained.")
+            }
+
+            Section {
+                ForEach(SearchCredentialKind.allCases) { kind in
+                    NavigationLink {
+                        CredentialEditorView(kind: kind)
+                    } label: {
+                        HStack {
+                            Text(kind.title)
+                            Spacer()
+                            Text(model.credentials.hasCredential(kind) ? "Stored" : "Missing")
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(model.credentials.hasCredential(kind) ? StylezamDesign.cobalt : .secondary)
+                        }
+                    }
+                }
+            } header: {
+                Text("Provider credentials")
+            } footer: {
+                Text("Values are stored in the device-only Keychain. Stylezam never shows a saved key again; paste a replacement to rotate it.")
+            }
+
+            Section {
+                NavigationLink {
+                    SearchDiagnosticsView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Search Usage & Diagnostics")
+                            Text("Request count, outcome, latency, result count, and estimated Fireworks spend")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "waveform.path.ecg")
+                            .foregroundStyle(StylezamDesign.cobalt)
+                    }
+                }
+            } header: {
+                Text("Observability")
+            }
+
             Section("Runtime") {
                 runtimeRow(title: "Garment detection", value: model.modelPack.isInstalled ? "Ready" : "Unavailable")
                 runtimeRow(title: "Segmentation crops", value: "On device")
-                runtimeRow(title: "Product retrieval", value: "Not built yet")
+                runtimeRow(title: "Product retrieval", value: searchRuntimeStatus)
                 runtimeRow(title: "Virtual try-on", value: "Not built yet")
             }
         }
         .navigationTitle("Developer Debug")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var searchRuntimeStatus: String {
+        switch model.settings.productSearchPipeline {
+        case .privateAIText:
+            model.credentials.hasCredential(.fireworks) && model.credentials.hasCredential(.serper)
+                ? "Ready" : "Keys missing"
+        case .directImage:
+            model.credentials.hasCredential(model.settings.imageSearchProvider.credential)
+                ? "Configured" : "Key missing"
+        }
     }
 
     private func runtimeRow(title: String, value: String) -> some View {
@@ -379,6 +539,193 @@ private struct DeveloperSettingsView: View {
             Text(value)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(value == "Ready" || value == "On device" ? StylezamDesign.cobalt : .secondary)
+        }
+    }
+}
+
+private struct CredentialEditorView: View {
+    @Environment(AppModel.self) private var model
+    let kind: SearchCredentialKind
+
+    @State private var replacement = ""
+    @State private var message: String?
+
+    var body: some View {
+        Form {
+            Section {
+                LabeledContent("Status") {
+                    Label(
+                        model.credentials.hasCredential(kind) ? "Stored" : "Missing",
+                        systemImage: model.credentials.hasCredential(kind) ? "checkmark.circle.fill" : "circle"
+                    )
+                    .foregroundStyle(model.credentials.hasCredential(kind) ? StylezamDesign.cobalt : .secondary)
+                }
+                SecureField("Paste API key", text: $replacement)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button(model.credentials.hasCredential(kind) ? "Replace key" : "Save key") {
+                    do {
+                        try model.credentials.setCredential(replacement, for: kind)
+                        replacement = ""
+                        message = "Saved to this iPhone's Keychain."
+                    } catch {
+                        message = error.localizedDescription
+                    }
+                }
+                .disabled(replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            } footer: {
+                Text("The existing value is intentionally unreadable in the UI. Saving replaces it atomically.")
+            }
+
+            if model.credentials.hasCredential(kind) {
+                Section {
+                    Button("Remove key from this iPhone", role: .destructive) {
+                        do {
+                            try model.credentials.removeCredential(kind)
+                            message = "Removed from the Keychain."
+                        } catch {
+                            message = error.localizedDescription
+                        }
+                    }
+                }
+            }
+
+            if let message {
+                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
+            }
+        }
+        .navigationTitle(kind.title)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct SearchLimitsDebugView: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var settings = model.settings
+        Form {
+            requestLimit("SearchAPI.io", value: $settings.searchAPIMonthlyLimit)
+            requestLimit("SerpApi", value: $settings.serpAPIMonthlyLimit)
+            requestLimit("Bright Data", value: $settings.brightDataMonthlyLimit)
+            requestLimit("Lykdat", value: $settings.lykdatMonthlyLimit)
+            requestLimit("Serper", value: $settings.serperMonthlyLimit)
+
+            Section("Fireworks") {
+                HStack {
+                    Text("Monthly safety budget")
+                    Spacer()
+                    TextField("USD", value: $settings.fireworksMonthlyBudgetUSD, format: .number)
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 90)
+                }
+                TextField("Model ID", text: $settings.fireworksModelID)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+
+            Section("Search locale") {
+                TextField("Country code", text: $settings.searchCountry)
+                    .textInputAutocapitalization(.never)
+                TextField("Language code", text: $settings.searchLanguage)
+                    .textInputAutocapitalization(.never)
+            }
+        }
+        .navigationTitle("Safety Limits")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func requestLimit(_ title: String, value: Binding<Int>) -> some View {
+        Section(title) {
+            HStack {
+                Text("Requests per month")
+                Spacer()
+                TextField("Limit", value: value, format: .number)
+                    .keyboardType(.numberPad)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 92)
+            }
+        }
+    }
+}
+
+private struct SearchDiagnosticsView: View {
+    @Environment(AppModel.self) private var model
+    @State private var confirmReset = false
+
+    var body: some View {
+        List {
+            Section("This month") {
+                diagnosticCount("Fireworks", provider: "fireworks")
+                diagnosticCount("Serper", provider: "serper")
+                diagnosticCount("Lykdat", provider: "lykdat")
+                diagnosticCount("SearchAPI.io", provider: "searchapi")
+                diagnosticCount("SerpApi", provider: "serpapi")
+                diagnosticCount("Bright Data", provider: "brightdata")
+                LabeledContent("Estimated Fireworks spend") {
+                    Text(model.searchUsage.estimatedFireworksSpend, format: .currency(code: "USD"))
+                        .monospacedDigit()
+                }
+            }
+
+            Section("Latest dispatched calls") {
+                if model.searchUsage.snapshot.records.isEmpty {
+                    Text("No calls recorded yet.").foregroundStyle(.secondary)
+                } else {
+                    ForEach(model.searchUsage.snapshot.records.reversed().prefix(40)) { record in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(record.providers.joined(separator: " + "))
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Text(record.status.rawValue.uppercased())
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(record.status == .succeeded ? StylezamDesign.cobalt : record.status == .failed ? .red : .secondary)
+                            }
+                            HStack(spacing: 7) {
+                                Text(record.createdAt.formatted(date: .abbreviated, time: .standard))
+                                Text("·")
+                                Text("\(record.requestCount) call\(record.requestCount == 1 ? "" : "s")")
+                                Text("·")
+                                Text("\(record.resultCount) results")
+                            }
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                            if let latency = record.latencyMilliseconds {
+                                Text("Latency \(latency.formatted(.number.precision(.fractionLength(0)))) ms")
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                            if let diagnostic = record.diagnostic {
+                                Text(diagnostic)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(3)
+                            }
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+            }
+
+            Section {
+                Button("Reset local usage ledger", role: .destructive) { confirmReset = true }
+            } footer: {
+                Text("This resets only Stylezam's local safety ledger. It does not restore provider credits or reset provider billing counters.")
+            }
+        }
+        .navigationTitle("Search Diagnostics")
+        .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog("Reset local usage ledger?", isPresented: $confirmReset) {
+            Button("Reset ledger", role: .destructive) { model.searchUsage.resetUsage() }
+        }
+    }
+
+    private func diagnosticCount(_ title: String, provider: String) -> some View {
+        LabeledContent(title) {
+            Text(model.searchUsage.requestCount(provider: provider), format: .number)
+                .monospacedDigit()
         }
     }
 }
