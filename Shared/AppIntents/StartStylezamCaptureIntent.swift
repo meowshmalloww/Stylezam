@@ -5,7 +5,7 @@ struct StartStylezamCaptureIntent: AppIntent {
     static let description = IntentDescription(
         "Open Stylezam to scan clothing from the camera or authorized screen content."
     )
-    static let supportedModes: IntentModes = [.foreground(.immediate)]
+    static let openAppWhenRun = true
 
     @MainActor
     func perform() async throws -> some IntentResult {

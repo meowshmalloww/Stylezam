@@ -11,7 +11,7 @@ import UIKit
 /// Owns the recent frames from a full-display stream the user authorizes with Apple’s picker.
 ///
 /// The ScreenCaptureKit implementation lives in an iOS 27-only adapter below. Keeping those
-/// symbols out of this public manager lets the same app continue to launch on iOS 26 when it is
+/// symbols out of this public manager lets the same app continue to launch on iOS 18–26 when it is
 /// eventually compiled with the iOS 27 SDK.
 @MainActor
 @Observable
@@ -28,7 +28,7 @@ final class LiveScreenCaptureManager: NSObject {
     private var frameBuffer: [BufferedFrame] = []
 
     @ObservationIgnored private let screenActivityManager = CaptureActivityManager()
-    // Type-erased because the concrete adapter is unavailable to an iOS 26 runtime.
+    // Type-erased because the concrete adapter is unavailable before an iOS 27 runtime.
     @ObservationIgnored private var platformAdapter: AnyObject?
 
     nonisolated static var isSupportedBySDK: Bool {

@@ -111,4 +111,4 @@ ScreenCaptureKit code is compiled only when the installed SDK exposes it. Appleâ
 - Missing provider key/zone: no request is reserved or dispatched; Search names the missing configuration.
 - Per-piece or monthly local limit reached: the request stops before networking.
 - Dispatched provider failure: the attempt remains visible in Search Diagnostics and is not silently retried.
-- iOS 26: screen capture reports unavailable; camera, Photos, clipboard, and Share paths continue.
+- iOS 18â€“26: screen capture reports unavailable; camera, Photos, clipboard, and Share paths continue.

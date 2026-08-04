@@ -801,7 +801,7 @@ private struct TryOnArchiveDetail: View {
                         Label("Share preview", systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glassProminent)
+                    .stylezamGlassButton(prominent: true)
                     .tint(StylezamDesign.cobalt)
                 }
                 .padding(StylezamDesign.pageInset)

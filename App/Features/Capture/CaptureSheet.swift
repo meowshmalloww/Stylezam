@@ -26,7 +26,10 @@ struct CaptureSheet: View {
             Color.black.ignoresSafeArea()
 
             if camera.isReady {
-                CameraPreview(session: camera.driver.session)
+                CameraPreview(
+                    session: camera.driver.session,
+                    rotationChanged: camera.driver.setVideoRotationAngle
+                )
                     .ignoresSafeArea()
 
                 GarmentGuideOverlay(
@@ -85,6 +88,16 @@ struct CaptureSheet: View {
     }
 
     private var cameraChrome: some View {
+        GeometryReader { proxy in
+            if proxy.size.width > proxy.size.height {
+                landscapeCameraChrome
+            } else {
+                portraitCameraChrome
+            }
+        }
+    }
+
+    private var portraitCameraChrome: some View {
         VStack(spacing: 0) {
             topBar
                 .padding(.horizontal, 18)
@@ -92,37 +105,62 @@ struct CaptureSheet: View {
 
             Spacer()
 
-            if captureMode == .live, !model.modelPack.isInstalled {
-                Text("Live detection is unavailable. You can still take a photo.")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.white.opacity(0.9))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .padding(.horizontal, 30)
-                    .padding(.bottom, 12)
-            }
-
-            if let confirmationText {
-                Label(confirmationText, systemImage: "checkmark")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 15)
-                    .padding(.vertical, 9)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .padding(.bottom, 12)
-            }
-
-            if captureMode == .live, model.modelPack.isInstalled {
-                liveGuidance
-                    .padding(.bottom, 12)
-            }
+            liveStatus
+                .padding(.bottom, 12)
 
             bottomControls
                 .padding(.horizontal, 24)
                 .padding(.bottom, 18)
+        }
+    }
+
+    private var landscapeCameraChrome: some View {
+        VStack(spacing: 0) {
+            topBar
+                .padding(.horizontal, 22)
+                .padding(.top, 8)
+
+            Spacer()
+
+            HStack(alignment: .bottom, spacing: 22) {
+                liveStatus
+                    .frame(maxWidth: 360, alignment: .leading)
+
+                Spacer(minLength: 0)
+
+                bottomControls
+                    .frame(width: 330)
+            }
+            .padding(.horizontal, 24)
+            .padding(.bottom, 10)
+        }
+    }
+
+    @ViewBuilder
+    private var liveStatus: some View {
+        if captureMode == .live, !model.modelPack.isInstalled {
+            Text("Live detection is unavailable. You can still take a photo.")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.white.opacity(0.9))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: Capsule())
+                .padding(.horizontal, 22)
+        }
+
+        if let confirmationText {
+            Label(confirmationText, systemImage: "checkmark")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 9)
+                .background(.ultraThinMaterial, in: Capsule())
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        if captureMode == .live, model.modelPack.isInstalled {
+            liveGuidance
         }
     }
 
@@ -356,7 +394,15 @@ struct CaptureSheet: View {
     private func capture(automatic: Bool) {
         guard captureTask == nil else { return }
         captureTask = Task {
-            defer { captureTask = nil }
+            if captureMode == .live {
+                camera.setLiveFramesEnabled(false)
+                previewTask?.cancel()
+                isAnalyzingPreview = false
+            }
+            defer {
+                captureTask = nil
+                updateLiveFrames()
+            }
             let data: Data?
             if automatic {
                 let previewFallback = bestFrameData
@@ -493,7 +539,7 @@ struct CaptureSheet: View {
                 .foregroundStyle(.white.opacity(0.64))
                 .multilineTextAlignment(.center)
             Button("Close") { dismiss() }
-                .buttonStyle(.glassProminent)
+                .stylezamGlassButton(prominent: true)
                 .tint(.white)
                 .foregroundStyle(.black)
                 .padding(.top, 8)

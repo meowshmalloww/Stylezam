@@ -158,7 +158,8 @@ actor ProductSearchService {
             objects: objects,
             provider: "Serper",
             searchID: searchID,
-            limit: limit
+            limit: limit,
+            targetLabel: query
         )
         guard !results.isEmpty else { throw ProductSearchError.noResults }
         return SearchProviderResponse(
@@ -197,7 +198,8 @@ actor ProductSearchService {
                 imageURL: publicImageURL,
                 apiKey: apiKey,
                 limit: limit,
-                searchID: searchID
+                searchID: searchID,
+                targetLabel: targetLabel
             )
         case .serpAPI:
             guard let publicImageURL else {
@@ -207,7 +209,8 @@ actor ProductSearchService {
                 imageURL: publicImageURL,
                 apiKey: apiKey,
                 limit: limit,
-                searchID: searchID
+                searchID: searchID,
+                targetLabel: targetLabel
             )
         case .brightData:
             guard let publicImageURL else {
@@ -221,7 +224,8 @@ actor ProductSearchService {
                 apiKey: apiKey,
                 zone: brightDataZone,
                 limit: limit,
-                searchID: searchID
+                searchID: searchID,
+                targetLabel: targetLabel
             )
         }
     }
@@ -259,7 +263,8 @@ actor ProductSearchService {
             objects: objects,
             provider: "Lykdat",
             searchID: searchID,
-            limit: limit
+            limit: limit,
+            targetLabel: targetLabel
         )
         guard !results.isEmpty else { throw ProductSearchError.noResults }
         let detectedName = ((selectedGroup?["detected_item"] as? [String: Any])?["name"] as? String)
@@ -277,7 +282,8 @@ actor ProductSearchService {
         imageURL: URL,
         apiKey: String,
         limit: Int,
-        searchID: String
+        searchID: String,
+        targetLabel: String
     ) async throws -> SearchProviderResponse {
         var components = URLComponents(string: "https://www.searchapi.io/api/v1/search")!
         components.queryItems = [
@@ -290,7 +296,13 @@ actor ProductSearchService {
         let (data, response) = try await send(request, provider: "SearchAPI.io")
         let root = try jsonObject(data, provider: "SearchAPI.io")
         let objects = root["visual_matches"] as? [[String: Any]] ?? []
-        let results = productResults(objects: objects, provider: "SearchAPI.io", searchID: searchID, limit: limit)
+        let results = productResults(
+            objects: objects,
+            provider: "SearchAPI.io",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: targetLabel
+        )
         guard !results.isEmpty else { throw ProductSearchError.noResults }
         return SearchProviderResponse(
             results: results,
@@ -305,7 +317,8 @@ actor ProductSearchService {
         imageURL: URL,
         apiKey: String,
         limit: Int,
-        searchID: String
+        searchID: String,
+        targetLabel: String
     ) async throws -> SearchProviderResponse {
         var components = URLComponents(string: "https://serpapi.com/search.json")!
         components.queryItems = [
@@ -317,7 +330,13 @@ actor ProductSearchService {
         let (data, response) = try await send(URLRequest(url: components.url!), provider: "SerpApi")
         let root = try jsonObject(data, provider: "SerpApi")
         let objects = root["visual_matches"] as? [[String: Any]] ?? []
-        let results = productResults(objects: objects, provider: "SerpApi", searchID: searchID, limit: limit)
+        let results = productResults(
+            objects: objects,
+            provider: "SerpApi",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: targetLabel
+        )
         guard !results.isEmpty else { throw ProductSearchError.noResults }
         return SearchProviderResponse(
             results: results,
@@ -333,7 +352,8 @@ actor ProductSearchService {
         apiKey: String,
         zone: String,
         limit: Int,
-        searchID: String
+        searchID: String,
+        targetLabel: String
     ) async throws -> SearchProviderResponse {
         var lens = URLComponents(string: "https://lens.google.com/uploadbyurl")!
         lens.queryItems = [
@@ -373,7 +393,13 @@ actor ProductSearchService {
             root = envelope
         }
         let objects = (root["visual_matches"] as? [[String: Any]]) ?? findProductObjects(in: root)
-        let results = productResults(objects: objects, provider: "Bright Data", searchID: searchID, limit: limit)
+        let results = productResults(
+            objects: objects,
+            provider: "Bright Data",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: targetLabel
+        )
         guard !results.isEmpty else {
             throw ProductSearchError.provider(
                 "Bright Data returned the Google Lens page but no supported structured product records. Confirm that the selected zone returns parsed Google Lens JSON."
@@ -526,15 +552,15 @@ actor ProductSearchService {
         objects: [[String: Any]],
         provider: String,
         searchID: String,
-        limit: Int
+        limit: Int,
+        targetLabel: String? = nil
     ) -> [ProductResultDTO] {
-        var seen = Set<String>()
-        return objects.enumerated().compactMap { index, object in
+        let targetTerms = normalizedTerms(targetLabel ?? "")
+        let candidates = objects.enumerated().compactMap { index, object -> ProductResultDTO? in
             guard let title = string(object["title"]) ?? string(object["name"]),
                   let link = productURLString(object),
                   let productURL = URL(string: link),
-                  ["http", "https"].contains(productURL.scheme?.lowercased() ?? ""),
-                  seen.insert(productURL.absoluteString).inserted
+                  ["http", "https"].contains(productURL.scheme?.lowercased() ?? "")
             else { return nil }
             let merchant = string(object["source"])
                 ?? string(object["merchant"])
@@ -556,7 +582,21 @@ actor ProductSearchService {
                 }
                 .first
             let price = money(priceValue)
-            let score = min(1, max(0, number(object["score"]) ?? max(0.45, 1 - (Double(index) * 0.035))))
+            let titleTerms = normalizedTerms(
+                [title, string(object["category"]), string(object["brand"])]
+                    .compactMap { $0 }
+                    .joined(separator: " ")
+            )
+            let overlap = targetTerms.isEmpty
+                ? 0
+                : Double(targetTerms.intersection(titleTerms).count) / Double(targetTerms.count)
+            let rawProviderScore = number(object["score"])
+                ?? number(object["similarity"])
+                ?? max(0.34, 0.72 - (Double(index) * 0.025))
+            let providerScore = rawProviderScore > 1
+                ? rawProviderScore / 100
+                : rawProviderScore
+            let score = min(0.96, max(0.2, providerScore * 0.9 + min(0.12, overlap * 0.12)))
             let stable = SHA256.hash(data: Data("\(provider)|\(productURL.absoluteString)".utf8))
                 .map { String(format: "%02x", $0) }.joined()
             return ProductResultDTO(
@@ -572,14 +612,104 @@ actor ProductSearchService {
                 productURL: productURL,
                 merchant: merchant,
                 price: price,
-                matchTier: index < 3 ? .likely : .similar,
+                matchTier: score >= 0.58 ? .similar : .inspired,
                 score: score,
                 rating: number(object["rating"]),
                 reviewCount: integer(object["ratingCount"] ?? object["reviews"]),
                 attributes: [:],
                 offers: []
             )
-        }.prefix(max(1, limit)).map { $0 }
+        }
+        .sorted { left, right in
+            if left.score != right.score { return left.score > right.score }
+            return left.title.localizedCaseInsensitiveCompare(right.title) == .orderedAscending
+        }
+
+        var grouped: [ProductResultDTO] = []
+        var groupIndexByIdentity: [String: Int] = [:]
+
+        for candidate in candidates {
+            let identities = productIdentities(for: candidate)
+            let duplicateIndex = identities.lazy.compactMap { groupIndexByIdentity[$0] }.first
+            if let duplicateIndex {
+                let primary = grouped[duplicateIndex]
+                guard primary.productURL != candidate.productURL,
+                      !primary.offers.contains(where: { $0.url == candidate.productURL })
+                else { continue }
+                var offers = primary.offers
+                offers.append(
+                    MerchantOfferDTO(
+                        merchant: candidate.merchant,
+                        url: candidate.productURL,
+                        price: candidate.price,
+                        shipping: nil,
+                        condition: nil
+                    )
+                )
+                grouped[duplicateIndex] = ProductResultDTO(
+                    id: primary.id,
+                    searchID: primary.searchID,
+                    provider: primary.provider,
+                    providerResultID: primary.providerResultID,
+                    title: primary.title,
+                    brand: primary.brand,
+                    category: primary.category,
+                    color: primary.color,
+                    imageURL: primary.imageURL,
+                    productURL: primary.productURL,
+                    merchant: primary.merchant,
+                    price: primary.price,
+                    matchTier: primary.matchTier,
+                    score: max(primary.score, candidate.score),
+                    rating: primary.rating,
+                    reviewCount: primary.reviewCount,
+                    attributes: primary.attributes,
+                    offers: offers
+                )
+                for identity in identities { groupIndexByIdentity[identity] = duplicateIndex }
+            } else {
+                let newIndex = grouped.count
+                grouped.append(candidate)
+                for identity in identities { groupIndexByIdentity[identity] = newIndex }
+            }
+        }
+
+        return Array(grouped.prefix(max(1, limit)))
+    }
+
+    private func productIdentities(for product: ProductResultDTO) -> [String] {
+        var identities: [String] = []
+        if let imageURL = product.imageURL,
+           var components = URLComponents(url: imageURL, resolvingAgainstBaseURL: false)
+        {
+            components.query = nil
+            components.fragment = nil
+            if let normalized = components.string?.lowercased() {
+                identities.append("image:\(normalized)")
+            }
+        }
+        let title = normalizedTerms(product.title).sorted().joined(separator: "-")
+        if title.count >= 10 { identities.append("title:\(title)") }
+        var productComponents = URLComponents(url: product.productURL, resolvingAgainstBaseURL: false)
+        productComponents?.query = nil
+        productComponents?.fragment = nil
+        if let normalized = productComponents?.string?.lowercased() {
+            identities.append("url:\(normalized)")
+        }
+        return identities
+    }
+
+    private func normalizedTerms(_ text: String) -> Set<String> {
+        let ignored: Set<String> = [
+            "a", "an", "and", "at", "by", "for", "from", "in", "of", "on", "the", "to",
+            "us", "uk", "au", "nz", "new", "sale", "women", "womens", "men", "mens",
+        ]
+        return Set(
+            text.lowercased()
+                .split { !$0.isLetter && !$0.isNumber }
+                .map(String.init)
+                .filter { $0.count > 1 && !ignored.contains($0) }
+        )
     }
 
     private func productURLString(_ object: [String: Any]) -> String? {

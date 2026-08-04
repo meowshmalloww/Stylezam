@@ -59,6 +59,35 @@ final class SearchUsageStore {
         }.count
     }
 
+    /// Chooses one eligible visual provider for one garment request. A healthy
+    /// provider receives at most two consecutive requests before the route
+    /// advances. A failed provider advances immediately so retries do not keep
+    /// hammering the same service.
+    func routedImageProvider(
+        from eligibleProviders: [ImageSearchProvider],
+        maximumConsecutiveRequests: Int = 2
+    ) -> ImageSearchProvider? {
+        let eligible = ImageSearchProvider.allCases.filter(eligibleProviders.contains)
+        guard let first = eligible.first else { return nil }
+
+        let recent = currentMonthRecords
+            .filter { $0.kind == .productSearch && $0.providers.count == 1 }
+            .sorted { $0.createdAt < $1.createdAt }
+        guard let lastRecord = recent.last,
+              let lastRaw = lastRecord.providers.first,
+              let lastProvider = ImageSearchProvider(rawValue: lastRaw),
+              let lastIndex = eligible.firstIndex(of: lastProvider)
+        else { return first }
+
+        let next = eligible[(lastIndex + 1) % eligible.count]
+        guard lastRecord.status != .failed else { return next }
+
+        let streak = recent.reversed().prefix { record in
+            record.providers.first == lastRaw && record.status != .failed
+        }.count
+        return streak >= max(1, maximumConsecutiveRequests) ? next : lastProvider
+    }
+
     @discardableResult
     func reserveProductSearch(
         garmentKey: String,

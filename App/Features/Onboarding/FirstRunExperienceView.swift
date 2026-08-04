@@ -53,7 +53,7 @@ struct FirstRunExperienceView: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 56)
                 }
-                .buttonStyle(.glassProminent)
+                .stylezamGlassButton(prominent: true)
                 .tint(StylezamDesign.cobalt)
 
                 Text("On-device detection · No account required")

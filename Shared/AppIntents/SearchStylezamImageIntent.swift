@@ -6,7 +6,7 @@ struct SearchStylezamImageIntent: AppIntent {
     static let description = IntentDescription(
         "Open Stylezam and separate the clothing visible in an image from a previous Shortcut action."
     )
-    static let supportedModes: IntentModes = [.foreground(.immediate)]
+    static let openAppWhenRun = true
 
     @Parameter(
         title: "Image",

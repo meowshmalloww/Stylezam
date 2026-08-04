@@ -147,6 +147,35 @@ struct EditorialRule: View {
     }
 }
 
+extension View {
+    /// Uses Liquid Glass on iOS 26+ and a native bordered treatment on older
+    /// supported systems. Keeping the compatibility choice in one place lets
+    /// the app back-deploy to iOS 18 without scattering availability checks.
+    @ViewBuilder
+    func stylezamGlassButton(prominent: Bool = false) -> some View {
+        if #available(iOS 26.0, *) {
+            if prominent {
+                self.buttonStyle(.glassProminent)
+            } else {
+                self.buttonStyle(.glass)
+            }
+        } else if prominent {
+            self.buttonStyle(.borderedProminent)
+        } else {
+            self.buttonStyle(.bordered)
+        }
+    }
+
+    @ViewBuilder
+    func stylezamTabBarBehavior() -> some View {
+        if #available(iOS 26.0, *) {
+            self.tabBarMinimizeBehavior(.onScrollDown)
+        } else {
+            self
+        }
+    }
+}
+
 struct CobaltActionButton: View {
     let title: String
     var systemImage: String? = nil
@@ -165,7 +194,7 @@ struct CobaltActionButton: View {
             .frame(maxWidth: .infinity)
             .frame(minHeight: 52)
         }
-        .buttonStyle(.glassProminent)
+        .stylezamGlassButton(prominent: true)
         .tint(StylezamDesign.cobalt)
         .disabled(!isEnabled)
     }

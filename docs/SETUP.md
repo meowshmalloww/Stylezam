@@ -73,9 +73,9 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-Add only the providers you intend to test. `.env` is ignored by Git and is not bundled into the app. `scripts/install_on_device.sh` passes the values into one Debug launch; Stylezam immediately stores them in the device-only Keychain. You can also paste, rotate, or remove each key under Settings → Developer Debug → Provider credentials.
+Add only the providers you intend to test. `.env` is ignored by Git and is not bundled into the app. `scripts/install_on_device.sh` passes the values into one Debug launch; Stylezam immediately stores them in the device-only Keychain. Developer Debug is status-only—keys cannot be viewed, pasted, or replaced inside the app. Rotate a key in the local `.env`, then reinstall/relaunch the Debug build.
 
-The default exact-image path uses Lykdat, which accepts the selected crop bytes directly. Fireworks powers the separate Stylezam AI chat; Serper is used only when the user asks that AI request to search similar products. SearchAPI.io and SerpApi Google Lens require a public HTTPS image URL. Bright Data requires both a token and a compatible SERP zone; the currently configured zone authenticates but returns an inner Lens HTTP 502, so do not select it until Bright Data confirms Lens access.
+The visual path uses a bounded smart router. It sends one request for a selected garment, keeps a healthy eligible provider for at most two consecutive requests, and advances immediately after a failure. Lykdat accepts selected crop bytes directly. Fireworks powers the separate Stylezam AI chat; Serper is used only when the user turns an AI request into a similar-product search. SearchAPI.io and SerpApi Google Lens require a public HTTPS crop URL. Bright Data requires both that URL and a compatible SERP zone; the currently configured zone authenticates but returns an inner Lens HTTP 502, so it is not eligible until both conditions are corrected.
 
 ## 4. Generate and sign the iOS project
 

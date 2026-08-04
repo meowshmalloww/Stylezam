@@ -83,7 +83,7 @@ struct SettingsView: View {
                         SettingsLinkLabel(
                             icon: "hammer",
                             title: "Developer Debug",
-                            detail: "Verified role · vision, providers, quotas, credentials, and request logs"
+                            detail: "Verified role · vision, provider readiness, quotas, and request logs"
                         )
                     }
 
@@ -158,7 +158,7 @@ private struct ControlSetupView: View {
             }
 
             Section {
-                Text("This route passes the actual screenshot into Stylezam for garment detection and works on iOS 26.")
+                Text("This route passes the actual screenshot into Stylezam for garment detection and works on iOS 18 through iOS 27.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 setupStep("1", "Add Take Screenshot")
@@ -294,9 +294,9 @@ private struct PrivacySettingsView: View {
                 detail: "Stylezam sends only the selected garment crop to the provider you configured after you tap Find. The Qwen route sends the crop to Fireworks; Serper receives generated text keywords, not the photo."
             )
             privacySection(
-                title: "Developer credentials",
+                title: "Service credentials",
                 icon: "key",
-                detail: "Provider keys are stored in the device-only Keychain and never written to the Library. Direct provider keys are intended for your private developer build, not a public App Store release."
+                detail: "Users never enter provider keys. This private developer build imports them from an ignored Xcode environment file into the device-only Keychain; they are never written to the Library."
             )
 
             Section {
@@ -426,32 +426,21 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
-                LabeledContent("Exact product search") {
-                    Text("Visual provider")
-                        .foregroundStyle(.secondary)
+                LabeledContent("Routing", value: "Smart rotation")
+                LabeledContent("Eligible providers") {
+                    Text(model.eligibleImageSearchProviders.count, format: .number)
+                        .monospacedDigit()
                 }
-
-                Picker("Image provider", selection: $settings.imageSearchProvider) {
-                    ForEach(ImageSearchProvider.allCases) { provider in
-                        Text(provider.title).tag(provider)
-                    }
-                }
-
-                if !settings.imageSearchProvider.acceptsPrivateImageData {
-                    TextField("Public HTTPS garment image URL", text: $settings.publicImageURL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .keyboardType(.URL)
-                }
-
-                if settings.imageSearchProvider == .brightData {
-                    TextField("Bright Data SERP zone", text: $settings.brightDataZone)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
+                LabeledContent(
+                    "Next provider",
+                    value: model.searchUsage
+                        .routedImageProvider(from: model.eligibleImageSearchProviders)?
+                        .title ?? "None ready"
+                )
+                LabeledContent("Maximum provider streak", value: "2 requests")
 
                 Stepper(
-                    "Searches per piece: \(settings.productSearchesPerPiece)",
+                    "Successful searches per piece: \(settings.productSearchesPerPiece)",
                     value: $settings.productSearchesPerPiece,
                     in: 1...5
                 )
@@ -467,27 +456,19 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Product search")
             } footer: {
-                Text("The main Search button sends the selected crop directly to the visual provider. Fireworks is used only by Stylezam AI and AI-guided refinements. Failed requests remain retryable; provider request diagnostics are still retained.")
+                Text("One tap makes one provider request, which can return several products. Stylezam keeps a healthy provider for no more than two consecutive requests, then rotates to the next eligible route. Fireworks remains exclusive to Stylezam AI and AI-guided refinements.")
             }
 
             Section {
-                ForEach(SearchCredentialKind.allCases) { kind in
-                    NavigationLink {
-                        CredentialEditorView(kind: kind)
-                    } label: {
-                        HStack {
-                            Text(kind.title)
-                            Spacer()
-                            Text(model.credentials.hasCredential(kind) ? "Stored" : "Missing")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(model.credentials.hasCredential(kind) ? StylezamDesign.cobalt : .secondary)
-                        }
-                    }
+                providerReadinessRow(kind: .fireworks, detail: "Stylezam AI")
+                providerReadinessRow(kind: .serper, detail: "AI-guided shopping")
+                ForEach(ImageSearchProvider.allCases) { provider in
+                    imageProviderReadinessRow(provider)
                 }
             } header: {
-                Text("Provider credentials")
+                Text("Provider readiness")
             } footer: {
-                Text("Values are stored in the device-only Keychain. Stylezam never shows a saved key again; paste a replacement to rotate it.")
+                Text("Status only—there is no key editor in the app. Developer builds import values from the ignored .env/Xcode scheme and store them in this iPhone's Keychain. Public users never supply service credentials.")
             }
 
             Section {
@@ -522,13 +503,62 @@ private struct DeveloperSettingsView: View {
     }
 
     private var searchRuntimeStatus: String {
-        switch model.settings.productSearchPipeline {
-        case .privateAIText:
-            model.credentials.hasCredential(.fireworks) && model.credentials.hasCredential(.serper)
-                ? "Ready" : "Keys missing"
-        case .directImage:
-            model.credentials.hasCredential(model.settings.imageSearchProvider.credential)
-                ? "Configured" : "Key missing"
+        let count = model.eligibleImageSearchProviders.count
+        return count > 0 ? "\(count) route\(count == 1 ? "" : "s") ready" : "No route ready"
+    }
+
+    private func providerReadinessRow(kind: SearchCredentialKind, detail: String) -> some View {
+        readinessRow(
+            title: kind.title,
+            detail: detail,
+            status: model.credentials.hasCredential(kind) ? "Ready" : "Not configured",
+            isReady: model.credentials.hasCredential(kind)
+        )
+    }
+
+    private func imageProviderReadinessRow(_ provider: ImageSearchProvider) -> some View {
+        let hasKey = model.credentials.hasCredential(provider.credential)
+        let isEligible = model.eligibleImageSearchProviders.contains(provider)
+        let status: String
+        if !hasKey {
+            status = "Not configured"
+        } else if provider == .brightData,
+                  model.settings.brightDataZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            status = "Needs SERP zone"
+        } else if !provider.acceptsPrivateImageData && !isEligible {
+            status = "Needs crop hosting"
+        } else {
+            status = "Ready"
+        }
+        return readinessRow(
+            title: provider.title,
+            detail: provider.acceptsPrivateImageData ? "Private crop upload" : "Public HTTPS crop required",
+            status: status,
+            isReady: isEligible
+        )
+    }
+
+    private func readinessRow(
+        title: String,
+        detail: String,
+        status: String,
+        isReady: Bool
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: isReady ? "checkmark.circle.fill" : "circle.dashed")
+                .foregroundStyle(isReady ? StylezamDesign.cobalt : .secondary)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(status)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(isReady ? StylezamDesign.cobalt : .secondary)
+                .multilineTextAlignment(.trailing)
         }
     }
 
@@ -538,64 +568,12 @@ private struct DeveloperSettingsView: View {
             Spacer()
             Text(value)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(value == "Ready" || value == "On device" ? StylezamDesign.cobalt : .secondary)
+                .foregroundStyle(
+                    value == "Ready" || value == "On device" || value.contains("route")
+                        ? StylezamDesign.cobalt
+                        : .secondary
+                )
         }
-    }
-}
-
-private struct CredentialEditorView: View {
-    @Environment(AppModel.self) private var model
-    let kind: SearchCredentialKind
-
-    @State private var replacement = ""
-    @State private var message: String?
-
-    var body: some View {
-        Form {
-            Section {
-                LabeledContent("Status") {
-                    Label(
-                        model.credentials.hasCredential(kind) ? "Stored" : "Missing",
-                        systemImage: model.credentials.hasCredential(kind) ? "checkmark.circle.fill" : "circle"
-                    )
-                    .foregroundStyle(model.credentials.hasCredential(kind) ? StylezamDesign.cobalt : .secondary)
-                }
-                SecureField("Paste API key", text: $replacement)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                Button(model.credentials.hasCredential(kind) ? "Replace key" : "Save key") {
-                    do {
-                        try model.credentials.setCredential(replacement, for: kind)
-                        replacement = ""
-                        message = "Saved to this iPhone's Keychain."
-                    } catch {
-                        message = error.localizedDescription
-                    }
-                }
-                .disabled(replacement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            } footer: {
-                Text("The existing value is intentionally unreadable in the UI. Saving replaces it atomically.")
-            }
-
-            if model.credentials.hasCredential(kind) {
-                Section {
-                    Button("Remove key from this iPhone", role: .destructive) {
-                        do {
-                            try model.credentials.removeCredential(kind)
-                            message = "Removed from the Keychain."
-                        } catch {
-                            message = error.localizedDescription
-                        }
-                    }
-                }
-            }
-
-            if let message {
-                Section { Text(message).font(.footnote).foregroundStyle(.secondary) }
-            }
-        }
-        .navigationTitle(kind.title)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 

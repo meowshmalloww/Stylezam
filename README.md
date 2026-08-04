@@ -11,16 +11,28 @@
 
 <p align="center">
   <img alt="Swift 6" src="https://img.shields.io/badge/Swift-6.0-FA7343?style=flat-square&logo=swift&logoColor=white">
-  <img alt="iOS 26+" src="https://img.shields.io/badge/iOS-26%2B-0A57FF?style=flat-square&logo=apple&logoColor=white">
+  <img alt="iOS 18–27" src="https://img.shields.io/badge/iOS-18%E2%80%9327-0A57FF?style=flat-square&logo=apple&logoColor=white">
   <img alt="Local Core ML" src="https://img.shields.io/badge/vision-on--device-111111?style=flat-square&logo=apple&logoColor=white">
   <img alt="Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-111111?style=flat-square">
 </p>
 
-Stylezam keeps fashion detection local. The RF-DETR Core ML model is included in the application, compiled by Xcode, and loaded directly on the iPhone. Capture, boxes, garment crops, diagnostic masks, duplicate filtering, and Library storage do not require a cloud host, local computer, API token, or first-run model download.
+Stylezam keeps fashion detection local. Its RF-DETR Core ML model is included in the app, compiled by Xcode, and loaded directly on the iPhone. Capture, live boxes, garment crops, diagnostic masks, duplicate filtering, and Library storage do not require a cloud host, a laptop acting as a server, an API token, or a first-run model download.
 
-Product retrieval is real and explicitly user-triggered. The main Search button sends one selected crop directly to Lykdat Global Search by default. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and for user-requested similar-search refinements, which perform one Serper shopping query. Direct adapters are also included for SearchAPI.io Google Lens, SerpApi Google Lens, and Bright Data. No sample products, simulated progress, or invented prices are used.
+Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. A bounded router keeps an eligible provider for no more than two consecutive requests before advancing. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and user-approved refinements, which then perform one Serper shopping query. No sample products, simulated progress, invented prices, or invented confidence scores are used.
 
 The app now opens with a focused five-page first-run experience and requires Google Sign-In through Firebase Authentication. Display-name, username, style note, captures, crops, and Library state remain local to the iPhone. Firebase stores the authentication identity and delivers a signed `developer` custom claim; no Firestore profile database is used. Free is active with 10 product searches and 20 AI questions per month. Plus and Pro are pricing previews only—there is no checkout, payment simulation, or paid entitlement in this build.
+
+## Current system
+
+| Area | Status | Boundary |
+|---|---|---|
+| iPhone support | iOS 18–27 | Liquid Glass is used on iOS 26+; native compatibility styling is used on iOS 18–25. |
+| Camera | Photo + hybrid Live, portrait + landscape | Live inference pauses under serious thermal pressure; the manual shutter remains available. |
+| Local vision | Bundled Core ML, no download | Fashionpedia item taxonomy; diagnostic masks are not presented as final cutouts. |
+| Product search | Real provider responses | One provider request per successful garment search by default; up to six deduplicated products shown. |
+| AI | Fireworks Qwen chat + Serper refinements | Fireworks does not power the main visual-search button. |
+| Accounts | Firebase Google Sign-In | Profile data stays local; developer access requires a signed Firebase custom claim. |
+| Payments | Free plan active | Plus and Pro are previews only; no checkout exists in this build. |
 
 ## Quick start
 
@@ -39,7 +51,7 @@ working directory containing ignored credentials.
 
 ## What works now
 
-- Custom full-screen camera with rear/front switching, flash, Photo mode, and hybrid Live mode.
+- Custom full-screen camera with rear/front switching, flash, Photo mode, hybrid Live mode, and orientation-correct portrait/landscape capture.
 - Animated five-page first-run experience, required Firebase Google sign-in, local editable profile, role badge, logout, and account restoration.
 - Free membership enforcement plus non-purchasable Plus/Pro preview cards; verified Developer claims receive unlimited internal usage.
 - Automatic Live capture after a stable, high-quality frame, plus a manual shutter at any time. Live mode draws provisional boxes immediately, confirms labels across consecutive frames, explains the current capture state, and saves a full-resolution still after consensus.
@@ -50,12 +62,14 @@ working directory containing ignored credentials.
 - Real Vision Inspector with source overlays, crop previews, normalized geometry, confidence, byte counts, and measured local inference time.
 - Local Library containing the source look, detected pieces, capture source, and timestamp.
 - One-successful-search-per-garment safety ledger by default. Failed provider attempts remain in diagnostics but are retryable and do not consume the garment or membership allowance.
-- Direct Lykdat visual retrieval by default, plus a separate Fireworks Qwen image chat and Fireworks → Serper AI-guided similar-search path.
-- Developer-selectable Lykdat, SearchAPI.io, SerpApi, and Bright Data adapters with Keychain credentials, local monthly limits, result caps, latency, outcomes, and request diagnostics.
+- Smart visual-provider routing: one request at a time, no more than two consecutive requests to the same healthy eligible provider, immediate advancement after a failed route.
+- Direct Lykdat visual retrieval, plus a separate Fireworks Qwen image chat and Fireworks → Serper AI-guided similar-search path.
+- SearchAPI.io, SerpApi, and Bright Data adapters with truthful eligibility checks, local monthly limits, result caps, latency, outcomes, and request diagnostics.
+- Result normalization that ranks provider evidence, groups repeated regional/store listings, and labels results as visual alternatives rather than claiming SKU identity.
 - Explicit deletion for captures and completed match history.
 - Duplicate suppression for recent Live and screen captures.
 - Photo import, clipboard input, Share extension, App Intents, separate Capture a Look and Live Screen Control Center controls, Live Activities, and Dynamic Island state.
-- Conditional iOS 27 ScreenCaptureKit adapter; iOS 26 continues to support camera, import, clipboard, and Share input.
+- iOS 18–27 runtime compatibility. The conditional iOS 27 ScreenCaptureKit adapter remains compile-gated until the project is built with the iOS 27 SDK; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems.
 
 <table>
   <tr>
@@ -78,18 +92,20 @@ flowchart LR
     Crops --> Inspector["Local Vision Inspector"]
     Masks --> Inspector
     Crops --> Choice["User selects one piece"]
-    Choice --> Meter["Persist request reservation"]
-    Meter --> Direct["Lykdat visual search by default"]
+    Choice --> Meter["Reserve one request"]
+    Meter --> Router["Eligible-provider router · max streak 2"]
+    Router --> Direct["One visual-provider request"]
     Choice --> Chat["Stylezam AI question"]
     Chat --> Qwen["Fireworks Qwen vision"]
     Qwen --> Refine["Optional user-approved refinement"]
     Refine --> Serper["One Serper shopping query"]
-    Direct --> Matches["Real product matches"]
+    Direct --> Rank["Normalize · rank · group duplicates"]
+    Rank --> Matches["Real visual matches"]
     Serper --> Matches
     Matches --> Library
 ```
 
-Live preview uses a bounded 1600 px source, one prediction, a 0.42 provisional confidence threshold, cross-label overlap filtering, and short temporal consensus; it does not create crops or run extra model passes. After automatic consensus, AVFoundation captures a full-quality still. Accepted Photo and Live images are decoded at up to 5120 px and use a global prediction plus thermal-aware square detail tiles. Every prediction uses the model's fixed 384×384 tensor; detections are merged in source coordinates and projected onto the high-resolution source as 94%-quality JPEG crops. The accepted-image scheduler has a 9-second internal budget, disables detail tiles in Low Power Mode, reduces them under fair thermal pressure, and stops them under serious or critical pressure. Screen capture remains single-pass. Diagnostic masks are generated only when Vision Inspector is open. Core ML is cached after first load. This model currently uses Core ML's CPU path on iOS because the GPU/Neural Engine path returned zero class logits during device validation. See [Architecture](./docs/ARCHITECTURE.md), [Model decision](./docs/MODEL_DECISION.md), [Privacy](./docs/PRIVACY.md), [Vision benchmark](./docs/VISION_BENCHMARK.md), and the [full validation report](./docs/VISION_VALIDATION.md).
+Live preview downsizes camera frames to a 960 px long edge before JPEG encoding, samples at an adaptive cadence, discards late frames, and runs one prediction with short temporal consensus. It does not create crops or run detail tiles. Full-frame preview work is paused while AVFoundation captures and analyzes the accepted still, and background Live inference stops entirely at serious/critical thermal pressure. Accepted Photo and Live images are decoded at up to 5120 px and use a global prediction plus thermal-aware square detail tiles. Every prediction still uses the model's fixed 384×384 tensor; detections are merged in source coordinates and projected onto the high-resolution source as 94%-quality JPEG crops. Diagnostic masks are generated only in Vision Inspector. Core ML is cached after first load. This model currently uses Core ML's CPU path on iOS because the GPU/Neural Engine path returned zero class logits during device validation. See [Architecture](./docs/ARCHITECTURE.md), [Model decision](./docs/MODEL_DECISION.md), [Privacy](./docs/PRIVACY.md), [Vision benchmark](./docs/VISION_BENCHMARK.md), and the [full validation report](./docs/VISION_VALIDATION.md).
 
 ## Bundled model
 
@@ -109,7 +125,7 @@ For development and a connected iPhone:
 
 ```bash
 cp .env.example .env
-# Add local developer provider keys; .env is ignored and must remain private.
+# Add only private developer provider keys; users never enter keys in the app.
 chmod 600 .env
 ./scripts/install_on_device.sh
 ```
@@ -138,13 +154,13 @@ scripts/                project generation, model research/export, and verificat
 
 ## Known release boundaries
 
-- Search credentials in Developer Debug are for a private developer build. Public distribution requires a server-side credential broker so provider secrets are not shipped to customers.
+- Provider settings in the app are status-only. Private Debug launches import ignored `.env` values into the device-only Keychain; users never paste service keys. Public distribution still requires a server-side credential broker so provider secrets are not shipped to customers.
 - Lykdat is the only currently verified direct provider that accepts private crop bytes. SearchAPI.io and SerpApi Google Lens connections work with a public HTTPS image URL, but Stylezam does not silently publish a private iPhone crop.
 - The configured Bright Data API authenticates, but the current zone returns an inner Google Lens HTTP 502 response. Treat it as unavailable until Bright Data confirms Lens access for that zone.
 - Fireworks Qwen chat and Serper shopping are verified as separate services; Fireworks is not used by the main exact visual-search button.
 - Prices are current provider observations, not tracked price history. Virtual try-on remains deferred.
 - Transparent masks from the current Core ML export are diagnostic-only on iOS; Library deliberately stores the reliable bounding-box crop instead of presenting a broken cutout as final output.
-- The conditional iOS 27 screen path is not compiled by the installed Xcode 26.6 / iOS 26.5 SDK. Install Xcode 27, regenerate the project, and complete a physical-device verification pass before claiming screen recognition support.
+- The deployment target is iOS 18 and the app runs on iOS 18–27. The conditional iOS 27 screen-recognition path is not compiled by the installed Xcode 26.6 / iOS 26.5 SDK. Install Xcode 27, regenerate, and complete a physical-device verification pass before claiming that SDK-gated path.
 - Physical-device camera performance, thermals, Live Activity, extensions, and App Group provisioning must be tested with the final signing team.
 - App Store privacy disclosures and model/dataset legal review remain release tasks.
 

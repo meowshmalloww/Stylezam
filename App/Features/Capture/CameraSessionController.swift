@@ -87,6 +87,8 @@ enum CameraSessionError: LocalizedError {
     case cameraUnavailable
     case cannotAddInput
     case cannotAddOutput
+    case captureInProgress
+    case captureUnavailable
     case photoDataUnavailable
 
     var errorDescription: String? {
@@ -94,6 +96,8 @@ enum CameraSessionError: LocalizedError {
         case .cameraUnavailable: "No camera is available on this iPhone."
         case .cannotAddInput: "Stylezam could not connect to the selected camera."
         case .cannotAddOutput: "Stylezam could not prepare photo capture."
+        case .captureInProgress: "The camera is already saving a photo."
+        case .captureUnavailable: "The camera is not ready to save a photo yet. Hold still and try again."
         case .photoDataUnavailable: "The captured photo could not be read."
         }
     }
@@ -109,7 +113,7 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
     )
     private let videoQueue = DispatchQueue(
         label: "com.stylezam.camera.frames",
-        qos: .userInitiated
+        qos: .utility
     )
     private let photoOutput = AVCapturePhotoOutput()
     private let videoOutput = AVCaptureVideoDataOutput()
@@ -120,6 +124,7 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
     private var liveFramesEnabled = false
     private var lastFrameAt: TimeInterval = 0
     private var outputsConfigured = false
+    private var currentRotationAngle: CGFloat = 90
 
     func configure(position: AVCaptureDevice.Position) async throws {
         try await withCheckedThrowingContinuation { continuation in
@@ -160,21 +165,45 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
         }
     }
 
+    func setVideoRotationAngle(_ angle: CGFloat) {
+        sessionQueue.async { [self] in
+            currentRotationAngle = angle
+            updateConnectionsOnQueue()
+        }
+    }
+
     func capturePhoto(flashEnabled: Bool) async throws -> Data {
         try await withCheckedThrowingContinuation { continuation in
             sessionQueue.async { [self] in
-                stateLock.withLock {
+                let accepted = stateLock.withLock { () -> Bool in
+                    guard photoContinuation == nil else { return false }
                     photoContinuation = continuation
+                    return true
+                }
+                guard accepted else {
+                    continuation.resume(throwing: CameraSessionError.captureInProgress)
+                    return
+                }
+                guard session.isRunning,
+                      session.outputs.contains(where: { $0 === photoOutput }),
+                      photoOutput.captureReadiness == .ready,
+                      let connection = photoOutput.connection(with: .video),
+                      connection.isActive,
+                      connection.isEnabled
+                else {
+                    finishPhotoCapture(.failure(CameraSessionError.captureUnavailable))
+                    return
                 }
                 let settings = AVCapturePhotoSettings()
                 if let device = currentInput?.device, device.hasFlash {
                     settings.flashMode = flashEnabled ? .on : .off
                 }
-                settings.photoQualityPrioritization = .quality
-                if let connection = photoOutput.connection(with: .video),
-                   connection.isVideoRotationAngleSupported(90)
-                {
-                    connection.videoRotationAngle = 90
+                // AVFoundation raises an Objective-C exception—not a Swift
+                // error—when this exceeds the output maximum. Match the value
+                // configured before the session started.
+                settings.photoQualityPrioritization = photoOutput.maxPhotoQualityPrioritization
+                if connection.isVideoRotationAngleSupported(currentRotationAngle) {
+                    connection.videoRotationAngle = currentRotationAngle
                 }
                 photoOutput.capturePhoto(with: settings, delegate: self)
             }
@@ -209,6 +238,7 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
                 throw CameraSessionError.cannotAddOutput
             }
             session.addOutput(photoOutput)
+            photoOutput.maxPhotoQualityPrioritization = .balanced
             videoOutput.alwaysDiscardsLateVideoFrames = true
             videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String:
@@ -218,16 +248,33 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
             session.addOutput(videoOutput)
             outputsConfigured = true
         }
-        if let connection = videoOutput.connection(with: .video),
-           connection.isVideoRotationAngleSupported(90)
-        {
-            connection.videoRotationAngle = 90
+        updateConnectionsOnQueue()
+    }
+
+    private func updateConnectionsOnQueue() {
+        for connection in [
+            videoOutput.connection(with: .video),
+            photoOutput.connection(with: .video),
+        ].compactMap({ $0 }) {
+            if connection.isVideoRotationAngleSupported(currentRotationAngle) {
+                connection.videoRotationAngle = currentRotationAngle
+            }
+            if connection.isVideoMirroringSupported {
+                connection.automaticallyAdjustsVideoMirroring = false
+                connection.isVideoMirrored = currentInput?.device.position == .front
+            }
         }
-        if let connection = videoOutput.connection(with: .video),
-           connection.isVideoMirroringSupported
-        {
-            connection.automaticallyAdjustsVideoMirroring = false
-            connection.isVideoMirrored = position == .front
+    }
+
+    private func finishPhotoCapture(_ result: Result<Data, Error>) {
+        let continuation = stateLock.withLock { () -> CheckedContinuation<Data, Error>? in
+            defer { photoContinuation = nil }
+            return photoContinuation
+        }
+        guard let continuation else { return }
+        switch result {
+        case let .success(data): continuation.resume(returning: data)
+        case let .failure(error): continuation.resume(throwing: error)
         }
     }
 }
@@ -238,17 +285,22 @@ extension CameraSessionDriver: AVCapturePhotoCaptureDelegate {
         didFinishProcessingPhoto photo: AVCapturePhoto,
         error: Error?
     ) {
-        let continuation = stateLock.withLock { () -> CheckedContinuation<Data, Error>? in
-            defer { photoContinuation = nil }
-            return photoContinuation
-        }
-        guard let continuation else { return }
         if let error {
-            continuation.resume(throwing: error)
+            finishPhotoCapture(.failure(error))
         } else if let data = photo.fileDataRepresentation() {
-            continuation.resume(returning: data)
+            finishPhotoCapture(.success(data))
         } else {
-            continuation.resume(throwing: CameraSessionError.photoDataUnavailable)
+            finishPhotoCapture(.failure(CameraSessionError.photoDataUnavailable))
+        }
+    }
+
+    func photoOutput(
+        _ output: AVCapturePhotoOutput,
+        didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings,
+        error: Error?
+    ) {
+        if let error {
+            finishPhotoCapture(.failure(error))
         }
     }
 }
@@ -262,7 +314,17 @@ extension CameraSessionDriver: AVCaptureVideoDataOutputSampleBufferDelegate {
         let shouldProcess = stateLock.withLock { () -> Bool in
             guard liveFramesEnabled else { return false }
             let now = ProcessInfo.processInfo.systemUptime
-            guard now - lastFrameAt >= 0.48 else { return false }
+            let interval: TimeInterval
+            switch ProcessInfo.processInfo.thermalState {
+            case .nominal: interval = ProcessInfo.processInfo.isLowPowerModeEnabled ? 1.15 : 0.82
+            case .fair: interval = 1.2
+            case .serious, .critical:
+                // Keep the camera and manual shutter available while pausing
+                // background ML work so an already-warm phone can recover.
+                return false
+            @unknown default: interval = 1.2
+            }
+            guard now - lastFrameAt >= interval else { return false }
             lastFrameAt = now
             return true
         }
@@ -272,8 +334,11 @@ extension CameraSessionDriver: AVCaptureVideoDataOutputSampleBufferDelegate {
         let width = CVPixelBufferGetWidth(pixelBuffer)
         let height = CVPixelBufferGetHeight(pixelBuffer)
         let image = CIImage(cvPixelBuffer: pixelBuffer)
-        guard let cgImage = imageContext.createCGImage(image, from: image.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.74)
+        let longestSide = CGFloat(max(width, height))
+        let scale = min(1, 960 / max(1, longestSide))
+        let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        guard let cgImage = imageContext.createCGImage(preview, from: preview.extent),
+              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.68)
         else { return }
         previewFrameHandler?(data, CGFloat(width) / CGFloat(max(1, height)))
     }

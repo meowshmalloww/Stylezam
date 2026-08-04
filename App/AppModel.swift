@@ -300,7 +300,12 @@ final class AppModel {
             }
             providers = ["fireworks", "serper"]
         case .directImage:
-            let selected = settings.imageSearchProvider
+            let eligibleProviders = eligibleImageSearchProviders
+            guard let selected = searchUsage.routedImageProvider(from: eligibleProviders) else {
+                throw ProductSearchError.provider(
+                    "No visual-search route is ready. This private build needs a Lykdat key, or a provider key plus a public HTTPS crop URL."
+                )
+            }
             directKey = try credentials.credential(for: selected.credential)
             guard directKey?.isEmpty == false else {
                 throw ProductSearchError.missingCredential(selected.title)
@@ -366,7 +371,11 @@ final class AppModel {
                 )
                 library.applyUnderstanding(analysis, scanID: scanID, garmentID: garmentID)
             case .directImage:
-                let selected = settings.imageSearchProvider
+                guard let selectedRaw = providers.first,
+                      let selected = ImageSearchProvider(rawValue: selectedRaw)
+                else {
+                    throw ProductSearchError.provider("The selected visual-search route became unavailable.")
+                }
                 progress?(.searchingImage(selected.title))
                 let response = try await productSearchService.directImageSearch(
                     provider: selected,
@@ -380,7 +389,10 @@ final class AppModel {
                 )
                 results = response.results
                 understanding = nil
-                providerSummary = selected.title
+                let eligibleCount = eligibleImageSearchProviders.count
+                providerSummary = eligibleCount > 1
+                    ? "\(selected.title) · smart route"
+                    : selected.title
                 diagnostic = response.diagnostic
             }
 
@@ -415,6 +427,26 @@ final class AppModel {
                 diagnostic: error.localizedDescription
             )
             throw error
+        }
+    }
+
+    var eligibleImageSearchProviders: [ImageSearchProvider] {
+        let publicURLIsReady: Bool = {
+            let raw = settings.publicImageURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let url = URL(string: raw) else { return false }
+            return url.scheme?.lowercased() == "https"
+        }()
+
+        return ImageSearchProvider.allCases.filter { provider in
+            guard credentials.hasCredential(provider.credential) else { return false }
+            if provider.acceptsPrivateImageData { return true }
+            guard publicURLIsReady else { return false }
+            if provider == .brightData {
+                return !settings.brightDataZone
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+            }
+            return true
         }
     }
 

@@ -18,7 +18,7 @@ enum ProductSearchPipeline: String, Codable, CaseIterable, Identifiable, Sendabl
         case .privateAIText:
             "Uses Fireworks only for an AI request, then searches those generated words with Serper."
         case .directImage:
-            "Sends the selected crop to the selected visual-search provider. Lykdat accepts private image bytes."
+            "Sends the selected crop to one eligible visual-search provider. The router advances after at most two healthy requests."
         }
     }
 }
@@ -199,9 +199,9 @@ enum ProductSearchError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case let .missingCredential(provider):
-            "Add the \(provider) key in Developer Debug before using this route."
+            "\(provider) is not configured for this private build. Add it to the ignored developer .env and relaunch."
         case .missingBrightDataZone:
-            "Add a Bright Data SERP zone name in Developer Debug."
+            "Bright Data needs a compatible SERP zone in the ignored developer .env."
         case let .publicImageURLRequired(provider):
             "\(provider) requires a public HTTPS image URL. A private iPhone crop is never uploaded automatically."
         case let .garmentSearchLimitReached(limit):

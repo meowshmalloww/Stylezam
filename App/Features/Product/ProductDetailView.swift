@@ -3,6 +3,7 @@ import SwiftUI
 struct ProductDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     let product: ProductResultDTO
 
     @State private var heroVisible = false
@@ -15,6 +16,8 @@ struct ProductDetailView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     identity
                         .motionReveal()
+                    merchantAction
+                        .motionReveal(delay: 0.04)
                     evidence
                         .motionReveal(delay: 0.06)
 
@@ -31,7 +34,7 @@ struct ProductDetailView: View {
                 }
                 .padding(.horizontal, StylezamDesign.pageInset)
                 .padding(.top, 24)
-                .padding(.bottom, 34)
+                .padding(.bottom, 54)
             }
         }
         .background(StylezamDesign.paper)
@@ -49,9 +52,6 @@ struct ProductDetailView: View {
                 }
                 .accessibilityLabel(model.library.isSaved(product) ? "Remove bookmark" : "Bookmark")
             }
-        }
-        .safeAreaInset(edge: .bottom) {
-            actionBar
         }
         .sensoryFeedback(.success, trigger: model.library.isSaved(product))
     }
@@ -75,17 +75,21 @@ struct ProductDetailView: View {
                     .padding(18)
                     .motionReveal(delay: 0.12, distance: 8)
             }
-            .frame(height: 510 + pullDown)
+            .frame(height: heroHeight + pullDown)
             .offset(y: -pullDown)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 510)
+        .frame(height: heroHeight)
         .clipped()
         .onAppear {
             withAnimation(.spring(response: 0.9, dampingFraction: 0.88)) {
                 heroVisible = true
             }
         }
+    }
+
+    private var heroHeight: CGFloat {
+        verticalSizeClass == .compact ? 270 : 390
     }
 
     private var identity: some View {
@@ -112,27 +116,7 @@ struct ProductDetailView: View {
 
     private var evidence: some View {
         VStack(alignment: .leading, spacing: 15) {
-            EditorialSectionHeader(title: "Match evidence", detail: "Not identity proof")
-
-            EditorialRule()
-
-            HStack(alignment: .firstTextBaseline, spacing: 16) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(product.matchTier.label)
-                        .font(.title2.weight(.semibold))
-                    Text("match tier")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                VStack(alignment: .trailing, spacing: 2) {
-                    Text(product.confidencePercent, format: .number)
-                        .font(.title2.monospacedDigit().weight(.semibold))
-                    Text("evidence score")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            EditorialSectionHeader(title: "Why it appeared", detail: product.matchTier.label)
 
             EditorialRule()
 
@@ -140,12 +124,16 @@ struct ProductDetailView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            Label("Retrieved by \(product.provider)", systemImage: "network")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
         }
     }
 
     private var offers: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSectionHeader(title: "Observed offers", detail: "\(product.offers.count) live links")
+            EditorialSectionHeader(title: "Other sellers", detail: "\(product.offers.count) additional")
                 .padding(.bottom, 7)
 
             ForEach(Array(product.offers.enumerated()), id: \.offset) { index, offer in
@@ -187,20 +175,14 @@ struct ProductDetailView: View {
         }
     }
 
-    private var actionBar: some View {
-        GlassEffectContainer(spacing: 10) {
-            Button {
-                openURL(product.productURL)
-            } label: {
-                merchantButtonLabel
-            }
-            .buttonStyle(.glassProminent)
-            .tint(StylezamDesign.cobalt)
+    private var merchantAction: some View {
+        Button {
+            openURL(product.productURL)
+        } label: {
+            merchantButtonLabel
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .motionReveal(delay: 0.16, distance: 10)
+        .stylezamGlassButton(prominent: true)
+        .tint(StylezamDesign.cobalt)
     }
 
     private var merchantButtonLabel: some View {
@@ -221,9 +203,9 @@ struct ProductDetailView: View {
         case .likely:
             "The title, visible attributes, and retrieval evidence align closely, but Stylezam cannot prove that this is the exact SKU."
         case .similar:
-            "The silhouette or visible attributes are close, while brand, material, color, or construction may differ."
+            "The visual-search source found similar shape, color, or construction. Brand, material, and the exact model may still differ, so verify the merchant photo and title."
         case .inspired:
-            "This result shares parts of the captured style but is not presented as the same product."
+            "This result shares part of the captured style, but the visual evidence is weaker. Treat it as an alternative—not the same product."
         }
     }
 }

@@ -21,7 +21,7 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
   transparent-mask output is shown only during the local Vision Inspector run.
 - The recent iOS 27 screen-frame buffer, which remains in memory rather than becoming a rolling recording.
 
-Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle.
+Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
 
 ## User-controlled input
 

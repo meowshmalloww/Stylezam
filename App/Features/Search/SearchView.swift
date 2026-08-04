@@ -102,7 +102,7 @@ struct SearchView: View {
                         .font(.body.weight(.semibold))
                         .frame(width: 40, height: 40)
                 }
-                .buttonStyle(.glass)
+                .stylezamGlassButton()
                 .accessibilityLabel("Search another image")
             }
         }
@@ -147,7 +147,7 @@ struct SearchView: View {
             PhotosPicker(selection: $referenceItem, matching: .images) {
                 SearchSourceLabel(title: "Photos", icon: "photo.on.rectangle")
             }
-            .buttonStyle(.glass)
+            .stylezamGlassButton()
 
             Button {
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
@@ -158,12 +158,12 @@ struct SearchView: View {
             } label: {
                 SearchSourceLabel(title: "Camera", icon: "camera")
             }
-            .buttonStyle(.glass)
+            .stylezamGlassButton()
 
             Button(action: pasteReferenceImage) {
                 SearchSourceLabel(title: "Paste", icon: "doc.on.clipboard")
             }
-            .buttonStyle(.glass)
+            .stylezamGlassButton()
         }
     }
 
@@ -187,7 +187,7 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
             }
-            .buttonStyle(.glassProminent)
+            .stylezamGlassButton(prominent: true)
             .tint(StylezamDesign.cobalt)
             .disabled(referenceImageData == nil || model.isAnalyzingCapture)
 
@@ -295,7 +295,7 @@ struct SearchView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 54)
             }
-            .buttonStyle(.glassProminent)
+            .stylezamGlassButton(prominent: true)
             .tint(StylezamDesign.cobalt)
             .disabled(selectedGarment == nil || isSearching)
 
@@ -317,14 +317,25 @@ struct SearchView: View {
     }
 
     private func resultsSection(_ search: SavedProductSearch) -> some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Matches")
-                    .font(.title2.weight(.semibold))
-                Spacer()
-                Text("\(search.results.count) · \(duration(search.durationMilliseconds))")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Visual matches")
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Text("\(search.results.count) products")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 6) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                    Text(search.providerSummary)
+                    Text("·")
+                    Text(duration(search.durationMilliseconds))
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             if let query = search.generatedQuery {
@@ -337,7 +348,7 @@ struct SearchView: View {
             LazyVGrid(
                 columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
                 alignment: .leading,
-                spacing: 24
+                spacing: 14
             ) {
                 ForEach(search.results) { product in
                     NavigationLink(value: product) {
@@ -348,9 +359,13 @@ struct SearchView: View {
                 }
             }
 
-            Text("One provider query can return several products. Stylezam limits what it displays; it does not fire one request per result.")
+            Label(
+                "One provider request returned these products. Similar means visually related—not proof of an exact SKU.",
+                systemImage: "info.circle"
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -377,7 +392,7 @@ struct SearchView: View {
                                 guard let scan, let garment = selectedGarment else { return }
                                 Task { await refineSearch(suggestion, scan: scan, garment: garment) }
                             }
-                            .buttonStyle(.glass)
+                            .stylezamGlassButton()
                             .disabled(isSearching)
                         }
                     }
@@ -391,7 +406,7 @@ struct SearchView: View {
                     HStack(spacing: 8) {
                         ForEach(quickQuestions, id: \.self) { question in
                             Button(question) { askAssistant(question) }
-                                .buttonStyle(.glass)
+                                .stylezamGlassButton()
                                 .disabled(isAskingAssistant)
                         }
                     }
@@ -413,7 +428,7 @@ struct SearchView: View {
                             .font(.subheadline.weight(.bold))
                     }
                 }
-                .buttonStyle(.glassProminent)
+                .stylezamGlassButton(prominent: true)
                 .tint(StylezamDesign.cobalt)
                 .disabled(assistantQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isAskingAssistant)
             }
@@ -634,19 +649,24 @@ private struct SearchProductCard: View {
     let product: ProductResultDTO
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             ProductImage(url: product.imageURL)
                 .frame(maxWidth: .infinity)
-                .aspectRatio(0.84, contentMode: .fit)
-                .padding(8)
+                .aspectRatio(0.86, contentMode: .fit)
+                .padding(10)
                 .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
-            Text(product.merchant.uppercased())
-                .font(.caption2.weight(.semibold))
-                .tracking(0.7)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text(product.matchTier.label)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(StylezamDesign.cobalt)
+                Spacer(minLength: 0)
+                Text(product.merchant)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             Text(product.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
@@ -654,6 +674,15 @@ private struct SearchProductCard: View {
             Text(product.price?.formatted ?? "Price unavailable")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+        }
+        .padding(9)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 19, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
         }
     }
 }

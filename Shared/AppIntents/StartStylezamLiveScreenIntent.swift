@@ -5,7 +5,7 @@ struct StartStylezamLiveScreenIntent: AppIntent {
     static let description = IntentDescription(
         "Open Stylezam and show Apple's picker to choose the screen you want to scan."
     )
-    static let supportedModes: IntentModes = [.foreground(.immediate)]
+    static let openAppWhenRun = true
 
     @MainActor
     func perform() async throws -> some IntentResult {

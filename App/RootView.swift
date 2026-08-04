@@ -37,7 +37,7 @@ struct RootView: View {
             .tabItem { Label("Settings", systemImage: "gearshape") }
         }
         .tint(StylezamDesign.cobalt)
-        .tabBarMinimizeBehavior(.onScrollDown)
+        .stylezamTabBarBehavior()
         .sensoryFeedback(.selection, trigger: model.selectedTab)
         .fullScreenCover(isPresented: $model.isCapturePresented) {
             CaptureSheet()

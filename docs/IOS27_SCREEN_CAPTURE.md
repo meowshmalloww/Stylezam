@@ -4,7 +4,7 @@
 
 Live screen is a consent-based capture source, not an app tab. The user starts it from Capture & Controls using Apple’s system content-sharing picker. Once an authorized stream exists, the Stylezam Control Center or Action Button control acts as the shutter. iOS owns the privacy indicator; Stylezam does not draw a custom blue border over other apps. Stylezam also starts a local “Live screen active” Live Activity for supported Dynamic Island and Lock Screen surfaces, then ends it when the stream stops or is interrupted.
 
-The feature is iOS 27-only. iOS 26 and earlier continue to support camera, Photos, Share, clipboard, Screenshot Shortcut, and Control Center entry into the normal capture sheet.
+The feature is iOS 27-only. iOS 18–26 continue to support camera, Photos, Share, clipboard, Screenshot Shortcut, and Control Center entry into the normal capture sheet.
 
 ## Existing adapter
 

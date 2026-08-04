@@ -70,7 +70,7 @@ struct LoginPanel: View {
                     .frame(maxWidth: .infinity)
                     .frame(height: 58)
                 }
-                .buttonStyle(.glassProminent)
+                .stylezamGlassButton(prominent: true)
                 .tint(StylezamDesign.cobalt)
                 .disabled(model.account.isWorking)
             case .missingPlist, .invalidPlist:
