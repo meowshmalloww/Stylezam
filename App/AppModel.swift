@@ -20,6 +20,8 @@ final class AppModel {
     var isAnalyzingCapture = false
     var captureStatus: String?
     var latestPreviewCandidates: [GarmentCandidate] = []
+    var pendingTryOnProducts: [ProductResultDTO] = []
+    var isTryOnPresented = false
 
     @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
     @ObservationIgnored private let visionEngine = GarmentVisionEngine()
@@ -50,6 +52,7 @@ final class AppModel {
     func start() async {
         credentials.importDebugEnvironment()
 #if DEBUG
+        YouCamCredentialStore.importDebugEnvironment()
         if settings.brightDataZone.isEmpty,
            let zone = ProcessInfo.processInfo.environment["STYLEZAM_BRIGHTDATA_ZONE"],
            !zone.isEmpty
@@ -78,6 +81,13 @@ final class AppModel {
             return
         }
         isCapturePresented = true
+    }
+
+    func addToTryOn(_ product: ProductResultDTO) {
+        if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
+            pendingTryOnProducts.append(product)
+        }
+        isTryOnPresented = true
     }
 
     @discardableResult
@@ -539,6 +549,8 @@ final class AppModel {
             lastError = nil
         case "live-screen":
             if account.isAuthenticated { liveScreen.presentSystemPicker() }
+        case "try-on":
+            isTryOnPresented = true
         case "library":
             selectedTab = .library
         default:

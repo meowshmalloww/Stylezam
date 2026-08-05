@@ -16,7 +16,7 @@ struct ProductDetailView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     identity
                         .motionReveal()
-                    merchantAction
+                    actionBar
                         .motionReveal(delay: 0.04)
                     evidence
                         .motionReveal(delay: 0.06)
@@ -175,14 +175,31 @@ struct ProductDetailView: View {
         }
     }
 
-    private var merchantAction: some View {
-        Button {
-            openURL(product.productURL)
-        } label: {
-            merchantButtonLabel
+    private var actionBar: some View {
+        VStack(spacing: 10) {
+            Button {
+                model.addToTryOn(product)
+            } label: {
+                HStack {
+                    Text("Try on this piece")
+                        .fontWeight(.semibold)
+                    Spacer()
+                    Image(systemName: "wand.and.sparkles")
+                }
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+            }
+            .stylezamGlassButton(prominent: true)
+            .tint(StylezamDesign.cobalt)
+
+            Button {
+                openURL(product.productURL)
+            } label: {
+                merchantButtonLabel
+            }
+            .stylezamGlassButton()
         }
-        .stylezamGlassButton(prominent: true)
-        .tint(StylezamDesign.cobalt)
     }
 
     private var merchantButtonLabel: some View {

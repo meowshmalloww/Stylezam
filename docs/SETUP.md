@@ -162,7 +162,15 @@ To finish verification:
 
 See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). Keep Apple’s sample as reference code rather than copying its entire project into Stylezam.
 
-## 8. Release checks
+## 8. YouCam photo try-on
+
+Try On is optional and does not affect local garment detection. For a prototype build, either enter the YouCam API key once in the Try On screen (it is stored in this device's Keychain), or add `STYLEZAM_YOUCAM_API_KEY` to the ignored `.env` file. `scripts/install_on_device.sh` passes that value only to the Debug launch, and the app imports it into the device-only Keychain.
+
+The app separates YouCam inputs into Outfit, Hand/Wrist, and Face/Neck photo contexts because jewelry endpoints require closer framing than clothing. Images must be under 10 MB. The UI requires explicit upload consent and explains YouCam's documented retention boundary.
+
+Do not distribute an app containing a shared YouCam bearer credential. Before release, put authentication and YouCam calls behind a scoped Stylezam server, rotate all development keys, add abuse/rate controls, and complete the provider data-retention review.
+
+## 9. Release checks
 
 - Run `./scripts/check.sh` from a clean checkout.
 - Build Debug and Release for simulator and physical-device SDKs.

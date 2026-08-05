@@ -28,4 +28,4 @@ if [ ! -f "$app_bundle/garment-segmentation.json" ] \
     exit 1
 fi
 
-echo "Verified local-only iOS build and bundled Core ML resources."
+echo "Verified the iOS build and bundled local Core ML resources."

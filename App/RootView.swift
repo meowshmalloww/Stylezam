@@ -43,6 +43,17 @@ struct RootView: View {
             CaptureSheet()
                 .environment(model)
         }
+        .fullScreenCover(isPresented: $model.isTryOnPresented) {
+            NavigationStack {
+                TryOnView()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button("Done") { model.isTryOnPresented = false }
+                        }
+                    }
+            }
+            .environment(model)
+        }
         .onOpenURL { model.handleURL($0) }
         .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenScan)) { note in
             model.handlePendingScanNotification(scanID: note.object as? String)

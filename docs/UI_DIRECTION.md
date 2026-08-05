@@ -29,7 +29,11 @@ The center tab action opens a custom full-screen camera. Photo/Live modes, flash
 
 ### Search
 
-Search is the future product-retrieval workspace. Today it can accept an image and route it through the real capture/understanding pipeline into Library. Text product retrieval remains visibly unavailable until implemented; the page must not show fake listings, prices, or progress.
+Search accepts a fashion reference image, detects its pieces, and lets the user make a bounded request to a configured real visual-search provider. It shows provider results and current observed prices without fake listings, invented confidence, or simulated progress.
+
+### Try On
+
+Try On opens as a focused full-screen workflow from a real product result rather than taking over a permanent tab. It uses a full-height person-photo stage and a horizontal item rail suited to iPhone. Users can add product photos or detected Library pieces, toggle inclusion, remove items, create a sequential YouCam preview, and save the result. It never represents the generated image as proof of physical fit.
 
 ### Library
 

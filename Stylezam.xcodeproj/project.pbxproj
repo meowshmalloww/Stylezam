@@ -25,6 +25,7 @@
 		40EF33336865700EB2439199 /* StylezamGarmentSegmentation.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 7D750C5C73D66F384DEB282B /* StylezamGarmentSegmentation.mlpackage */; };
 		457BA936B47C78C3D3C3C4AC /* LaunchExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48962ED198B3B07771116D6B /* LaunchExperienceView.swift */; };
 		458409D05674C04C290D9648 /* StylezamWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */; };
+		45BEC38F3C8E4A0378DDC300 /* YouCamTryOnService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11D7B431AD3D7BEA40E09136 /* YouCamTryOnService.swift */; };
 		465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */; };
 		4AC1CCCDE9F2DC74F3B7C63F /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 23EC7B3710F3524794102889 /* FirebaseAuth */; };
 		4C4F5CD7D712F0FD6E61EA34 /* AccountSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF3733E7C459231377964274 /* AccountSession.swift */; };
@@ -38,6 +39,7 @@
 		68A8B3891A1D11AFC46D5B58 /* StylezamCaptureLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */; };
 		6E487DF493CFE206E884087D /* StylezamCaptureActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */; };
 		755B5F562D260411BAD1C773 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		7F28690E56B4A0EEC46F968A /* TryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */; };
 		81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FFF5ED05C00039B172D585 /* StylezamDesign.swift */; };
 		83EB3C5DC0A3967C316620C7 /* SearchUsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA430F4B7EAA4B66F24C408 /* SearchUsageStore.swift */; };
 		8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */; };
@@ -115,6 +117,7 @@
 		0D7CD24096454F2142A32276 /* CameraSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionController.swift; sourceTree = "<group>"; };
 		104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamShortcuts.swift; sourceTree = "<group>"; };
 		10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureActivityAttributes.swift; sourceTree = "<group>"; };
+		11D7B431AD3D7BEA40E09136 /* YouCamTryOnService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouCamTryOnService.swift; sourceTree = "<group>"; };
 		11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentVisionEngine.swift; sourceTree = "<group>"; };
 		186586B04572ED4CBAC07684 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -153,6 +156,7 @@
 		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
 		A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
 		B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViews.swift; sourceTree = "<group>"; };
 		B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureControl.swift; sourceTree = "<group>"; };
 		B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamAppDelegate.swift; sourceTree = "<group>"; };
@@ -246,6 +250,7 @@
 				C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */,
 				B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */,
 				104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */,
+				11D7B431AD3D7BEA40E09136 /* YouCamTryOnService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -269,6 +274,7 @@
 			isa = PBXGroup;
 			children = (
 				7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */,
+				AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */,
 			);
 			path = Product;
 			sourceTree = "<group>";
@@ -654,8 +660,10 @@
 				81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */,
 				2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */,
 				E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */,
+				7F28690E56B4A0EEC46F968A /* TryOnView.swift in Sources */,
 				E38666AB4433101A34885641 /* VisionAndProductModels.swift in Sources */,
 				F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */,
+				45BEC38F3C8E4A0378DDC300 /* YouCamTryOnService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

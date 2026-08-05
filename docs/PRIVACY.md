@@ -1,6 +1,6 @@
 # Privacy and data handling
 
-This document describes the local-vision and developer product-search build. Virtual try-on remains unavailable.
+This document describes the local-vision, developer product-search, and optional photo try-on build. YouCam receives data only when the user explicitly creates a try-on.
 
 Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for the required-reason APIs it uses. The manifests declare no tracking and no tracking domains. App Store privacy answers still require final account-specific review.
 
@@ -22,6 +22,8 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
 - The recent iOS 27 screen-frame buffer, which remains in memory rather than becoming a rolling recording.
 
 Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
+
+The capture and garment-detection pipeline has no remote inference call. The separate Try On workspace uploads the chosen person photo and selected product images to YouCam, polls the generated task, and downloads the result. Users see this disclosure next to the action.
 
 ## User-controlled input
 
@@ -47,6 +49,8 @@ Detection, segmentation, cropping, and Library capture remain local. Network act
 - Bright Data receives the configured public image URL and zone when selected.
 
 Stylezam never uploads a private crop to an anonymous image host to satisfy a Google Lens URL requirement.
+
+Photo try-on requires network access. The user must consent immediately before submission. YouCam documents a file-retention period of up to 30 days, while generated result links expire sooner; the app discloses this in the Try On workspace. Stylezam requests immediate deletion after downloading each finished task, but the documented 30-day automatic-retention boundary remains the fallback if that request fails. A prototype YouCam token can be stored in the device Keychain. Before release, replace direct bearer authentication with a scoped server-side proxy and align remote deletion behavior with the active YouCam agreement.
 
 ## Deletion
 

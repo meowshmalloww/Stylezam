@@ -34,7 +34,7 @@ Fashionpedia supplies useful clothing, footwear, bag, watch, and accessory item 
 | Prompt-oriented mobile mask models | Useful for future user-selected refinement, but still require a fashion detector/classifier. |
 | Apple foreground-instance masks | Kept only as code-level fallback capability; the production capture path requires the bundled fashion model for classes. |
 | Hosted image-language labeling | Removed from this build. It would reintroduce credentials, retention questions, network latency, and per-call cost. |
-| Product and virtual try-on services | Deferred until separate quality, privacy, and cost benchmarks are complete. |
+| YouCam photo try-on | Added as an explicit, consent-gated network workflow; the local capture and detection stack remains unchanged. |
 
 ## Runtime bounds
 
@@ -58,4 +58,4 @@ Fashionpedia supplies useful clothing, footwear, bag, watch, and accessory item 
 - Vision Inspector: raw transparent masks are generated on demand and are not
   part of normal capture latency or Library art.
 
-The app stores no model-provider credentials because the active model is bundled.
+The local vision stack stores no model-provider credentials because the active model is bundled. The optional YouCam prototype can store its bearer credential in the device Keychain; production builds must proxy that credential through a Stylezam server.

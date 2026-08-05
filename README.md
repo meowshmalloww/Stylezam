@@ -20,6 +20,8 @@ Stylezam keeps fashion detection local. Its RF-DETR Core ML model is included in
 
 Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. A bounded router keeps an eligible provider for no more than two consecutive requests before advancing. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and user-approved refinements, which then perform one Serper shopping query. No sample products, simulated progress, invented prices, or invented confidence scores are used.
 
+Photo-based virtual try-on is also real and explicitly user-triggered. A product result or saved Library piece can be sent with a user-selected photo to YouCam's category-specific clothes, bag, scarf, shoes, hat, ring, bracelet, earring, watch, or necklace endpoint. Completed previews are downloaded into the local Library.
+
 The app now opens with a focused five-page first-run experience and requires Google Sign-In through Firebase Authentication. Display-name, username, style note, captures, crops, and Library state remain local to the iPhone. Firebase stores the authentication identity and delivers a signed `developer` custom claim; no Firestore profile database is used. Free is active with 10 product searches and 20 AI questions per month. Plus and Pro are pricing previews only—there is no checkout, payment simulation, or paid entitlement in this build.
 
 ## Current system
@@ -30,6 +32,7 @@ The app now opens with a focused five-page first-run experience and requires Goo
 | Camera | Photo + hybrid Live, portrait + landscape | Live inference pauses under serious thermal pressure; the manual shutter remains available. |
 | Local vision | Bundled Core ML, no download | Fashionpedia item taxonomy; diagnostic masks are not presented as final cutouts. |
 | Product search | Real provider responses | One provider request per successful garment search by default; up to six deduplicated products shown. |
+| Virtual try-on | Real YouCam V2 tasks | Separate Outfit, Hand/Wrist, and Face/Neck contexts; every upload requires explicit consent. |
 | AI | Fireworks Qwen chat + Serper refinements | Fireworks does not power the main visual-search button. |
 | Accounts | Firebase Google Sign-In | Profile data stays local; developer access requires a signed Firebase custom claim. |
 | Payments | Free plan active | Plus and Pro are previews only; no checkout exists in this build. |
@@ -70,6 +73,7 @@ working directory containing ignored credentials.
 - Duplicate suppression for recent Live and screen captures.
 - Photo import, clipboard input, Share extension, App Intents, separate Capture a Look and Live Screen Control Center controls, Live Activities, and Dynamic Island state.
 - iOS 18–27 runtime compatibility. The conditional iOS 27 ScreenCaptureKit adapter remains compile-gated until the project is built with the iOS 27 SDK; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems.
+- Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with selectable Library pieces and saved results.
 
 <table>
   <tr>
@@ -103,6 +107,8 @@ flowchart LR
     Rank --> Matches["Real visual matches"]
     Serper --> Matches
     Matches --> Library
+    TryOn["Selected photo + product images"] --> YouCam["YouCam photo try-on"]
+    YouCam --> Library
 ```
 
 Live preview downsizes camera frames to a 960 px long edge before JPEG encoding, samples at an adaptive cadence, discards late frames, and runs one prediction with short temporal consensus. It does not create crops or run detail tiles. Full-frame preview work is paused while AVFoundation captures and analyzes the accepted still, and background Live inference stops entirely at serious/critical thermal pressure. Accepted Photo and Live images are decoded at up to 5120 px and use a global prediction plus thermal-aware square detail tiles. Every prediction still uses the model's fixed 384×384 tensor; detections are merged in source coordinates and projected onto the high-resolution source as 94%-quality JPEG crops. Diagnostic masks are generated only in Vision Inspector. Core ML is cached after first load. This model currently uses Core ML's CPU path on iOS because the GPU/Neural Engine path returned zero class logits during device validation. See [Architecture](./docs/ARCHITECTURE.md), [Model decision](./docs/MODEL_DECISION.md), [Privacy](./docs/PRIVACY.md), [Vision benchmark](./docs/VISION_BENCHMARK.md), and the [full validation report](./docs/VISION_VALIDATION.md).
@@ -158,7 +164,8 @@ scripts/                project generation, model research/export, and verificat
 - Lykdat is the only currently verified direct provider that accepts private crop bytes. SearchAPI.io and SerpApi Google Lens connections work with a public HTTPS image URL, but Stylezam does not silently publish a private iPhone crop.
 - The configured Bright Data API authenticates, but the current zone returns an inner Google Lens HTTP 502 response. Treat it as unavailable until Bright Data confirms Lens access for that zone.
 - Fireworks Qwen chat and Serper shopping are verified as separate services; Fireworks is not used by the main exact visual-search button.
-- Prices are current provider observations, not tracked price history. Virtual try-on remains deferred.
+- Prices are current provider observations, not tracked price history.
+- YouCam photo try-on requires network access, explicit per-session upload consent, an eligible YouCam account, and category-compatible source/reference photos.
 - Transparent masks from the current Core ML export are diagnostic-only on iOS; Library deliberately stores the reliable bounding-box crop instead of presenting a broken cutout as final output.
 - The deployment target is iOS 18 and the app runs on iOS 18–27. The conditional iOS 27 screen-recognition path is not compiled by the installed Xcode 26.6 / iOS 26.5 SDK. Install Xcode 27, regenerate, and complete a physical-device verification pass before claiming that SDK-gated path.
 - Physical-device camera performance, thermals, Live Activity, extensions, and App Group provisioning must be tested with the final signing team.
