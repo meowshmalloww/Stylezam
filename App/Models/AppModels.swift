@@ -337,6 +337,7 @@ struct LibrarySnapshot: Codable, Sendable {
     var scans: [SavedScan] = []
     var captures: [SavedCapture] = []
     var searches: [SavedProductSearch] = []
+    var chats: [StylezamChatThread] = []
     var products: [SavedProduct] = []
     var wardrobeItems: [SavedWardrobeItem] = []
     var tryOns: [SavedTryOn] = []
@@ -345,6 +346,7 @@ struct LibrarySnapshot: Codable, Sendable {
         case scans
         case captures
         case searches
+        case chats
         case products
         case wardrobeItems
         case tryOns
@@ -357,6 +359,7 @@ struct LibrarySnapshot: Codable, Sendable {
         scans = try container.decodeIfPresent([SavedScan].self, forKey: .scans) ?? []
         captures = try container.decodeIfPresent([SavedCapture].self, forKey: .captures) ?? []
         searches = try container.decodeIfPresent([SavedProductSearch].self, forKey: .searches) ?? []
+        chats = try container.decodeIfPresent([StylezamChatThread].self, forKey: .chats) ?? []
         products = try container.decodeIfPresent([SavedProduct].self, forKey: .products) ?? []
         wardrobeItems = try container.decodeIfPresent([SavedWardrobeItem].self, forKey: .wardrobeItems) ?? []
         tryOns = try container.decodeIfPresent([SavedTryOn].self, forKey: .tryOns) ?? []

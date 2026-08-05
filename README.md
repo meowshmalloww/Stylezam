@@ -18,7 +18,7 @@
 
 Stylezam keeps fashion detection local. Its RF-DETR Core ML model is included in the app, compiled by Xcode, and loaded directly on the iPhone. Capture, live boxes, garment crops, diagnostic masks, duplicate filtering, and Library storage do not require a cloud host, a laptop acting as a server, an API token, or a first-run model download.
 
-Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. Developer Debug can pin an eligible preferred provider and uses an eligible fallback when that preference cannot accept the current local crop. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and user-approved refinements, which then perform one Serper shopping query. No sample products, simulated progress, invented prices, or invented confidence scores are used.
+Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. Developer Debug can pin an eligible preferred provider and uses an eligible fallback when that preference cannot accept the current local crop. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus powers a persistent, image-aware conversation for each garment. The explicit **Find similar** and **Find cheaper** chat actions generate grounded shopping terms and then perform one real Serper keyword-shopping query; cheaper results with comparable currencies are ordered from lower to higher price. No sample products, simulated progress, invented prices, or invented confidence scores are used.
 
 Photo-based virtual try-on is also real and explicitly user-triggered. A product result or saved Library piece can be sent with a user-selected photo to YouCam's category-specific clothes, bag, scarf, shoes, hat, ring, bracelet, earring, watch, or necklace endpoint. Completed previews are downloaded into the local Library.
 
@@ -29,11 +29,12 @@ The app now opens with a focused five-page first-run experience and requires Goo
 | Area | Status | Boundary |
 |---|---|---|
 | iPhone support | iOS 18–27 | Liquid Glass is used on iOS 26+; native compatibility styling is used on iOS 18–25. |
+| Live screen | iOS 27 + iOS 27 SDK build | The phone OS alone is insufficient; the installed app must be rebuilt with Xcode 27/ScreenCaptureKit. |
 | Camera | Photo + hybrid Live, portrait + landscape | Live inference pauses under serious thermal pressure; the manual shutter remains available. |
 | Local vision | Bundled Core ML, no download | Fashionpedia item taxonomy; diagnostic masks are not presented as final cutouts. |
 | Product search | Real provider responses | One provider request per successful garment search by default; up to six deduplicated products shown. |
 | Virtual try-on | Real YouCam V2 tasks | Separate Outfit, Hand/Wrist, and Face/Neck contexts; every upload requires explicit consent. |
-| AI | Fireworks Qwen chat + Serper refinements | Fireworks does not power the main visual-search button. |
+| AI | Persistent Fireworks Qwen chat + Serper shopping | Similar and cheaper actions are explicit; Fireworks does not power the main visual-search button. |
 | Accounts | Firebase Google Sign-In | Profile data stays local; developer access requires a signed Firebase custom claim. |
 | Payments | Free plan active | Plus and Pro are previews only; no checkout exists in this build. |
 
@@ -66,7 +67,7 @@ working directory containing ignored credentials.
 - Local Library containing the source look, detected pieces, capture source, and timestamp.
 - One-successful-search-per-garment safety ledger by default. Failed provider attempts remain in diagnostics but are retryable and do not consume the garment or membership allowance.
 - Preferred visual-provider routing: one request at a time to the selected eligible provider, with a visible eligible fallback when the preference cannot accept the crop.
-- Direct Lykdat visual retrieval, plus a separate Fireworks Qwen image chat and Fireworks → Serper AI-guided similar-search path.
+- Direct Lykdat visual retrieval, plus persistent per-garment Fireworks Qwen image chat and explicit Fireworks → Serper similar/cheaper shopping paths.
 - SearchAPI.io, SerpApi, and Bright Data adapters with truthful eligibility checks, local monthly limits, result caps, latency, outcomes, and request diagnostics.
 - Result normalization that ranks provider evidence, groups repeated regional/store listings, and labels results as visual alternatives rather than claiming SKU identity.
 - Explicit deletion for captures and completed match history.
@@ -101,10 +102,10 @@ flowchart LR
     Choice --> Meter["Reserve one request"]
     Meter --> Router["Preferred eligible provider · safe fallback"]
     Router --> Direct["One visual-provider request"]
-    Choice --> Chat["Stylezam AI question"]
-    Chat --> Qwen["Fireworks Qwen vision"]
-    Qwen --> Refine["Optional user-approved refinement"]
-    Refine --> Serper["One Serper shopping query"]
+    Choice --> Chat["Persistent Stylezam AI chat"]
+    Chat --> Qwen["Fireworks Qwen vision + conversation"]
+    Qwen --> Refine["Find similar · Find cheaper"]
+    Refine --> Serper["One keyword shopping query"]
     Direct --> Rank["Normalize · rank · group duplicates"]
     Rank --> Matches["Real visual matches"]
     Serper --> Matches
@@ -165,7 +166,7 @@ scripts/                project generation, model research/export, and verificat
 - Provider settings in the app are status-only. Private Debug launches import ignored `.env` values into the device-only Keychain; users never paste service keys. Public distribution still requires a server-side credential broker so provider secrets are not shipped to customers.
 - Lykdat is the only currently verified direct provider that accepts private crop bytes. SearchAPI.io and SerpApi Google Lens connections work with a public HTTPS image URL, but Stylezam does not silently publish a private iPhone crop.
 - The configured Bright Data API authenticates, but the current zone returns an inner Google Lens HTTP 502 response. Treat it as unavailable until Bright Data confirms Lens access for that zone.
-- Fireworks Qwen chat and Serper shopping are verified as separate services; Fireworks is not used by the main exact visual-search button.
+- Fireworks Qwen structured multi-turn chat and Serper shopping were verified separately against their live APIs; Fireworks is not used by the main exact visual-search button.
 - Prices are current provider observations, not tracked price history.
 - YouCam photo try-on requires network access, explicit per-session upload consent, an eligible YouCam account, and category-compatible source/reference photos.
 - Transparent masks from the current Core ML export are diagnostic-only on iOS; Library deliberately stores the reliable bounding-box crop instead of presenting a broken cutout as final output.

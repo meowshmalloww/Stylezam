@@ -16,13 +16,7 @@ struct SearchView: View {
     @State private var showSearchProgress = false
     @State private var searchProgressTask: Task<Void, Never>?
     @State private var message: String?
-    @State private var assistantQuestion = ""
-    @State private var lastAssistantQuestion: String?
-    @State private var assistantReply: String?
-    @State private var isAskingAssistant = false
-    @State private var showAssistantProgress = false
-    @State private var assistantProgressTask: Task<Void, Never>?
-    @FocusState private var assistantFocused: Bool
+    @State private var chatContext: StylezamChatContext?
     @Namespace private var productTransition
 
     private var scan: SavedScan? {
@@ -73,6 +67,13 @@ struct SearchView: View {
             }
             .ignoresSafeArea()
         }
+        .sheet(item: $chatContext) { context in
+            StylezamChatView(
+                scanID: context.scanID,
+                garmentID: context.garmentID,
+                currentSearch: $currentSearch
+            )
+        }
         .onChange(of: referenceItem) { _, item in
             guard let item else { return }
             Task { await loadReference(item) }
@@ -82,7 +83,6 @@ struct SearchView: View {
         }
         .onDisappear {
             searchProgressTask?.cancel()
-            assistantProgressTask?.cancel()
         }
     }
 
@@ -237,8 +237,6 @@ struct SearchView: View {
         return Button {
             selectedGarmentID = item.id
             currentSearch = model.library.search(for: garmentKey)
-            assistantReply = nil
-            lastAssistantQuestion = nil
             message = nil
         } label: {
             VStack(alignment: .leading, spacing: 8) {
@@ -329,7 +327,7 @@ struct SearchView: View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("Visual matches")
+                    Text(searchTitle(search))
                         .font(.title2.weight(.semibold))
                     Spacer()
                     Text("\(search.results.count) products")
@@ -368,32 +366,89 @@ struct SearchView: View {
                 }
             }
 
-            Label(
-                "One provider request returned these products. Similar means visually related—not proof of an exact SKU.",
-                systemImage: "info.circle"
-            )
+            Label(searchDisclosure(search), systemImage: "info.circle")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
+    private func searchDisclosure(_ search: SavedProductSearch) -> String {
+        switch search.aiSearchIntent {
+        case .similar:
+            "Fireworks generated the visible shopping terms and one Serper request returned these live alternatives."
+        case .cheaper:
+            "Prices are current Serper observations, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
+        case nil:
+            "One visual-provider request returned these products. Similar means visually related—not proof of an exact SKU."
+        }
+    }
+
+    private func searchTitle(_ search: SavedProductSearch) -> String {
+        switch search.aiSearchIntent {
+        case .similar: "Similar pieces"
+        case .cheaper: "Lower-priced options"
+        case nil: "Visual matches"
+        }
+    }
+
     private func assistantSection(_ search: SavedProductSearch?) -> some View {
-        let quickQuestions = [
-            "Describe this piece",
-            "What details are visible?",
-            "What should I search for?",
-        ]
+        let conversationCount: Int = {
+            guard let scan, let garment = selectedGarment else { return 0 }
+            return model.library.chatMessages(
+                for: "\(scan.id.uuidString):\(garment.id)"
+            ).count
+        }()
         return VStack(alignment: .leading, spacing: 14) {
             EditorialRule()
             EditorialSectionHeader(title: "Stylezam AI", detail: "Fireworks · Qwen 3.7 Plus")
 
-            Text("Ask about the selected crop. AI does not search stores unless you choose Search using this request.")
+            Text("Have a real conversation about the selected piece, then search similar products or lower-priced alternatives with live shopping results.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
+            Button {
+                guard let scan, let garment = selectedGarment else { return }
+                chatContext = StylezamChatContext(scanID: scan.id, garmentID: garment.id)
+            } label: {
+                HStack(spacing: 13) {
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(conversationCount == 0 ? "Start a conversation" : "Continue conversation")
+                            .font(.headline)
+                        Text(
+                            conversationCount == 0
+                                ? "Image-aware answers and live shopping actions"
+                                : "\(conversationCount) saved message\(conversationCount == 1 ? "" : "s")"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 16)
+                .frame(maxWidth: .infinity)
+                .frame(height: 70)
+            }
+            .buttonStyle(.plain)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(StylezamDesign.hairline, lineWidth: 1)
+            }
+
             if let search, !search.generatedSuggestions.isEmpty {
+                Text("Search directions")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(search.generatedSuggestions, id: \.self) { suggestion in
@@ -407,71 +462,8 @@ struct SearchView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
-                Text("A refinement performs another Qwen + Serper search and follows the per-piece limit.")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else if assistantReply == nil {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(quickQuestions, id: \.self) { question in
-                            Button(question) { askAssistant(question) }
-                                .stylezamGlassButton()
-                                .disabled(isAskingAssistant)
-                        }
-                    }
-                }
-                .scrollIndicators(.hidden)
-            }
-
-            HStack(spacing: 9) {
-                TextField("Ask about color, material, or styling", text: $assistantQuestion)
-                    .focused($assistantFocused)
-                    .textInputAutocapitalization(.sentences)
-                    .submitLabel(.send)
-                    .onSubmit { askAssistant(nil) }
-                Button { askAssistant(nil) } label: {
-                    if isAskingAssistant {
-                        ProgressView()
-                    } else {
-                        Image(systemName: "arrow.up")
-                            .font(.subheadline.weight(.bold))
-                    }
-                }
-                .stylezamGlassButton(prominent: true)
-                .tint(StylezamDesign.cobalt)
-                .disabled(assistantQuestion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isAskingAssistant)
-            }
-            .padding(.leading, 14)
-            .padding(.trailing, 6)
-            .frame(minHeight: 52)
-            .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
-
-            if isAskingAssistant, showAssistantProgress {
-                longOperationProgress(title: "Stylezam AI is reading the selected piece")
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
-            if let assistantReply {
-                VStack(alignment: .leading, spacing: 13) {
-                    Text(assistantReply)
-                        .font(.subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let lastAssistantQuestion, let scan, let garment = selectedGarment {
-                        Button {
-                            Task { await refineSearch(lastAssistantQuestion, scan: scan, garment: garment) }
-                        } label: {
-                            Label("Search similar using this request", systemImage: "magnifyingglass")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .disabled(isSearching)
-                    }
-                }
-                .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(StylezamDesign.cobalt.opacity(0.07), in: RoundedRectangle(cornerRadius: 17, style: .continuous))
             }
         }
-        .animation(.easeOut(duration: 0.2), value: showAssistantProgress)
     }
 
     private func longOperationProgress(title: String) -> some View {
@@ -543,8 +535,6 @@ struct SearchView: View {
         scanID = requestedScan.id
         selectedGarmentID = requestedGarment.id
         referenceImageData = nil
-        assistantReply = nil
-        lastAssistantQuestion = nil
         message = nil
         let key = "\(requestedScan.id.uuidString):\(requestedGarment.id)"
         currentSearch = model.library.search(for: key)
@@ -592,42 +582,6 @@ struct SearchView: View {
         }
     }
 
-    private func askAssistant(_ suggestedQuestion: String?) {
-        let question = (suggestedQuestion ?? assistantQuestion)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !question.isEmpty, let scan, let garment = selectedGarment else { return }
-        assistantFocused = false
-        isAskingAssistant = true
-        showAssistantProgress = false
-        assistantReply = nil
-        message = nil
-        assistantProgressTask?.cancel()
-        assistantProgressTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled, isAskingAssistant else { return }
-            showAssistantProgress = true
-        }
-        Task { @MainActor in
-            defer {
-                assistantProgressTask?.cancel()
-                assistantProgressTask = nil
-                showAssistantProgress = false
-                isAskingAssistant = false
-            }
-            do {
-                assistantReply = try await model.askStylezamAI(
-                    scanID: scan.id,
-                    garmentID: garment.id,
-                    question: question
-                )
-                lastAssistantQuestion = question
-                if suggestedQuestion == nil { assistantQuestion = "" }
-            } catch {
-                message = error.localizedDescription
-            }
-        }
-    }
-
     private func loadReference(_ item: PhotosPickerItem) async {
         if let data = try? await item.loadTransferable(type: Data.self),
            let normalized = await ImageEncoding.normalizedJPEGAsync(from: data)
@@ -656,8 +610,6 @@ struct SearchView: View {
         scanID = nil
         selectedGarmentID = nil
         currentSearch = nil
-        assistantReply = nil
-        lastAssistantQuestion = nil
         message = nil
     }
 
@@ -671,6 +623,13 @@ struct SearchView: View {
         if milliseconds < 1_000 { return "\(Int(milliseconds.rounded())) ms" }
         return (milliseconds / 1_000).formatted(.number.precision(.fractionLength(1))) + " s"
     }
+}
+
+private struct StylezamChatContext: Identifiable {
+    let scanID: UUID
+    let garmentID: String
+
+    var id: String { "\(scanID.uuidString):\(garmentID)" }
 }
 
 private struct SearchSourceLabel: View {

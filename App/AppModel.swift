@@ -311,6 +311,7 @@ final class AppModel {
         scanID: UUID,
         garmentID: String,
         refinement: String? = nil,
+        aiSearchIntent: AIShoppingSearchIntent? = nil,
         progress: ((ProductSearchProgress) -> Void)? = nil
     ) async throws -> SavedProductSearch {
         progress?(.preparing)
@@ -389,7 +390,7 @@ final class AppModel {
         let searchID = UUID().uuidString
 
         do {
-            let results: [ProductResultDTO]
+            var results: [ProductResultDTO]
             let understanding: GarmentUnderstanding?
             let providerSummary: String
             let diagnostic: String
@@ -402,6 +403,7 @@ final class AppModel {
                     imageData: context.imageData,
                     localLabel: context.garmentLabel,
                     refinement: refinement,
+                    searchIntent: aiSearchIntent,
                     apiKey: fireworksKey!,
                     modelID: settings.fireworksModelID
                 )
@@ -415,6 +417,23 @@ final class AppModel {
                     searchID: searchID
                 )
                 results = serperResponse.results
+                if aiSearchIntent == .cheaper {
+                    results.sort { left, right in
+                        switch (left.price, right.price) {
+                        case let (leftPrice?, rightPrice?) where leftPrice.currency == rightPrice.currency:
+                            if leftPrice.amount != rightPrice.amount {
+                                return leftPrice.amount < rightPrice.amount
+                            }
+                            return left.score > right.score
+                        case (_?, nil):
+                            return true
+                        case (nil, _?):
+                            return false
+                        default:
+                            return left.score > right.score
+                        }
+                    }
+                }
                 understanding = analysis
                 providerSummary = "Fireworks Qwen + Serper"
                 diagnostic = "\(fireworkResponse.diagnostic); \(serperResponse.diagnostic)"
@@ -458,6 +477,7 @@ final class AppModel {
                 createdAt: .now,
                 pipeline: pipeline,
                 providerSummary: providerSummary,
+                aiSearchIntent: aiSearchIntent,
                 generatedQuery: understanding?.searchQuery,
                 generatedSuggestions: understanding?.suggestions ?? [],
                 results: results,
@@ -510,7 +530,11 @@ final class AppModel {
         return searchUsage.routedImageProvider(from: eligible)
     }
 
-    func askStylezamAI(scanID: UUID, garmentID: String, question: String) async throws -> String {
+    func askStylezamAI(
+        scanID: UUID,
+        garmentID: String,
+        question: String
+    ) async throws -> StylezamChatMessage {
         guard let activePlan = account.account?.plan else {
             throw ProductSearchError.provider("Sign in with Google before using the assistant.")
         }
@@ -520,6 +544,7 @@ final class AppModel {
             throw ProductSearchError.planLimitReached("AI questions", limit)
         }
         let context = try garmentSearchContext(scanID: scanID, garmentID: garmentID)
+        let history = library.chatMessages(for: context.key)
         guard let key = try credentials.credential(for: .fireworks), !key.isEmpty else {
             throw ProductSearchError.missingCredential(SearchCredentialKind.fireworks.title)
         }
@@ -532,9 +557,10 @@ final class AppModel {
         )
         let startedAt = Date()
         do {
-            let (reply, response) = try await productSearchService.assistantReply(
+            let (turn, response) = try await productSearchService.assistantReply(
                 imageData: context.imageData,
                 localLabel: context.garmentLabel,
+                history: history,
                 question: question,
                 apiKey: key,
                 modelID: settings.fireworksModelID
@@ -549,7 +575,19 @@ final class AppModel {
                 ),
                 diagnostic: response.diagnostic
             )
-            return reply
+            let userMessage = StylezamChatMessage(role: .user, text: question)
+            let assistantMessage = StylezamChatMessage(
+                role: .assistant,
+                text: turn.answer,
+                suggestedQuestions: turn.suggestedQuestions
+            )
+            try library.appendChatMessages(
+                [userMessage, assistantMessage],
+                garmentKey: context.key,
+                scanID: scanID,
+                garmentID: garmentID
+            )
+            return assistantMessage
         } catch {
             searchUsage.fail(
                 usageID,
@@ -578,8 +616,11 @@ final class AppModel {
     }
 
     private func fireworksCost(inputTokens: Int?, outputTokens: Int?) -> Double {
-        let input = Double(inputTokens ?? 0) * 0.4 / 1_000_000
-        let output = Double(outputTokens ?? 0) * 1.6 / 1_000_000
+        // Qwen 3.7 Plus serverless list pricing verified August 2026.
+        // Count uncached input conservatively so the local safety meter never
+        // understates spend when the provider omits cached-token detail.
+        let input = Double(inputTokens ?? 0) * 0.5 / 1_000_000
+        let output = Double(outputTokens ?? 0) * 3.0 / 1_000_000
         return input + output
     }
 

@@ -43,7 +43,7 @@ The default private developer route is:
 
 Each detected piece in Library Recent exposes both routes directly. **Find products & prices** hands the existing scan and garment identifiers to Search and starts one provider request only when no saved search exists. **Try on crop** adds the already-saved local crop to the YouCam rail without performing a product search. Developer Debug can pin an eligible visual provider; if that provider needs configuration the current capture cannot satisfy, Search names and uses an eligible fallback.
 
-Stylezam AI is separate: a question sends the selected crop and user prompt to Fireworks Qwen 3.7 Plus. Only when the user explicitly converts a question or suggestion into a similar-product search does Stylezam send one generated text query—not the photo—to Serper shopping.
+Stylezam AI is separate: each garment has a bounded, locally persisted conversation. A turn sends the selected crop, recent conversation context, and new prompt to Fireworks Qwen 3.7 Plus. Qwen runs in non-thinking mode for predictable structured answers and returns both the response and relevant follow-up questions. Only when the user explicitly taps **Find similar** or **Find cheaper** does Stylezam ask Qwen for grounded shopping keywords and send one generated text query—not the photo—to Serper Shopping. Cheaper-result presentation orders comparable priced results from lower to higher and leaves products without a parsed price afterward.
 
 The default is one successful product search per garment. Logical reservations and provider counts survive relaunches. Failed requests remain in the diagnostic ledger because providers may still count them, but they do not consume the user's successful-search allowance and can be retried.
 
@@ -93,7 +93,7 @@ Recent Live and screen box crops use a perceptual dHash guard to suppress obviou
 ## Local persistence
 
 The Library stores source images, readable garment box-crop JPEGs,
-class/confidence/box records, capture source, and time under the app container.
+class/confidence/box records, capture source, per-garment chat history, and time under the app container.
 The current raw mask is diagnostic-only because its iOS regions are not reliable
 enough for a product-facing cutout. A bounded snapshot keeps the most recent
 media. Deleting a scan removes its source and crop files; clearing Library

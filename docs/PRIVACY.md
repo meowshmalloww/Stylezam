@@ -19,6 +19,7 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
 - Accepted camera/import/share/screen images.
 - Individual garment box crops and structured detection records. Raw
   transparent-mask output is shown only during the local Vision Inspector run.
+- Per-garment Stylezam AI conversation history and generated follow-up prompts.
 - The recent iOS 27 screen-frame buffer, which remains in memory rather than becoming a rolling recording.
 
 Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
@@ -42,7 +43,7 @@ The app does not analyze every camera frame continuously. Live preview is thrott
 
 Detection, segmentation, cropping, and Library capture remain local. Network activity begins only after the user taps Find similar products, asks the image-aware assistant, opens a merchant link, or loads a product thumbnail.
 
-- Fireworks receives the selected garment crop and prompt for Qwen vision.
+- Fireworks receives the selected garment crop, the bounded recent conversation, and the new prompt for Qwen vision.
 - Serper receives generated or user-refined text, not the photo.
 - Lykdat receives the selected crop when chosen as the direct image provider.
 - SearchAPI.io and SerpApi receive only an explicitly configured public image URL.
@@ -54,7 +55,7 @@ Photo try-on requires network access. The user must consent immediately before s
 
 ## Deletion
 
-Users can delete individual scans, completed product searches, saved products, and previews, or clear the Library. A scan deletion removes its source image, associated crop files, and associated search history. Clearing Library removes captures, crops, searches, saved products, and appearance previews. The usage ledger is intentionally separate because clearing local history does not restore provider credits. Stopping live screen capture clears its in-memory frame buffer.
+Users can clear one garment conversation, delete individual scans, completed product searches, saved products, and previews, or clear the Library. A scan deletion removes its source image, associated crop files, chat history, and associated search history. Clearing Library removes captures, crops, conversations, searches, saved products, and appearance previews. The usage ledger is intentionally separate because clearing local history does not restore provider credits. Stopping live screen capture clears its in-memory frame buffer.
 
 ## Release checklist
 

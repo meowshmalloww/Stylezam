@@ -59,6 +59,7 @@ final class LibraryStore {
     var scans: [SavedScan] { snapshot.scans }
     var captures: [SavedCapture] { snapshot.captures }
     var searches: [SavedProductSearch] { snapshot.searches }
+    var chats: [StylezamChatThread] { snapshot.chats }
     var products: [SavedProduct] { snapshot.products }
     var wardrobeItems: [SavedWardrobeItem] { snapshot.wardrobeItems }
     var tryOns: [SavedTryOn] { snapshot.tryOns }
@@ -203,6 +204,56 @@ final class LibraryStore {
 
     func search(for garmentKey: String) -> SavedProductSearch? {
         snapshot.searches.first { $0.garmentKey == garmentKey }
+    }
+
+    func chatMessages(for garmentKey: String) -> [StylezamChatMessage] {
+        snapshot.chats.first { $0.id == garmentKey }?.messages ?? []
+    }
+
+    func appendChatMessages(
+        _ messages: [StylezamChatMessage],
+        garmentKey: String,
+        scanID: UUID,
+        garmentID: String
+    ) throws {
+        guard !messages.isEmpty else { return }
+        let previousSnapshot = snapshot
+        if let index = snapshot.chats.firstIndex(where: { $0.id == garmentKey }) {
+            snapshot.chats[index].messages.append(contentsOf: messages)
+            snapshot.chats[index].messages = Array(snapshot.chats[index].messages.suffix(60))
+            snapshot.chats[index].updatedAt = .now
+            let updated = snapshot.chats.remove(at: index)
+            snapshot.chats.insert(updated, at: 0)
+        } else {
+            snapshot.chats.insert(
+                StylezamChatThread(
+                    id: garmentKey,
+                    scanID: scanID,
+                    garmentID: garmentID,
+                    messages: Array(messages.suffix(60)),
+                    updatedAt: .now
+                ),
+                at: 0
+            )
+        }
+        snapshot.chats = Array(snapshot.chats.prefix(80))
+        do {
+            try persist()
+        } catch {
+            snapshot = previousSnapshot
+            throw error
+        }
+    }
+
+    func clearChat(for garmentKey: String) {
+        let previousSnapshot = snapshot
+        snapshot.chats.removeAll { $0.id == garmentKey }
+        do {
+            try persist()
+        } catch {
+            snapshot = previousSnapshot
+            loadError = error.localizedDescription
+        }
     }
 
     func saveSearch(_ search: SavedProductSearch) throws {
@@ -374,6 +425,7 @@ final class LibraryStore {
         let previousSnapshot = snapshot
         snapshot.scans.removeAll { $0.id == scan.id }
         snapshot.searches.removeAll { $0.scanID == scan.id }
+        snapshot.chats.removeAll { $0.scanID == scan.id }
         do {
             try persist()
             removeFiles(for: scan)

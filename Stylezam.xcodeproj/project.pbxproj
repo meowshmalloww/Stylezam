@@ -71,6 +71,7 @@
 		E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */; };
 		EAF4BEF7975C4B347C0A4586 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
 		F36D719E6BB5959E1BF4A536 /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
+		F422F7A2449F720684071D48 /* StylezamChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C03E5A010AC21D3FC127413 /* StylezamChatView.swift */; };
 		F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A940D99785B136691E06C4A /* CaptureSheet.swift */; };
 		F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70AC81BE3A88E7297739342 /* VisionDebugView.swift */; };
 		FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */; };
@@ -114,6 +115,7 @@
 		0323FB49E9A47D9209839A59 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		08EADD108A8B6C096FF911EF /* FirstRunExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirstRunExperienceView.swift; sourceTree = "<group>"; };
 		0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		0C03E5A010AC21D3FC127413 /* StylezamChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamChatView.swift; sourceTree = "<group>"; };
 		0D7CD24096454F2142A32276 /* CameraSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionController.swift; sourceTree = "<group>"; };
 		104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamShortcuts.swift; sourceTree = "<group>"; };
 		10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureActivityAttributes.swift; sourceTree = "<group>"; };
@@ -212,6 +214,7 @@
 			isa = PBXGroup;
 			children = (
 				5D6149F74411CB2250C2927B /* SearchView.swift */,
+				0C03E5A010AC21D3FC127413 /* StylezamChatView.swift */,
 			);
 			path = Search;
 			sourceTree = "<group>";
@@ -657,6 +660,7 @@
 				C366E4AF7E9683D6DFA38F8F /* StylezamApp.swift in Sources */,
 				465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */,
 				6E487DF493CFE206E884087D /* StylezamCaptureActivityAttributes.swift in Sources */,
+				F422F7A2449F720684071D48 /* StylezamChatView.swift in Sources */,
 				81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */,
 				2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */,
 				E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */,

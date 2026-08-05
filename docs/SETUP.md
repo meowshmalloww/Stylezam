@@ -75,7 +75,7 @@ chmod 600 .env
 
 Add only the providers you intend to test. `.env` is ignored by Git and is not bundled into the app. `scripts/install_on_device.sh` passes the values into one Debug launch; Stylezam immediately stores them in the device-only Keychain. Developer Debug is status-only—keys cannot be viewed, pasted, or replaced inside the app. Rotate a key in the local `.env`, then reinstall/relaunch the Debug build.
 
-The visual path sends one request for a selected garment to the preferred eligible provider chosen in Developer Debug. If that preference cannot accept the current local crop, Stylezam names and uses an eligible fallback. Lykdat accepts selected crop bytes directly. Fireworks powers the separate Stylezam AI chat; Serper is used only when the user turns an AI request into a similar-product search. SearchAPI.io and SerpApi Google Lens require a public HTTPS crop URL. Bright Data requires both that URL and a compatible SERP zone; the currently configured zone authenticates but returns an inner Lens HTTP 502, so it is not eligible until both conditions are corrected.
+The visual path sends one request for a selected garment to the preferred eligible provider chosen in Developer Debug. If that preference cannot accept the current local crop, Stylezam names and uses an eligible fallback. Lykdat accepts selected crop bytes directly. Fireworks powers the separate persistent Stylezam AI chat. Serper is used only after the user explicitly chooses **Find similar** or **Find cheaper**; it receives Qwen-generated keyword text, not the photo. SearchAPI.io and SerpApi Google Lens require a public HTTPS crop URL. Bright Data is also currently an image-search route and requires both that URL and a compatible SERP zone; the configured zone authenticates but returns an inner Lens HTTP 502, so it is not eligible until both conditions are corrected.
 
 ## 4. Generate and sign the iOS project
 
@@ -137,6 +137,8 @@ On the connected iPhone, verify:
 - scan deletion removes source and crop files;
 - one selected garment produces one persisted product-search attempt by default;
 - Search diagnostics records the actual provider-call count, latency, outcome, and result count;
+- Stylezam AI remembers prior turns for the selected piece, generates usable follow-up prompts, and clears only the selected conversation from its menu;
+- Find similar and Find cheaper each make one Fireworks request followed by one Serper Shopping request, with no Bright Data keyword call;
 - completed searches remain under Library → Matches and can be deleted;
 - Photos and clipboard import;
 - offline capture works with Wi-Fi and cellular disabled;

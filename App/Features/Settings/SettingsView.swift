@@ -193,6 +193,21 @@ private struct ControlSetupView: View {
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
+                LabeledContent("Device", value: ScreenCaptureAvailability.deviceSummary)
+                LabeledContent("Installed build", value: ScreenCaptureAvailability.buildSummary)
+
+                if let recovery = ScreenCaptureAvailability.recoverySummary {
+                    Text(recovery)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Link(
+                        "Apple’s iOS screen-capture requirements",
+                        destination: URL(string: "https://developer.apple.com/documentation/screencapturekit/capturing-screen-content-on-ios")!
+                    )
+                    .font(.subheadline)
+                }
+
                 if ScreenCaptureAvailability.isSDKAvailable {
                     Button {
                         model.liveScreen.presentSystemPicker()
@@ -219,7 +234,7 @@ private struct ControlSetupView: View {
                 HStack {
                     Label("Live screen", systemImage: "rectangle.dashed.badge.record")
                     Spacer()
-                    Text(ScreenCaptureAvailability.isSDKAvailable ? "AVAILABLE" : "iOS 27")
+                    Text(ScreenCaptureAvailability.badge)
                 }
             } footer: {
                 Text("Apple’s system picker always starts the session. Protected video may appear blank; Stylezam never attempts silent recording.")

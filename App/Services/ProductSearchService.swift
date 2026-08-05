@@ -2,6 +2,16 @@ import CryptoKit
 import Foundation
 
 actor ProductSearchService {
+    private struct AssistantPayload: Decodable {
+        let answer: String
+        let suggestedQuestions: [String]
+
+        private enum CodingKeys: String, CodingKey {
+            case answer
+            case suggestedQuestions = "suggested_questions"
+        }
+    }
+
     private let session: URLSession
 
     init() {
@@ -17,19 +27,30 @@ actor ProductSearchService {
         imageData: Data,
         localLabel: String,
         refinement: String? = nil,
+        searchIntent: AIShoppingSearchIntent? = nil,
         apiKey: String,
         modelID: String
     ) async throws -> (GarmentUnderstanding, SearchProviderResponse) {
         let refinementInstruction = refinement.map {
             "The user wants this refinement: \($0). Incorporate it into the search query without inventing facts."
         } ?? ""
+        let intentInstruction: String
+        switch searchIntent {
+        case .similar:
+            intentInstruction = "Optimize the query for visually similar alternatives. Preserve the visible category, silhouette, color, pattern, and construction details that make this piece distinctive."
+        case .cheaper:
+            intentInstruction = "Optimize the query for lower-priced alternatives. Keep the visible category and defining style details, use budget-oriented terms only when useful, and never invent a price."
+        case nil:
+            intentInstruction = "Optimize the query for useful shopping matches to the visible item."
+        }
         let prompt = """
         Analyze only the main fashion item in this crop. The on-device detector called it \(localLabel).
         Return strict JSON with these keys:
-        summary (one short factual sentence), search_query (8-16 useful shopping search words),
+        summary (one short factual sentence), search_query (6-14 useful shopping search words),
         suggestions (exactly 3 shorter alternative shopping queries), category (string or null),
         colors (array), materials (array), patterns (array).
         Do not invent a brand. Include visible brand/model text only when clearly readable.
+        \(intentInstruction)
         \(refinementInstruction)
         """
         let imageURL = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
@@ -82,26 +103,55 @@ actor ProductSearchService {
     func assistantReply(
         imageData: Data,
         localLabel: String,
+        history: [StylezamChatMessage],
         question: String,
         apiKey: String,
         modelID: String
-    ) async throws -> (String, SearchProviderResponse) {
+    ) async throws -> (StylezamAssistantTurn, SearchProviderResponse) {
         let imageURL = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
-        let body: [String: Any] = [
-            "model": modelID,
-            "reasoning_effort": "none",
-            "temperature": 0.25,
-            "max_tokens": 520,
-            "messages": [[
+        let systemPrompt = """
+        You are Stylezam AI, a careful, useful fashion shopping assistant. Maintain context across the conversation and reason from the selected garment image.
+
+        Be direct and conversational. Explain visible construction, color, silhouette, styling, likely material, care, fit, and shopping terminology when relevant. Clearly distinguish what is visible from what is only likely. Never claim an exact brand, model, material, authenticity, store price, or availability unless it is explicit in the image or supplied conversation. If the user wants products or current prices, explain that Stylezam can perform a live shopping search.
+
+        Return strict JSON with exactly these keys:
+        answer: a useful answer, usually 1-4 short paragraphs.
+        suggested_questions: 2 or 3 concise, relevant follow-up questions the user could ask next. Do not put product-search buttons in this list; the app provides Find similar and Find cheaper separately.
+        """
+        var messages: [[String: Any]] = [
+            ["role": "system", "content": systemPrompt],
+            [
                 "role": "user",
                 "content": [
                     [
                         "type": "text",
-                        "text": "You are Stylezam's concise fashion search assistant. The local detector label is \(localLabel). Answer the user's question about this pictured item. Never claim an exact brand unless it is visibly readable. User: \(question)",
+                        "text": "This is the selected fashion item for the conversation. The on-device detector label is \(localLabel). Use the image as persistent visual context, but do not overstate uncertain details.",
                     ],
                     ["type": "image_url", "image_url": ["url": imageURL]],
                 ],
-            ]],
+            ],
+            [
+                "role": "assistant",
+                "content": "I’ll use this selected item as the visual context for our conversation.",
+            ],
+        ]
+        for turn in boundedChatHistory(history) {
+            messages.append([
+                "role": turn.role == .user ? "user" : "assistant",
+                "content": turn.text,
+            ])
+        }
+        messages.append(["role": "user", "content": question])
+        let body: [String: Any] = [
+            "model": modelID,
+            // Qwen 3.7 Plus can emit its analysis in the message body when a
+            // constrained JSON answer exhausts a thinking budget. Non-thinking
+            // mode is both faster and more reliable for this conversational UI.
+            "reasoning_effort": "none",
+            "temperature": 0.3,
+            "max_tokens": 900,
+            "response_format": ["type": "json_object"],
+            "messages": messages,
         ]
         let (data, response) = try await sendJSON(
             url: URL(string: "https://api.fireworks.ai/inference/v1/chat/completions")!,
@@ -117,15 +167,16 @@ actor ProductSearchService {
         else {
             throw ProductSearchError.invalidResponse("Fireworks")
         }
+        let turn = decodeAssistantTurn(content)
         let usage = root["usage"] as? [String: Any]
         return (
-            content.trimmingCharacters(in: .whitespacesAndNewlines),
+            turn,
             SearchProviderResponse(
                 results: [],
                 providerRequestID: response.value(forHTTPHeaderField: "x-request-id") ?? root["id"] as? String,
                 inputTokens: integer(usage?["prompt_tokens"]),
                 outputTokens: integer(usage?["completion_tokens"]),
-                diagnostic: "Fireworks returned one assistant response"
+                diagnostic: "Fireworks returned one contextual assistant turn"
             )
         )
     }
@@ -467,6 +518,42 @@ actor ProductSearchService {
         }
         guard let start = text.firstIndex(of: "{"), let end = text.lastIndex(of: "}") else { return nil }
         return String(text[start...end]).data(using: .utf8)
+    }
+
+    private func boundedChatHistory(_ history: [StylezamChatMessage]) -> [StylezamChatMessage] {
+        var result: [StylezamChatMessage] = []
+        var characterCount = 0
+        for message in history.suffix(18).reversed() {
+            let length = message.text.count
+            guard characterCount + length <= 8_000 || result.isEmpty else { break }
+            result.insert(message, at: 0)
+            characterCount += length
+        }
+        return result
+    }
+
+    private func decodeAssistantTurn(_ content: String) -> StylezamAssistantTurn {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let data = jsonData(fromPossiblyFenced: trimmed),
+              let payload = try? JSONDecoder().decode(AssistantPayload.self, from: data),
+              !payload.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return StylezamAssistantTurn(answer: trimmed, suggestedQuestions: [])
+        }
+
+        var seen: Set<String> = []
+        let suggestions = payload.suggestedQuestions.compactMap { raw -> String? in
+            let suggestion = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            let identity = suggestion.lowercased()
+            guard suggestion.count >= 4, suggestion.count <= 100, seen.insert(identity).inserted else {
+                return nil
+            }
+            return suggestion
+        }
+        return StylezamAssistantTurn(
+            answer: payload.answer.trimmingCharacters(in: .whitespacesAndNewlines),
+            suggestedQuestions: Array(suggestions.prefix(3))
+        )
     }
 
     private func findProductObjects(in value: Any) -> [[String: Any]] {

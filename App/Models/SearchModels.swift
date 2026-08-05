@@ -23,6 +23,82 @@ enum ProductSearchPipeline: String, Codable, CaseIterable, Identifiable, Sendabl
     }
 }
 
+enum AIShoppingSearchIntent: String, Codable, CaseIterable, Identifiable, Sendable {
+    case similar
+    case cheaper
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .similar: "Find similar"
+        case .cheaper: "Find cheaper"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .similar: "square.stack.3d.up"
+        case .cheaper: "tag"
+        }
+    }
+
+    func refinementPrompt(conversationContext: String?) -> String {
+        let context = conversationContext?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let contextInstruction = context.flatMap { $0.isEmpty ? nil : $0 }
+            .map { " Respect this request from the conversation: \($0)." }
+            ?? ""
+
+        switch self {
+        case .similar:
+            return "Find visually similar products in the same garment category. Preserve the most distinctive visible silhouette, color, pattern, and construction details. Do not assume a brand.\(contextInstruction)"
+        case .cheaper:
+            return "Find lower-priced alternatives in the same garment category. Preserve the key visible style details, but favor useful shopping terms such as affordable, sale, outlet, or budget only where natural. Do not invent a price or assume a brand.\(contextInstruction)"
+        }
+    }
+}
+
+enum StylezamChatRole: String, Codable, Sendable {
+    case user
+    case assistant
+}
+
+struct StylezamChatMessage: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let role: StylezamChatRole
+    let text: String
+    let createdAt: Date
+    let suggestedQuestions: [String]?
+
+    init(
+        id: UUID = UUID(),
+        role: StylezamChatRole,
+        text: String,
+        createdAt: Date = .now,
+        suggestedQuestions: [String]? = nil
+    ) {
+        self.id = id
+        self.role = role
+        self.text = text
+        self.createdAt = createdAt
+        self.suggestedQuestions = suggestedQuestions
+    }
+}
+
+struct StylezamChatThread: Codable, Identifiable, Hashable, Sendable {
+    let id: String
+    let scanID: UUID
+    let garmentID: String
+    var messages: [StylezamChatMessage]
+    var updatedAt: Date
+}
+
+struct StylezamAssistantTurn: Hashable, Sendable {
+    let answer: String
+    let suggestedQuestions: [String]
+}
+
 enum ProductSearchProgress: Equatable, Sendable {
     case preparing
     case searchingImage(String)
@@ -148,6 +224,7 @@ struct SavedProductSearch: Codable, Identifiable, Hashable, Sendable {
     let createdAt: Date
     let pipeline: ProductSearchPipeline
     let providerSummary: String
+    let aiSearchIntent: AIShoppingSearchIntent?
     let generatedQuery: String?
     let generatedSuggestions: [String]
     let results: [ProductResultDTO]
