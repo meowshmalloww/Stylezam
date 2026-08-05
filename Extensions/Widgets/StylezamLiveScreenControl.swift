@@ -1,12 +1,13 @@
 import SwiftUI
 import WidgetKit
 
+@available(iOS 26.0, *)
 struct StylezamLiveScreenControl: ControlWidget {
     static let kind = "com.stylezam.app.live-screen-control"
 
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: Self.kind) {
-            ControlWidgetButton(action: StartStylezamLiveScreenIntent()) {
+            ControlWidgetButton(action: OpenStylezamIntent(target: .liveScreen)) {
                 Label("Live Screen", systemImage: "rectangle.dashed.badge.record")
             }
         }

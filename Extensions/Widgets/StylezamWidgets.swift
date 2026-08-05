@@ -5,7 +5,9 @@ import WidgetKit
 struct StylezamWidgets: WidgetBundle {
     var body: some Widget {
         StylezamCaptureLiveActivity()
-        StylezamCaptureControl()
-        StylezamLiveScreenControl()
+        if #available(iOS 26.0, *) {
+            StylezamCaptureControl()
+            StylezamLiveScreenControl()
+        }
     }
 }

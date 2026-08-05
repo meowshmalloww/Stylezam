@@ -171,7 +171,7 @@ To finish verification:
 3. run Apple’s sample separately on the intended device;
 4. regenerate and open Stylezam with that Xcode;
 5. compile the conditional ScreenCaptureKit adapter;
-6. add both **Capture a Look** and **Live Screen** from the Control Center gallery; their direct URL handoff does not require an App Group entitlement;
+6. add both **Capture a Look** and **Live Screen** from the Control Center gallery; their typed `OpenIntent` handoff does not require an App Group entitlement;
 7. use Live Screen and confirm Apple’s picker appears before a recent real frame becomes a Library scan;
 8. test stop, denial, interruption, protected content, memory pressure, and app termination.
 

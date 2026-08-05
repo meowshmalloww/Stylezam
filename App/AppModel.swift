@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UIKit
+import WidgetKit
 
 @MainActor
 @Observable
@@ -37,6 +38,7 @@ final class AppModel {
     @ObservationIgnored private var isLiveScreenPickerPending = false
     @ObservationIgnored private var isStartupComplete = false
     @ObservationIgnored private var pendingDeepLink: URL?
+    @ObservationIgnored private var pendingControlDestination: StylezamControlDestination?
 
     init(
         settings: SettingsStore = SettingsStore(),
@@ -57,6 +59,7 @@ final class AppModel {
     }
 
     func start() async {
+        ControlCenter.shared.reloadAllControls()
         credentials.importDebugEnvironment()
 #if DEBUG
         YouCamCredentialStore.importDebugEnvironment()
@@ -84,6 +87,10 @@ final class AppModel {
         if let pendingDeepLink {
             self.pendingDeepLink = nil
             handleURL(pendingDeepLink)
+        }
+        if let pendingControlDestination {
+            self.pendingControlDestination = nil
+            handleControlDestination(pendingControlDestination)
         }
     }
 
@@ -665,6 +672,20 @@ final class AppModel {
         }
     }
 
+    func handleControlDestination(_ destination: StylezamControlDestination) {
+        guard isStartupComplete else {
+            pendingControlDestination = destination
+            return
+        }
+
+        switch destination {
+        case .capture:
+            captureFromControl()
+        case .liveScreen:
+            requestLiveScreenPicker()
+        }
+    }
+
     func handleExternalCaptureRequest() {
         let defaults = StylezamShared.defaults
         let liveRequestedAt = StylezamShared.defaults.double(
@@ -695,7 +716,7 @@ final class AppModel {
 
         liveScreenPickerTask?.cancel()
         liveScreenPickerTask = Task { @MainActor [weak self] in
-            // A Control Center OpenURL handoff can arrive a moment before the
+            // A Control Center OpenIntent handoff can arrive a moment before the
             // application window is ready to present Apple's system picker.
             try? await Task.sleep(for: .milliseconds(350))
             guard !Task.isCancelled,
@@ -709,7 +730,14 @@ final class AppModel {
     }
 
     private func requestLiveScreenPicker() {
-        guard account.isAuthenticated else {
+        #if DEBUG
+        let isLiveScreenUITest = ProcessInfo.processInfo.arguments.contains(
+            "-stylezam-ui-test-live-screen"
+        )
+        #else
+        let isLiveScreenUITest = false
+        #endif
+        guard account.isAuthenticated || isLiveScreenUITest else {
             liveScreenNotice = "Sign in with Google before starting Live Screen."
             return
         }

@@ -108,6 +108,20 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SKIP_INSTALL: YES
 
+  StylezamControlUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: Tests/StylezamControlUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stylezam.app.control-ui-tests
+        PRODUCT_NAME: StylezamControlUITests
+        TEST_TARGET_NAME: Stylezam
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Stylezam
+
 schemes:
   Stylezam:
     build:
@@ -117,5 +131,9 @@ schemes:
         StylezamShare: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - StylezamControlUITests
     archive:
       config: Release

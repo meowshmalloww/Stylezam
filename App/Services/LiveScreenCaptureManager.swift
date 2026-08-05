@@ -41,10 +41,12 @@ final class LiveScreenCaptureManager: NSObject {
     }
 
     nonisolated static var unsupportedSummary: String {
-        #if canImport(ScreenCaptureKit)
+        #if targetEnvironment(simulator)
+        return "Live Screen must be tested on a physical iPhone running iOS 27; Apple does not include ScreenCaptureKit in the iOS Simulator SDK."
+        #elseif canImport(ScreenCaptureKit)
         return "Live screen capture requires iOS 27. Camera, Photos, Share, and Control Center capture remain available."
         #else
-        return "Install Xcode 27 to compile iOS 27 ScreenCaptureKit support. Camera, Photos, Share, and Control Center capture remain available."
+        return "Install Xcode 27 to compile iOS 27 ScreenCaptureKit support. Camera, Photos, Share, clipboard, and normal capture remain available."
         #endif
     }
 

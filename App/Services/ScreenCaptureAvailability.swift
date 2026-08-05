@@ -29,7 +29,9 @@ enum ScreenCaptureAvailability {
     }
 
     static var buildSummary: String {
-        #if canImport(ScreenCaptureKit)
+        #if targetEnvironment(simulator)
+        "ScreenCaptureKit is not included in Apple’s iOS Simulator SDK"
+        #elseif canImport(ScreenCaptureKit)
         "iOS 27 ScreenCaptureKit included"
         #else
         "Built without the iOS 27 ScreenCaptureKit SDK"
@@ -38,9 +40,13 @@ enum ScreenCaptureAvailability {
 
     static var recoverySummary: String? {
         guard !isSDKAvailable else { return nil }
+        #if targetEnvironment(simulator)
+        return "Apple makes iOS Live Screen capture available only on a physical iPhone. Build and run Stylezam on an iPhone with iOS 27 to test it."
+        #else
         if isDeviceOSSupported {
             return "This iPhone is compatible, but the installed Stylezam build does not contain the iOS 27 screen-capture code. Update this Mac to macOS 26.4 or later, install Xcode 27, then rebuild and reinstall Stylezam."
         }
         return "Live Screen requires iOS 27. Screenshot Shortcut, Share, Photos, clipboard, and camera capture remain available on this device."
+        #endif
     }
 }

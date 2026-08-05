@@ -26,6 +26,7 @@ struct StylezamApp: App {
                 }
             }
             .task { await model.start() }
+            .stylezamControlIntentHandler(model: model)
             .onOpenURL { url in
                 _ = GIDSignIn.sharedInstance.handle(url)
                 model.handleURL(url)
@@ -49,6 +50,19 @@ struct StylezamApp: App {
         } else {
             RootView()
                 .environment(model)
+        }
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func stylezamControlIntentHandler(model: AppModel) -> some View {
+        if #available(iOS 26.0, *) {
+            onAppIntentExecution(OpenStylezamIntent.self) { intent in
+                model.handleControlDestination(intent.target)
+            }
+        } else {
+            self
         }
     }
 }
