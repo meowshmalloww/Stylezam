@@ -376,7 +376,7 @@ struct SearchView: View {
     private func searchDisclosure(_ search: SavedProductSearch) -> String {
         switch search.aiSearchIntent {
         case .similar:
-            "Fireworks generated the visible shopping terms and one Serper request returned these live alternatives."
+            "AI prepared visible shopping terms and one live request returned these alternatives."
         case .cheaper:
             "Prices are current Serper observations, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
         case nil:
@@ -401,7 +401,7 @@ struct SearchView: View {
         }()
         return VStack(alignment: .leading, spacing: 14) {
             EditorialRule()
-            EditorialSectionHeader(title: "Stylezam AI", detail: "Fireworks · Qwen 3.7 Plus")
+            EditorialSectionHeader(title: "Stylezam AI", detail: "Image aware")
 
             Text("Have a real conversation about the selected piece, then search similar products or lower-priced alternatives with live shopping results.")
                 .font(.subheadline)
@@ -657,7 +657,7 @@ private struct SearchProductCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
             HStack(spacing: 6) {
-                Text(product.matchTier.label)
+                Text("\(product.matchTier.label) · \(product.confidencePercent)%")
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(StylezamDesign.cobalt)
                 Spacer(minLength: 0)

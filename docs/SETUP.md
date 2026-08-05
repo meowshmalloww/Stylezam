@@ -150,6 +150,8 @@ On the connected iPhone, verify:
 - Google Vision stops locally at the configured limit and never allows a value above 1,000;
 - Stylezam AI remembers prior turns for the selected piece, generates usable follow-up prompts, and clears only the selected conversation from its menu;
 - Find similar and Find cheaper each make one Fireworks request followed by one Serper Shopping request, with no Bright Data keyword call;
+- Stylezam AI returns a schema-valid answer instead of a generic unreadable-response error, and failed turns expose a retry action;
+- shopping cards show a match percentage and currency-formatted prices;
 - completed searches remain under Library → Matches and can be deleted;
 - Photos and clipboard import;
 - offline capture works with Wi-Fi and cellular disabled;
@@ -179,7 +181,7 @@ See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). Keep Apple’s sample as refe
 
 Try On is optional and does not affect local garment detection. For a prototype build, either enter the YouCam API key once in the Try On screen (it is stored in this device's Keychain), or add `STYLEZAM_YOUCAM_API_KEY` to the ignored `.env` file. `scripts/install_on_device.sh` passes that value only to the Debug launch, and the app imports it into the device-only Keychain.
 
-The app separates YouCam inputs into Outfit, Hand/Wrist, and Face/Neck photo contexts because jewelry endpoints require closer framing than clothing. The Try On workspace can take a new front/rear-camera photo or import one from Photos. Images are normalized to YouCam's supported bounds and remain under 10 MB. The UI verifies the connection, requires explicit upload consent, shows the real request phase, and explains YouCam's documented retention boundary.
+The app separates YouCam inputs into Outfit, Hand/Wrist, and Face/Neck photo contexts because jewelry endpoints require closer framing than clothing. The Try On workspace opens its in-app camera front-facing, shows a transparent three-second countdown before capture, supports switching to the rear camera, or can import an image from Photos. Images are normalized to YouCam's supported bounds and remain under 10 MB. The UI verifies the connection, requires explicit upload consent, shows the real request phase, and explains YouCam's documented retention boundary.
 
 Do not distribute an app containing a shared YouCam bearer credential. Before release, put authentication and YouCam calls behind a scoped Stylezam server, rotate all development keys, add abuse/rate controls, and complete the provider data-retention review.
 

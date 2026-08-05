@@ -11,11 +11,15 @@ final class CameraSessionController {
     private(set) var isRunning = false
     private(set) var isCapturingPhoto = false
     private(set) var errorMessage: String?
-    private(set) var position: AVCaptureDevice.Position = .back
+    private(set) var position: AVCaptureDevice.Position
     var flashEnabled = false
     var onPreviewFrame: ((Data, CGFloat) -> Void)?
 
     @ObservationIgnored let driver = CameraSessionDriver()
+
+    init(position: AVCaptureDevice.Position = .back) {
+        self.position = position
+    }
 
     func start() async {
         let authorized: Bool

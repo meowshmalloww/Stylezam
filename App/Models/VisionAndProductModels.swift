@@ -86,7 +86,10 @@ struct MoneyDTO: Codable, Hashable, Sendable {
     let display: String?
 
     var formatted: String {
-        display ?? amount.formatted(.currency(code: currency))
+        amount.formatted(
+            .currency(code: currency.uppercased())
+                .precision(.fractionLength(amount.rounded() == amount ? 0 : 2))
+        )
     }
 }
 
@@ -119,7 +122,7 @@ struct ProductResultDTO: Codable, Identifiable, Hashable, Sendable {
     let offers: [MerchantOfferDTO]
 
     var confidencePercent: Int {
-        Int((score * 100).rounded())
+        Int((min(1, max(0, score)) * 100).rounded())
     }
 }
 

@@ -1,3 +1,4 @@
+import AVFoundation
 import PhotosUI
 import SwiftUI
 
@@ -609,9 +610,10 @@ private struct TryOnCameraCaptureView: View {
     let context: TryOnPhotoContext
     let onCapture: (Data) -> Void
 
-    @State private var camera = CameraSessionController()
+    @State private var camera = CameraSessionController(position: .front)
     @State private var captureTask: Task<Void, Never>?
     @State private var didCapture = false
+    @State private var countdownValue: Int?
 
     var body: some View {
         ZStack {
@@ -640,6 +642,12 @@ private struct TryOnCameraCaptureView: View {
             .allowsHitTesting(false)
 
             cameraChrome
+
+            if let countdownValue {
+                countdownOverlay(countdownValue)
+                    .transition(.scale(scale: 0.86).combined(with: .opacity))
+                    .allowsHitTesting(false)
+            }
         }
         .statusBarHidden()
         .task { await camera.start() }
@@ -653,7 +661,10 @@ private struct TryOnCameraCaptureView: View {
     private var cameraChrome: some View {
         VStack(spacing: 0) {
             HStack {
-                toolButton(icon: "xmark", label: "Close camera") { dismiss() }
+                toolButton(icon: "xmark", label: "Close camera") {
+                    captureTask?.cancel()
+                    dismiss()
+                }
                 Spacer()
                 VStack(spacing: 2) {
                     Text("TRY-ON PHOTO")
@@ -670,6 +681,7 @@ private struct TryOnCameraCaptureView: View {
                 ) {
                     camera.flashEnabled.toggle()
                 }
+                .disabled(captureTask != nil)
             }
             .padding(.horizontal, 18)
             .padding(.top, 12)
@@ -695,11 +707,12 @@ private struct TryOnCameraCaptureView: View {
                     ) {
                         Task { await camera.switchCamera() }
                     }
+                    .disabled(captureTask != nil)
 
                     Spacer()
 
                     Button {
-                        capture()
+                        startCountdown()
                     } label: {
                         ZStack {
                             Circle()
@@ -717,8 +730,13 @@ private struct TryOnCameraCaptureView: View {
 
                     Spacer()
 
-                    Color.clear
-                        .frame(width: 48, height: 48)
+                    VStack(spacing: 2) {
+                        Image(systemName: "timer")
+                        Text("3s")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.white.opacity(0.82))
+                    .frame(width: 48, height: 48)
                 }
                 .padding(.horizontal, 28)
             }
@@ -726,16 +744,57 @@ private struct TryOnCameraCaptureView: View {
         }
     }
 
-    private func capture() {
+    private func startCountdown() {
         guard captureTask == nil else { return }
         captureTask = Task {
-            defer { captureTask = nil }
+            defer {
+                countdownValue = nil
+                captureTask = nil
+            }
+
+            for value in stride(from: 3, through: 1, by: -1) {
+                guard !Task.isCancelled else { return }
+                withAnimation(StylezamMotion.quickSpring) {
+                    countdownValue = value
+                }
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+
+            withAnimation(.easeOut(duration: 0.16)) {
+                countdownValue = nil
+            }
             guard let data = await camera.capturePhoto(), !Task.isCancelled else { return }
             didCapture = true
             onCapture(data)
             try? await Task.sleep(for: .milliseconds(120))
             dismiss()
         }
+    }
+
+    private func countdownOverlay(_ value: Int) -> some View {
+        VStack(spacing: 7) {
+            Text("\(value)")
+                .font(.system(size: 82, weight: .light, design: .rounded))
+                .monospacedDigit()
+                .contentTransition(.numericText(countsDown: true))
+            Text("Step back and hold your position")
+                .font(.subheadline.weight(.medium))
+        }
+        .foregroundStyle(.white)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 28)
+        .padding(.vertical, 20)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(.white.opacity(0.18), lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Photo in \(value) seconds")
     }
 
     private func toolButton(icon: String, label: String, action: @escaping () -> Void) -> some View {

@@ -10,6 +10,15 @@ actor ProductSearchService {
             case answer
             case suggestedQuestions = "suggested_questions"
         }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            answer = try container.decode(String.self, forKey: .answer)
+            suggestedQuestions = try container.decodeIfPresent(
+                [String].self,
+                forKey: .suggestedQuestions
+            ) ?? []
+        }
     }
 
     private let session: URLSession
@@ -53,13 +62,13 @@ actor ProductSearchService {
         \(intentInstruction)
         \(refinementInstruction)
         """
-        let imageURL = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
+        let imageURL = imageDataURL(for: imageData)
         let body: [String: Any] = [
             "model": modelID,
             "reasoning_effort": "none",
             "temperature": 0.1,
             "max_tokens": 520,
-            "response_format": ["type": "json_object"],
+            "response_format": garmentResponseFormat(),
             "messages": [[
                 "role": "user",
                 "content": [
@@ -75,14 +84,20 @@ actor ProductSearchService {
             provider: "Fireworks"
         )
         let root = try jsonObject(data, provider: "Fireworks")
-        guard let choices = root["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String,
-              let contentData = jsonData(fromPossiblyFenced: content),
-              let decoded = try? JSONDecoder().decode(GarmentUnderstanding.self, from: contentData),
-              !decoded.searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let choices = root["choices"] as? [[String: Any]] ?? []
+        guard let message = choices.first?["message"] as? [String: Any],
+              let content = messageText(message),
+              let decoded = decodeGarmentUnderstanding(content)
         else {
-            throw ProductSearchError.invalidResponse("Fireworks")
+            let finishReason = choices.first?["finish_reason"] as? String
+            if finishReason == "length" {
+                throw ProductSearchError.provider(
+                    "Stylezam AI reached its response limit before it could prepare the shopping search. Try the action again."
+                )
+            }
+            throw ProductSearchError.provider(
+                "Stylezam AI returned incomplete shopping details. Try the action again."
+            )
         }
         let usage = root["usage"] as? [String: Any]
         let inputTokens = integer(usage?["prompt_tokens"])
@@ -108,7 +123,7 @@ actor ProductSearchService {
         apiKey: String,
         modelID: String
     ) async throws -> (StylezamAssistantTurn, SearchProviderResponse) {
-        let imageURL = "data:image/jpeg;base64,\(imageData.base64EncodedString())"
+        let imageURL = imageDataURL(for: imageData)
         let systemPrompt = """
         You are Stylezam AI, a careful, useful fashion shopping assistant. Maintain context across the conversation and reason from the selected garment image.
 
@@ -150,7 +165,7 @@ actor ProductSearchService {
             "reasoning_effort": "none",
             "temperature": 0.3,
             "max_tokens": 900,
-            "response_format": ["type": "json_object"],
+            "response_format": assistantResponseFormat(),
             "messages": messages,
         ]
         let (data, response) = try await sendJSON(
@@ -160,14 +175,21 @@ actor ProductSearchService {
             provider: "Fireworks"
         )
         let root = try jsonObject(data, provider: "Fireworks")
-        guard let choices = root["choices"] as? [[String: Any]],
-              let message = choices.first?["message"] as? [String: Any],
-              let content = message["content"] as? String,
-              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let choices = root["choices"] as? [[String: Any]] ?? []
+        guard let message = choices.first?["message"] as? [String: Any],
+              let content = messageText(message),
+              let turn = decodeAssistantTurn(content)
         else {
-            throw ProductSearchError.invalidResponse("Fireworks")
+            let finishReason = choices.first?["finish_reason"] as? String
+            if finishReason == "length" {
+                throw ProductSearchError.provider(
+                    "Stylezam AI reached its response limit before finishing. Try a shorter question."
+                )
+            }
+            throw ProductSearchError.provider(
+                "Stylezam AI returned an empty answer. Try the question again."
+            )
         }
-        let turn = decodeAssistantTurn(content)
         let usage = root["usage"] as? [String: Any]
         return (
             turn,
@@ -766,28 +788,144 @@ actor ProductSearchService {
         return result
     }
 
-    private func decodeAssistantTurn(_ content: String) -> StylezamAssistantTurn {
+    private func decodeAssistantTurn(_ content: String) -> StylezamAssistantTurn? {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let data = jsonData(fromPossiblyFenced: trimmed),
-              let payload = try? JSONDecoder().decode(AssistantPayload.self, from: data),
-              !payload.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            return StylezamAssistantTurn(answer: trimmed, suggestedQuestions: [])
+        guard !trimmed.isEmpty else { return nil }
+
+        if let data = jsonData(fromPossiblyFenced: trimmed),
+           let json = try? JSONSerialization.jsonObject(with: data),
+           json is [String: Any]
+        {
+            guard let payload = try? JSONDecoder().decode(AssistantPayload.self, from: data),
+                  !payload.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+
+            var seen: Set<String> = []
+            let suggestions = payload.suggestedQuestions.compactMap { raw -> String? in
+                let suggestion = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+                let identity = suggestion.lowercased()
+                guard suggestion.count >= 4,
+                      suggestion.count <= 100,
+                      seen.insert(identity).inserted
+                else { return nil }
+                return suggestion
+            }
+            return StylezamAssistantTurn(
+                answer: payload.answer.trimmingCharacters(in: .whitespacesAndNewlines),
+                suggestedQuestions: Array(suggestions.prefix(3))
+            )
         }
 
-        var seen: Set<String> = []
-        let suggestions = payload.suggestedQuestions.compactMap { raw -> String? in
-            let suggestion = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            let identity = suggestion.lowercased()
-            guard suggestion.count >= 4, suggestion.count <= 100, seen.insert(identity).inserted else {
-                return nil
-            }
-            return suggestion
+        return StylezamAssistantTurn(answer: trimmed, suggestedQuestions: [])
+    }
+
+    private func decodeGarmentUnderstanding(_ content: String) -> GarmentUnderstanding? {
+        guard let data = jsonData(fromPossiblyFenced: content),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let query = string(object["search_query"])
+                ?? string(object["searchQuery"])
+                ?? string(object["query"]),
+              !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+
+        func strings(_ value: Any?) -> [String] {
+            guard let values = value as? [Any] else { return [] }
+            return values.compactMap(string)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
         }
-        return StylezamAssistantTurn(
-            answer: payload.answer.trimmingCharacters(in: .whitespacesAndNewlines),
-            suggestedQuestions: Array(suggestions.prefix(3))
+
+        return GarmentUnderstanding(
+            summary: string(object["summary"]) ?? "Shopping terms prepared from the selected piece.",
+            searchQuery: query.trimmingCharacters(in: .whitespacesAndNewlines),
+            suggestions: Array(strings(object["suggestions"]).prefix(3)),
+            category: string(object["category"]),
+            colors: strings(object["colors"]),
+            materials: strings(object["materials"]),
+            patterns: strings(object["patterns"])
         )
+    }
+
+    private func messageText(_ message: [String: Any]) -> String? {
+        if let content = string(message["content"]),
+           !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        {
+            return content
+        }
+        guard let parts = message["content"] as? [[String: Any]] else { return nil }
+        let text = parts.compactMap { part in
+            string(part["text"]) ?? string(part["content"])
+        }
+        .joined(separator: "\n")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private func imageDataURL(for data: Data) -> String {
+        let isPNG = data.count >= 8 && Array(data.prefix(8)) == [
+            0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+        ]
+        let mediaType = isPNG ? "image/png" : "image/jpeg"
+        return "data:\(mediaType);base64,\(data.base64EncodedString())"
+    }
+
+    private func garmentResponseFormat() -> [String: Any] {
+        [
+            "type": "json_schema",
+            "json_schema": [
+                "name": "stylezam_garment_search",
+                "schema": [
+                    "type": "object",
+                    "properties": [
+                        "summary": ["type": "string"],
+                        "search_query": ["type": "string"],
+                        "suggestions": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "minItems": 3,
+                            "maxItems": 3,
+                        ] as [String: Any],
+                        "category": [
+                            "anyOf": [
+                                ["type": "string"],
+                                ["type": "null"],
+                            ],
+                        ],
+                        "colors": ["type": "array", "items": ["type": "string"]],
+                        "materials": ["type": "array", "items": ["type": "string"]],
+                        "patterns": ["type": "array", "items": ["type": "string"]],
+                    ] as [String: Any],
+                    "required": [
+                        "summary", "search_query", "suggestions", "category",
+                        "colors", "materials", "patterns",
+                    ],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ] as [String: Any],
+        ]
+    }
+
+    private func assistantResponseFormat() -> [String: Any] {
+        [
+            "type": "json_schema",
+            "json_schema": [
+                "name": "stylezam_assistant_turn",
+                "schema": [
+                    "type": "object",
+                    "properties": [
+                        "answer": ["type": "string"],
+                        "suggested_questions": [
+                            "type": "array",
+                            "items": ["type": "string"],
+                            "minItems": 2,
+                            "maxItems": 3,
+                        ] as [String: Any],
+                    ] as [String: Any],
+                    "required": ["answer", "suggested_questions"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ] as [String: Any],
+        ]
     }
 
     private func findProductObjects(in value: Any) -> [[String: Any]] {

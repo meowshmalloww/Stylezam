@@ -435,7 +435,7 @@ final class AppModel {
                     }
                 }
                 understanding = analysis
-                providerSummary = "Fireworks Qwen + Serper"
+                providerSummary = "AI-guided shopping"
                 diagnostic = "\(fireworkResponse.diagnostic); \(serperResponse.diagnostic)"
                 estimatedCost = fireworksCost(
                     inputTokens: fireworkResponse.inputTokens,

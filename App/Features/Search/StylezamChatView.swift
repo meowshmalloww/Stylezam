@@ -14,7 +14,14 @@ struct StylezamChatView: View {
     @State private var activeSearchIntent: AIShoppingSearchIntent?
     @State private var searchProgress: ProductSearchProgress = .preparing
     @State private var errorMessage: String?
+    @State private var retryRequest: ChatRetryRequest?
     @FocusState private var composerFocused: Bool
+
+    private let starterQuestions = [
+        "What style is this?",
+        "How would you wear it?",
+        "What details stand out?",
+    ]
 
     private var scan: SavedScan? {
         model.library.scans.first { $0.id == scanID }
@@ -48,12 +55,12 @@ struct StylezamChatView: View {
         NavigationStack {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 18) {
+                    LazyVStack(alignment: .leading, spacing: 22) {
                         itemContext
                         shoppingActions
 
                         if messages.isEmpty, pendingUserText == nil {
-                            welcomeMessage
+                            conversationWelcome
                         }
 
                         ForEach(messages) { message in
@@ -70,20 +77,14 @@ struct StylezamChatView: View {
                             followUpQuestions
                         }
 
-                        if let currentSearch, currentSearch.pipeline == .privateAIText {
+                        if let activeSearchIntent {
+                            searchStatus(activeSearchIntent)
+                        } else if let currentSearch, currentSearch.pipeline == .privateAIText {
                             searchResultPreview(currentSearch)
                         }
 
-                        if let activeSearchIntent {
-                            searchStatus(activeSearchIntent)
-                        }
-
                         if let errorMessage {
-                            Label(errorMessage, systemImage: "exclamationmark.circle")
-                                .font(.footnote)
-                                .foregroundStyle(.red)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .padding(.horizontal, 2)
+                            errorPanel(errorMessage)
                         }
 
                         Color.clear
@@ -91,25 +92,20 @@ struct StylezamChatView: View {
                             .id("chat-bottom")
                     }
                     .padding(.horizontal, StylezamDesign.pageInset)
-                    .padding(.top, 12)
-                    .padding(.bottom, 18)
+                    .padding(.top, 14)
+                    .padding(.bottom, 24)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: messages.count) { _, _ in
-                    scrollToBottom(proxy)
-                }
-                .onChange(of: pendingUserText) { _, _ in
-                    scrollToBottom(proxy)
-                }
-                .onChange(of: activeSearchIntent) { _, _ in
-                    scrollToBottom(proxy)
-                }
+                .onChange(of: messages.count) { _, _ in scrollToBottom(proxy) }
+                .onChange(of: pendingUserText) { _, _ in scrollToBottom(proxy) }
+                .onChange(of: activeSearchIntent) { _, _ in scrollToBottom(proxy) }
+                .onChange(of: errorMessage) { _, _ in scrollToBottom(proxy) }
             }
             .background(StylezamDesign.canvas)
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer
             }
-            .navigationTitle("Stylezam AI")
+            .navigationTitle("Ask Stylezam")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -121,6 +117,7 @@ struct StylezamChatView: View {
                             Button("Clear conversation", systemImage: "trash", role: .destructive) {
                                 model.library.clearChat(for: garmentKey)
                                 errorMessage = nil
+                                retryRequest = nil
                             }
                         }
                     } label: {
@@ -137,80 +134,130 @@ struct StylezamChatView: View {
     }
 
     private var itemContext: some View {
-        HStack(spacing: 13) {
+        HStack(spacing: 14) {
             Group {
                 if let garment, let url = model.library.cropURL(for: garment) {
                     LocalFileImage(url: url, contentMode: .fit)
                 } else {
-                    Color(uiColor: .secondarySystemBackground)
-                        .overlay { Image(systemName: "tshirt") }
+                    Color(uiColor: .tertiarySystemFill)
+                        .overlay {
+                            Image(systemName: "tshirt")
+                                .foregroundStyle(.secondary)
+                        }
                 }
             }
-            .frame(width: 62, height: 70)
+            .frame(width: 72, height: 82)
             .background(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 13, style: .continuous)
-                    .stroke(StylezamDesign.hairline, lineWidth: 1)
-            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(garment?.title ?? "Selected piece")
-                    .font(.headline)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("IN THIS CHAT")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1.1)
+                    .foregroundStyle(.secondary)
+                Text(garment?.title.capitalized ?? "Selected piece")
+                    .font(.title3.weight(.semibold))
                     .lineLimit(2)
-                Text("Qwen keeps this crop in context throughout the conversation.")
+                Label("AI keeps this crop in context", systemImage: "viewfinder")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
             Spacer(minLength: 0)
+        }
+        .padding(12)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
         }
     }
 
     private var shoppingActions: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 9) {
+        VStack(alignment: .leading, spacing: 11) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Shop this look")
+                    .font(.headline)
+                Spacer()
+                Text("1 LIVE SEARCH")
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.9)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 10) {
                 ForEach(AIShoppingSearchIntent.allCases) { intent in
                     Button {
                         runShoppingSearch(intent)
                     } label: {
-                        Label(intent.title, systemImage: intent.systemImage)
-                            .font(.subheadline.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 46)
+                        ChatShoppingAction(intent: intent)
                     }
-                    .stylezamGlassButton(prominent: intent == .similar)
-                    .tint(intent == .similar ? StylezamDesign.cobalt : nil)
+                    .buttonStyle(.plain)
                     .disabled(isBusy)
+                    .opacity(isBusy && activeSearchIntent != intent ? 0.48 : 1)
+                }
+            }
+        }
+    }
+
+    private var conversationWelcome: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 11) {
+                assistantMark
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Ask about this piece")
+                        .font(.headline)
+                    Text("I can identify the style, explain visible details, suggest outfits, or help refine what to shop for.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            Text("Fireworks reads the piece and your conversation, then Serper performs one live keyword shopping search. Bright Data remains an image-search provider.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
+            VStack(spacing: 0) {
+                ForEach(Array(starterQuestions.enumerated()), id: \.element) { index, question in
+                    Button {
+                        send(question)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(question)
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(.primary)
+                            Spacer()
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(StylezamDesign.cobalt)
+                        }
+                        .frame(minHeight: 46)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
 
-    private var welcomeMessage: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Ask me anything about this piece.")
-                .font(.headline)
-            Text("I can help identify visible details, name the style, suggest outfits, explain fit and care, or turn the conversation into a live product search.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+                    if index < starterQuestions.count - 1 {
+                        EditorialRule()
+                    }
+                }
+            }
+            .padding(.horizontal, 14)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
         }
-        .padding(16)
-        .background(
-            StylezamDesign.cobalt.opacity(0.065),
-            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-        )
     }
 
     private func chatBubble(_ message: StylezamChatMessage) -> some View {
-        HStack(alignment: .bottom) {
-            if message.role == .user { Spacer(minLength: 48) }
+        HStack(alignment: .bottom, spacing: 9) {
+            if message.role == .assistant {
+                assistantMark
+            } else {
+                Spacer(minLength: 54)
+            }
+
             Text(message.text)
                 .font(.body)
                 .foregroundStyle(message.role == .user ? Color.white : Color.primary)
@@ -221,16 +268,19 @@ struct StylezamChatView: View {
                     message.role == .user
                         ? AnyShapeStyle(StylezamDesign.cobalt)
                         : AnyShapeStyle(Color(uiColor: .secondarySystemBackground)),
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 19, style: .continuous)
                 )
-            if message.role == .assistant { Spacer(minLength: 32) }
+
+            if message.role == .assistant {
+                Spacer(minLength: 26)
+            }
         }
         .frame(maxWidth: .infinity)
     }
 
     private func pendingBubble(_ text: String) -> some View {
         HStack {
-            Spacer(minLength: 48)
+            Spacer(minLength: 54)
             Text(text)
                 .font(.body)
                 .foregroundStyle(.white)
@@ -238,7 +288,7 @@ struct StylezamChatView: View {
                 .padding(.vertical, 12)
                 .background(
                     StylezamDesign.cobalt,
-                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 19, style: .continuous)
                 )
         }
         .frame(maxWidth: .infinity)
@@ -246,34 +296,53 @@ struct StylezamChatView: View {
 
     private var assistantThinking: some View {
         HStack(spacing: 9) {
-            ProgressView()
-                .controlSize(.small)
-            Text("Reading the piece and our conversation…")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            assistantMark
+            HStack(spacing: 9) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("Looking closely at the piece…")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: Capsule()
+            )
             Spacer()
         }
-        .padding(.horizontal, 4)
     }
 
     private var followUpQuestions: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                ForEach(latestSuggestedQuestions, id: \.self) { question in
-                    Button(question) { send(question) }
-                        .stylezamGlassButton()
+        VStack(alignment: .leading, spacing: 9) {
+            Text("YOU COULD ALSO ASK")
+                .font(.caption2.weight(.bold))
+                .tracking(1)
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(latestSuggestedQuestions, id: \.self) { question in
+                        Button(question) { send(question) }
+                            .font(.subheadline.weight(.medium))
+                            .stylezamGlassButton()
+                    }
                 }
+                .padding(.vertical, 1)
             }
-            .padding(.vertical, 1)
+            .scrollIndicators(.hidden)
         }
-        .scrollIndicators(.hidden)
+        .padding(.leading, 39)
     }
 
     private func searchStatus(_ intent: AIShoppingSearchIntent) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 13) {
             ProgressView()
+                .controlSize(.regular)
+                .tint(StylezamDesign.cobalt)
             VStack(alignment: .leading, spacing: 3) {
-                Text(intent == .cheaper ? "Finding lower-priced options" : "Finding similar pieces")
+                Text(intent == .cheaper ? "Finding lower prices" : "Finding similar pieces")
                     .font(.subheadline.weight(.semibold))
                 Text(searchProgress.title)
                     .font(.caption)
@@ -281,33 +350,31 @@ struct StylezamChatView: View {
             }
             Spacer()
         }
-        .padding(15)
+        .padding(16)
         .background(
             Color(uiColor: .secondarySystemBackground),
-            in: RoundedRectangle(cornerRadius: 17, style: .continuous)
+            in: RoundedRectangle(cornerRadius: 19, style: .continuous)
         )
     }
 
     private func searchResultPreview(_ search: SavedProductSearch) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(alignment: .center, spacing: 11) {
+                Image(systemName: search.aiSearchIntent == .cheaper ? "tag.fill" : "square.stack.3d.up.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(StylezamDesign.cobalt, in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
                     Text(search.aiSearchIntent == .cheaper ? "Lower-priced options" : "Similar pieces")
                         .font(.headline)
-                    Text("\(search.providerSummary) · \(search.results.count) results")
+                    Text("\(search.results.count) live matches")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("View all") { dismiss() }
+                Button("See all") { dismiss() }
                     .font(.subheadline.weight(.semibold))
-            }
-
-            if let query = search.generatedQuery {
-                Text(query)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
 
             ScrollView(.horizontal) {
@@ -322,12 +389,47 @@ struct StylezamChatView: View {
             }
             .scrollIndicators(.hidden)
         }
-        .padding(.top, 2)
+        .padding(14)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+    }
+
+    private func errorPanel(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 11) {
+            Label("That didn’t finish", systemImage: "exclamationmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.red)
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            HStack(spacing: 15) {
+                if retryRequest != nil {
+                    Button("Try again") { retryLastRequest() }
+                        .font(.subheadline.weight(.semibold))
+                }
+                Button("Dismiss") {
+                    errorMessage = nil
+                    retryRequest = nil
+                }
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            Color.red.opacity(0.065),
+            in: RoundedRectangle(cornerRadius: 19, style: .continuous)
+        )
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 10) {
-            TextField("Ask about this piece", text: $draft, axis: .vertical)
+        HStack(alignment: .bottom, spacing: 9) {
+            TextField("Message Stylezam", text: $draft, axis: .vertical)
                 .focused($composerFocused)
                 .lineLimit(1...5)
                 .textInputAutocapitalization(.sentences)
@@ -337,17 +439,23 @@ struct StylezamChatView: View {
                 .padding(.vertical, 11)
                 .background(
                     Color(uiColor: .secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
                 )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 21, style: .continuous)
+                        .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+                }
 
             Button { send(nil) } label: {
                 Image(systemName: "arrow.up")
                     .font(.body.weight(.bold))
-                    .frame(width: 43, height: 43)
+                    .foregroundStyle(.white)
+                    .frame(width: 44, height: 44)
+                    .background(StylezamDesign.cobalt, in: Circle())
             }
-            .stylezamGlassButton(prominent: true)
-            .tint(StylezamDesign.cobalt)
+            .buttonStyle(.plain)
             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy)
+            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy ? 0.34 : 1)
             .accessibilityLabel("Send message")
         }
         .padding(.horizontal, StylezamDesign.pageInset)
@@ -356,15 +464,25 @@ struct StylezamChatView: View {
         .background(.bar)
     }
 
-    private func send(_ suggestedQuestion: String?) {
-        let question = (suggestedQuestion ?? draft)
+    private var assistantMark: some View {
+        Image(systemName: "sparkles")
+            .font(.caption.weight(.bold))
+            .foregroundStyle(StylezamDesign.cobalt)
+            .frame(width: 30, height: 30)
+            .background(StylezamDesign.cobalt.opacity(0.1), in: Circle())
+            .accessibilityHidden(true)
+    }
+
+    private func send(_ suppliedQuestion: String?) {
+        let question = (suppliedQuestion ?? draft)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isBusy else { return }
-        if suggestedQuestion == nil { draft = "" }
+        if suppliedQuestion == nil { draft = "" }
         composerFocused = false
         pendingUserText = question
         isSending = true
         errorMessage = nil
+        retryRequest = nil
 
         Task { @MainActor in
             defer {
@@ -379,7 +497,7 @@ struct StylezamChatView: View {
                 )
             } catch {
                 errorMessage = error.localizedDescription
-                if suggestedQuestion == nil, draft.isEmpty { draft = question }
+                retryRequest = .question(question)
             }
         }
     }
@@ -390,6 +508,7 @@ struct StylezamChatView: View {
         activeSearchIntent = intent
         searchProgress = .preparing
         errorMessage = nil
+        retryRequest = nil
         let request = intent.refinementPrompt(conversationContext: latestConversationRequest)
 
         Task { @MainActor in
@@ -404,7 +523,16 @@ struct StylezamChatView: View {
                 )
             } catch {
                 errorMessage = error.localizedDescription
+                retryRequest = .search(intent)
             }
+        }
+    }
+
+    private func retryLastRequest() {
+        guard let retryRequest, !isBusy else { return }
+        switch retryRequest {
+        case let .question(question): send(question)
+        case let .search(intent): runShoppingSearch(intent)
         }
     }
 
@@ -418,29 +546,82 @@ struct StylezamChatView: View {
     }
 }
 
+private enum ChatRetryRequest {
+    case question(String)
+    case search(AIShoppingSearchIntent)
+}
+
+private struct ChatShoppingAction: View {
+    let intent: AIShoppingSearchIntent
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack {
+                Image(systemName: intent.systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(StylezamDesign.cobalt)
+                    .frame(width: 34, height: 34)
+                    .background(StylezamDesign.cobalt.opacity(0.1), in: Circle())
+                Spacer()
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text(intent.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(intent == .similar ? "Same visual language" : "Lower live prices")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 94, alignment: .leading)
+        .padding(13)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 19, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 19, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 19, style: .continuous))
+    }
+}
+
 private struct ChatProductCard: View {
     let product: ProductResultDTO
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            ProductImage(url: product.imageURL)
-                .frame(width: 132, height: 148)
-                .padding(8)
-                .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            ZStack(alignment: .topLeading) {
+                ProductImage(url: product.imageURL)
+                    .frame(width: 132, height: 148)
+                    .padding(8)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                Text("\(product.confidencePercent)%")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(.black.opacity(0.72), in: Capsule())
+                    .padding(7)
+            }
             Text(product.title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(2)
             Text(product.price?.formatted ?? product.merchant)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+                .font(.caption2.weight(product.price == nil ? .regular : .semibold))
+                .foregroundStyle(product.price == nil ? .secondary : .primary)
                 .lineLimit(1)
         }
         .frame(width: 148, alignment: .leading)
         .padding(8)
         .background(
-            Color(uiColor: .secondarySystemBackground),
+            Color(uiColor: .tertiarySystemBackground),
             in: RoundedRectangle(cornerRadius: 17, style: .continuous)
         )
     }
