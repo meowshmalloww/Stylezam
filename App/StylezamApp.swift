@@ -3,10 +3,12 @@ import SwiftUI
 
 @main
 struct StylezamApp: App {
+    private static let currentOnboardingVersion = 2
+
     @UIApplicationDelegateAdaptor(StylezamAppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @State private var isShowingLaunchExperience = true
-    @AppStorage("stylezam.onboarding.completed") private var onboardingCompleted = false
+    @AppStorage("stylezam.onboarding.version") private var onboardingVersion = 0
 
     var body: some Scene {
         WindowGroup {
@@ -32,10 +34,10 @@ struct StylezamApp: App {
 
     @ViewBuilder
     private var authenticatedContent: some View {
-        if !onboardingCompleted {
+        if onboardingVersion < Self.currentOnboardingVersion {
             FirstRunExperienceView {
                 withAnimation(.easeInOut(duration: 0.28)) {
-                    onboardingCompleted = true
+                    onboardingVersion = Self.currentOnboardingVersion
                 }
             }
             .environment(model)

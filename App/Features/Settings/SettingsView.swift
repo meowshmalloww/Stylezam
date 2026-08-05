@@ -3,7 +3,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
-    @AppStorage("stylezam.onboarding.completed") private var onboardingCompleted = false
 
     var body: some View {
         List {
@@ -87,18 +86,6 @@ struct SettingsView: View {
                         )
                     }
 
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.28)) {
-                            onboardingCompleted = false
-                        }
-                    } label: {
-                        SettingsLinkLabel(
-                            icon: "sparkles.rectangle.stack",
-                            title: "Replay First Run",
-                            detail: "Preview the new-user welcome screen without deleting your Library"
-                        )
-                    }
-                    .buttonStyle(.plain)
                 }
             }
 

@@ -126,8 +126,8 @@ No inspector action uploads the photo or crops.
 On the connected iPhone, verify:
 
 - the app launches without a model-setup sheet or network configuration;
-- the five-page first-run experience cannot enter the main app without Google authentication;
-- **Replay First Run** under Settings → Developer shows onboarding again without deleting Library data;
+- the four-page first-run experience supports forward, back, and swipe navigation and completes only from its final page;
+- the four-page first-run experience appears once for the current onboarding version and does not add a replay control to Settings;
 - Google Sign-In restores the account after relaunch;
 - profile edits survive relaunch locally and sign-out returns to the required login screen;
 - Free is the active public plan; Plus/Pro are non-purchasable previews;

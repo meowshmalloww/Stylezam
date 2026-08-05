@@ -22,7 +22,7 @@ Product retrieval is real and explicitly user-triggered. One tap makes one visua
 
 Photo-based virtual try-on is also real and explicitly user-triggered. A product result or saved Library piece can be sent with a user-selected photo to YouCam's category-specific clothes, bag, scarf, shoes, hat, ring, bracelet, earring, watch, or necklace endpoint. Completed previews are downloaded into the local Library.
 
-The app now opens with a focused five-page first-run experience and requires Google Sign-In through Firebase Authentication. Display-name, username, style note, captures, crops, and Library state remain local to the iPhone. Firebase stores the authentication identity and delivers a signed `developer` custom claim; no Firestore profile database is used. Free is active with 10 product searches and 20 AI questions per month. Plus and Pro are pricing previews only—there is no checkout, payment simulation, or paid entitlement in this build.
+The app now opens with a focused four-page first-run experience and requires Google Sign-In through Firebase Authentication. Display-name, username, style note, captures, crops, and Library state remain local to the iPhone. Firebase stores the authentication identity and delivers a signed `developer` custom claim; no Firestore profile database is used. Free is active with 10 product searches and 20 AI questions per month. Plus and Pro are pricing previews only—there is no checkout, payment simulation, or paid entitlement in this build.
 
 ## Current system
 
@@ -56,7 +56,7 @@ working directory containing ignored credentials.
 ## What works now
 
 - Custom full-screen camera with rear/front switching, flash, Photo mode, hybrid Live mode, and orientation-correct portrait/landscape capture.
-- Animated five-page first-run experience, required Firebase Google sign-in, local editable profile, role badge, logout, and account restoration.
+- Four-page editorial first-run experience, required Firebase Google sign-in, local editable profile, role badge, logout, and account restoration.
 - Free membership enforcement plus non-purchasable Plus/Pro preview cards; verified Developer claims receive unlimited internal usage.
 - Automatic Live capture after a stable, high-quality frame, plus a manual shutter at any time. Live mode draws provisional boxes immediately, confirms labels across consecutive frames, explains the current capture state, and saves a full-resolution still after consensus.
 - Bundled 61.7 MB FP16 Core ML garment-segmentation package—no setup download.
