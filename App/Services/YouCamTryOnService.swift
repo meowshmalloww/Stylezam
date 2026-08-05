@@ -83,6 +83,13 @@ actor YouCamTryOnService {
         self.session = session
     }
 
+    func validateConnection() async throws {
+        _ = try await requestJSON(
+            path: "/s2s/v2.0/credit/feature-cost",
+            method: "GET"
+        )
+    }
+
     func render(
         personImage: Data,
         items: [TryOnTrayItem],
@@ -94,10 +101,13 @@ actor YouCamTryOnService {
         var lastTaskID = UUID().uuidString
 
         for (index, item) in items.enumerated() {
-            await progress(index, items.count, "Applying \(item.title)")
+            await progress(index, items.count, "Preparing \(item.title)")
             let endpoint = item.category.endpoint
+            await progress(index, items.count, "Uploading your photo")
             let sourceID = try await upload(current, endpoint: endpoint)
+            await progress(index, items.count, "Uploading the found piece")
             let referenceID = try await upload(item.imageData, endpoint: endpoint)
+            await progress(index, items.count, "Starting YouCam")
             lastTaskID = try await createTask(
                 endpoint: endpoint,
                 category: item.category,
@@ -106,7 +116,9 @@ actor YouCamTryOnService {
                 gender: gender
             )
             do {
+                await progress(index, items.count, "Creating your try-on")
                 let resultURL = try await poll(endpoint: endpoint, taskID: lastTaskID)
+                await progress(index, items.count, "Downloading the result")
                 let (data, response) = try await session.data(from: resultURL)
                 guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
                     throw YouCamTryOnError.server("The generated image could not be downloaded.")
@@ -213,7 +225,6 @@ actor YouCamTryOnService {
             body["ref_file_id"] = referenceID
             if category == .clothes {
                 body["garment_category"] = "auto"
-                body["change_shoes"] = false
             } else {
                 body["gender"] = gender.rawValue
                 if category == .shoes {
@@ -271,8 +282,11 @@ actor YouCamTryOnService {
         } else {
             json = ["message": String(data: data, encoding: .utf8) ?? "YouCam returned an unreadable response."]
         }
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw serverError(from: json)
+        guard let http = response as? HTTPURLResponse else {
+            throw YouCamTryOnError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            throw serverError(from: json, statusCode: http.statusCode)
         }
         return json
     }
@@ -284,11 +298,38 @@ actor YouCamTryOnService {
         return nil
     }
 
-    private func serverError(from json: Any) -> YouCamTryOnError {
-        let message = (recursiveValue(for: "message", in: json) as? String)
+    private func serverError(from json: Any, statusCode: Int? = nil) -> YouCamTryOnError {
+        let code = (recursiveValue(for: "error_code", in: json) as? String)
+            ?? (recursiveValue(for: "code", in: json) as? String)
+        let providerMessage = (recursiveValue(for: "message", in: json) as? String)
             ?? (recursiveValue(for: "error", in: json) as? String)
-            ?? "YouCam could not generate this try-on. Check the photo and product image."
-        return .server(message)
+
+        let friendly: String
+        switch code?.lowercased() {
+        case "error_invalid_src", "error_no_face", "photo_detection_fail", "photo_check_invalid":
+            friendly = "YouCam could not detect one clear person in your photo. Retake it facing forward with the requested body area visible."
+        case "object_detection_fail", "input_object_image_empty":
+            friendly = "YouCam could not recognize the found product image. Try another result or add a clearer product photo."
+        case "exceed_max_filesize":
+            friendly = "One of the try-on images is too large for YouCam."
+        case "invalid_parameter":
+            friendly = "YouCam rejected this category or image combination. Confirm the piece category and try again."
+        case "error_nsfw_content_detected":
+            friendly = "YouCam declined this image under its content policy."
+        default:
+            if let providerMessage, !providerMessage.isEmpty {
+                friendly = providerMessage
+            } else if let statusCode {
+                friendly = "YouCam returned HTTP \(statusCode). Check the API allowance and try again."
+            } else {
+                friendly = "YouCam could not generate this try-on. Check the person photo and product image."
+            }
+        }
+
+        guard let code, !friendly.localizedCaseInsensitiveContains(code) else {
+            return .server(friendly)
+        }
+        return .server("\(friendly) (\(code))")
     }
 
     private func recursiveValue(for key: String, in value: Any) -> Any? {

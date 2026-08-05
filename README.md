@@ -73,7 +73,7 @@ working directory containing ignored credentials.
 - Duplicate suppression for recent Live and screen captures.
 - Photo import, clipboard input, Share extension, App Intents, separate Capture a Look and Live Screen Control Center controls, Live Activities, and Dynamic Island state.
 - iOS 18–27 runtime compatibility. The conditional iOS 27 ScreenCaptureKit adapter remains compile-gated until the project is built with the iOS 27 SDK; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems.
-- Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with selectable Library pieces and saved results.
+- Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with an in-app front/rear camera, Photos import, selectable Library pieces, connection checks, actionable API errors, and saved results.
 
 <table>
   <tr>

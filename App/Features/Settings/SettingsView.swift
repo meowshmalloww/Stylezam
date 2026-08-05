@@ -294,9 +294,14 @@ private struct PrivacySettingsView: View {
                 detail: "Stylezam sends only the selected garment crop to the provider you configured after you tap Find. The Qwen route sends the crop to Fireworks; Serper receives generated text keywords, not the photo."
             )
             privacySection(
+                title: "Only when you create a try-on",
+                icon: "wand.and.sparkles",
+                detail: "After you allow the upload, Stylezam sends the selected person photo and product image to YouCam, downloads the generated preview, and requests remote task deletion."
+            )
+            privacySection(
                 title: "Service credentials",
                 icon: "key",
-                detail: "Users never enter provider keys. This private developer build imports them from an ignored Xcode environment file into the device-only Keychain; they are never written to the Library."
+                detail: "Search keys are developer-managed. This private build imports them from an ignored environment file into the device-only Keychain. A YouCam key can also be saved directly to this iPhone for prototype testing; credentials are never written to Library media or JSON."
             )
 
             Section {
@@ -460,6 +465,12 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
+                readinessRow(
+                    title: "YouCam",
+                    detail: "Photo virtual try-on",
+                    status: YouCamCredentialStore.isConfigured ? "Configured" : "Not configured",
+                    isReady: YouCamCredentialStore.isConfigured
+                )
                 providerReadinessRow(kind: .fireworks, detail: "Stylezam AI")
                 providerReadinessRow(kind: .serper, detail: "AI-guided shopping")
                 ForEach(ImageSearchProvider.allCases) { provider in
@@ -468,7 +479,7 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Provider readiness")
             } footer: {
-                Text("Status only—there is no key editor in the app. Developer builds import values from the ignored .env/Xcode scheme and store them in this iPhone's Keychain. Public users never supply service credentials.")
+                Text("Search-provider status is read-only. This private build imports developer credentials from the ignored .env launch environment into this iPhone's Keychain. Try On also exposes a local YouCam connection field when its credential is missing.")
             }
 
             Section {
@@ -495,7 +506,10 @@ private struct DeveloperSettingsView: View {
                 runtimeRow(title: "Garment detection", value: model.modelPack.isInstalled ? "Ready" : "Unavailable")
                 runtimeRow(title: "Segmentation crops", value: "On device")
                 runtimeRow(title: "Product retrieval", value: searchRuntimeStatus)
-                runtimeRow(title: "Virtual try-on", value: "Not built yet")
+                runtimeRow(
+                    title: "Virtual try-on",
+                    value: YouCamCredentialStore.isConfigured ? "YouCam configured" : "Needs YouCam key"
+                )
             }
         }
         .navigationTitle("Developer Debug")

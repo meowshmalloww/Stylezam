@@ -12,6 +12,9 @@ struct TryOnView: View {
     @State private var tray: [TryOnTrayItem] = []
     @State private var newCategory: TryOnCategory = .clothes
     @State private var isLibraryPresented = false
+    @State private var isCameraPresented = false
+    @State private var isLoadingFoundProducts = false
+    @State private var foundProductStatus: String?
     @State private var isRendering = false
     @State private var status = ""
     @State private var errorMessage: String?
@@ -20,6 +23,9 @@ struct TryOnView: View {
     @State private var acceptsRetention = false
     @State private var credential = ""
     @State private var hasCredential = YouCamCredentialStore.isConfigured
+    @State private var isCheckingConnection = false
+    @State private var isConnectionVerified = false
+    @State private var connectionError: String?
     @State private var renderTask: Task<Void, Never>?
     @State private var activeRenderID: UUID?
     @State private var activeRenderContext: TryOnPhotoContext?
@@ -32,8 +38,8 @@ struct TryOnView: View {
                 contextControls
                 personStage
                 itemTray
-                controls
                 credentialPanel
+                controls
             }
             .padding(.horizontal, StylezamDesign.pageInset)
             .padding(.top, 12)
@@ -42,13 +48,19 @@ struct TryOnView: View {
         .background(StylezamDesign.canvas)
         .navigationTitle("Try On")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            hasCredential = YouCamCredentialStore.isConfigured
+            await checkConnection()
+        }
         .onChange(of: personPickerItem) { _, item in
             guard let item else { return }
             let targetContext = photoContext
             Task {
-                personImages[targetContext] = await normalizedData(from: item)
-                invalidateResult(for: targetContext)
-                acceptsRetention = false
+                if let data = await normalizedData(from: item) {
+                    setPersonPhoto(data, for: targetContext)
+                } else {
+                    errorMessage = "That photo could not be read. Choose a JPEG, PNG, or HEIC image."
+                }
                 personPickerItem = nil
             }
         }
@@ -67,19 +79,29 @@ struct TryOnView: View {
         }
         .task(id: model.pendingTryOnProducts.map(\.id)) {
             let pending = model.pendingTryOnProducts
+            guard !pending.isEmpty else { return }
+            isLoadingFoundProducts = true
             for product in pending where !tray.contains(where: { $0.sourceProduct?.id == product.id }) {
+                foundProductStatus = "Adding \(product.title)"
                 await addPendingProduct(product)
             }
             let handledIDs = Set(pending.map(\.id))
             model.pendingTryOnProducts.removeAll { product in
                 handledIDs.contains(product.id)
             }
+            isLoadingFoundProducts = false
+            if !tray.isEmpty { foundProductStatus = "Found piece ready" }
         }
         .sheet(isPresented: $isLibraryPresented) {
             TryOnLibraryPicker { item in
                 appendTrayItem(item)
             }
                 .environment(model)
+        }
+        .fullScreenCover(isPresented: $isCameraPresented) {
+            TryOnCameraCaptureView(context: photoContext) { data in
+                setPersonPhoto(data, for: photoContext)
+            }
         }
         .onDisappear { renderTask?.cancel() }
     }
@@ -120,30 +142,54 @@ struct TryOnView: View {
     }
 
     private var personStage: some View {
-        return ZStack(alignment: .topTrailing) {
+        let hasPersonPhoto = personImages[photoContext] != nil
+        return VStack(spacing: 0) {
             if let display = resultImages[photoContext] ?? personImages[photoContext] {
                 DataImage(data: display, contentMode: .fit)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 420)
+                    .frame(height: 400)
                     .clipped()
+                    .background(Color(uiColor: .secondarySystemBackground))
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: photoContext.cameraSymbol)
+                        .font(.system(size: 40, weight: .light))
+                        .foregroundStyle(StylezamDesign.cobalt)
+                    Text(photoContext.emptyPhotoTitle)
+                        .font(.title3.weight(.semibold))
+                    Text(photoContext.guidance)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 22)
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 245)
+            }
+
+            EditorialRule()
+
+            HStack(spacing: 10) {
+                Button {
+                    isCameraPresented = true
+                } label: {
+                    Label(hasPersonPhoto ? "Retake" : "Take photo", systemImage: "camera.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
+                }
+                .stylezamGlassButton(prominent: true)
+                .tint(StylezamDesign.cobalt)
+
                 PhotosPicker(selection: $personPickerItem, matching: .images) {
-                    Label("Change photo", systemImage: "photo")
-                        .font(.caption.weight(.semibold))
+                    Label(hasPersonPhoto ? "Replace" : "Photos", systemImage: "photo")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 48)
                 }
                 .stylezamGlassButton()
-                .padding(12)
-            } else {
-                PhotosPicker(selection: $personPickerItem, matching: .images) {
-                    VStack(spacing: 14) {
-                        Image(systemName: "person.crop.rectangle.badge.plus")
-                            .font(.system(size: 38, weight: .light))
-                            .foregroundStyle(StylezamDesign.cobalt)
-                        Text("Add your photo").font(.headline)
-                    }
-                    .frame(maxWidth: .infinity).frame(height: 300)
-                }
-                .buttonStyle(.plain)
             }
+            .padding(12)
         }
         .background(Color(uiColor: .secondarySystemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -171,7 +217,20 @@ struct TryOnView: View {
                 .stylezamGlassButton()
             }
 
-            if !tray.contains(where: { photoContext.categories.contains($0.category) }) {
+            if isLoadingFoundProducts {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(foundProductStatus ?? "Preparing the found piece")
+                        .font(.subheadline.weight(.medium))
+                }
+                .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+            } else if let foundProductStatus, !tray.isEmpty {
+                Label(foundProductStatus, systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            if !isLoadingFoundProducts && !tray.contains(where: { photoContext.categories.contains($0.category) }) {
                 Text(tray.isEmpty
                      ? "Use + to add a product image or an existing Library piece."
                      : "No \(photoContext.title.lowercased()) pieces yet. Use + to add one, or switch photo type.")
@@ -256,7 +315,33 @@ struct TryOnView: View {
     }
 
     private var controls: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 9) {
+                Image(systemName: readinessSymbol)
+                    .foregroundStyle(isReadyToRender ? StylezamDesign.cobalt : .secondary)
+                Text(readinessMessage)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(isReadyToRender ? .primary : .secondary)
+            }
+
+            if let errorMessage {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Try-on could not finish", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline.weight(.semibold))
+                    Text(errorMessage)
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(.red)
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            Toggle("Allow this try-on upload", isOn: $acceptsRetention)
+                .font(.subheadline)
+                .disabled(personImages[photoContext] == nil || selectedItems.isEmpty)
+
             Button {
                 startRender()
             } label: {
@@ -271,7 +356,7 @@ struct TryOnView: View {
             }
             .stylezamGlassButton(prominent: true)
             .tint(StylezamDesign.cobalt)
-            .disabled(personImages[photoContext] == nil || selectedItems.isEmpty || isRendering || !acceptsRetention || !hasCredential)
+            .disabled(!isReadyToRender || isRendering)
 
             if let resultImage = resultImages[photoContext], let jobID = resultJobIDs[photoContext] {
                 Button {
@@ -288,11 +373,6 @@ struct TryOnView: View {
                 .stylezamGlassButton()
                 .disabled(savedJobIDs.contains(jobID))
             }
-            if let errorMessage {
-                Text(errorMessage).font(.caption).foregroundStyle(.red)
-            }
-            Toggle("I agree to upload these selected images to YouCam", isOn: $acceptsRetention)
-                .font(.caption)
             Text("YouCam documents that uploaded and generated files may be retained for up to 30 days; result links expire sooner. Generative passes may alter earlier details. Previews show appearance, not physical size or fit.")
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -300,7 +380,33 @@ struct TryOnView: View {
 
     @ViewBuilder
     private var credentialPanel: some View {
-        if !hasCredential {
+        if hasCredential {
+            HStack(spacing: 10) {
+                if isCheckingConnection {
+                    ProgressView()
+                } else {
+                    Image(systemName: isConnectionVerified ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .foregroundStyle(isConnectionVerified ? StylezamDesign.cobalt : .orange)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isConnectionVerified ? "YouCam connected" : "YouCam needs attention")
+                        .font(.subheadline.weight(.semibold))
+                    if let connectionError {
+                        Text(connectionError)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(3)
+                    }
+                }
+                Spacer()
+                if !isCheckingConnection && !isConnectionVerified {
+                    Button("Retry") { Task { await checkConnection() } }
+                        .font(.caption.weight(.semibold))
+                }
+            }
+            .padding(12)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        } else {
             VStack(alignment: .leading, spacing: 10) {
                 EditorialSectionHeader(title: "Connect YouCam", detail: "Prototype credential")
                 SecureField("YouCam API key", text: $credential)
@@ -312,6 +418,7 @@ struct TryOnView: View {
                         try YouCamCredentialStore.save(credential)
                         credential = ""
                         hasCredential = true
+                        Task { await checkConnection() }
                     } catch { errorMessage = error.localizedDescription }
                 }
                 .stylezamGlassButton()
@@ -357,6 +464,32 @@ struct TryOnView: View {
         tray.filter { $0.isSelected && photoContext.categories.contains($0.category) }
     }
 
+    private var isReadyToRender: Bool {
+        personImages[photoContext] != nil
+            && !selectedItems.isEmpty
+            && acceptsRetention
+            && hasCredential
+            && isConnectionVerified
+            && !isLoadingFoundProducts
+    }
+
+    private var readinessMessage: String {
+        if isLoadingFoundProducts { return foundProductStatus ?? "Preparing the found piece" }
+        if personImages[photoContext] == nil { return "Take or choose your \(photoContext.photoNoun) photo" }
+        if selectedItems.isEmpty { return "Add or select one \(photoContext.title.lowercased()) piece" }
+        if !hasCredential { return "Connect the YouCam API key below" }
+        if isCheckingConnection { return "Checking the YouCam connection" }
+        if !isConnectionVerified { return "Retry the YouCam connection" }
+        if !acceptsRetention { return "Allow this upload to continue" }
+        return "Ready to create a real YouCam preview"
+    }
+
+    private var readinessSymbol: String {
+        if isReadyToRender { return "checkmark.circle.fill" }
+        if isLoadingFoundProducts || isCheckingConnection { return "clock" }
+        return "circle.dashed"
+    }
+
     private var selectionSignature: String {
         tray.map { "\($0.id.uuidString):\($0.category.rawValue):\($0.isSelected)" }.joined(separator: "|")
     }
@@ -384,18 +517,61 @@ struct TryOnView: View {
         return await ImageEncoding.normalizedJPEGAsync(from: data)
     }
 
+    private func setPersonPhoto(_ data: Data, for context: TryOnPhotoContext) {
+        personImages[context] = data
+        invalidateResult(for: context)
+        acceptsRetention = false
+        errorMessage = nil
+    }
+
+    @MainActor
+    private func checkConnection() async {
+        guard YouCamCredentialStore.isConfigured else {
+            hasCredential = false
+            isConnectionVerified = false
+            connectionError = nil
+            return
+        }
+        hasCredential = true
+        isCheckingConnection = true
+        connectionError = nil
+        do {
+            try await service.validateConnection()
+            isConnectionVerified = true
+        } catch {
+            isConnectionVerified = false
+            connectionError = error.localizedDescription
+        }
+        isCheckingConnection = false
+    }
+
     @MainActor
     private func addPendingProduct(_ product: ProductResultDTO) async {
-        guard let url = product.imageURL else { errorMessage = "\(product.title) has no product image."; return }
+        guard let url = product.imageURL else {
+            errorMessage = "This result has no product image for YouCam. Choose another result or add a product photo from the try-on rail."
+            return
+        }
         do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard data.count < 10_000_000,
-                  let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode),
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 25
+            request.cachePolicy = .returnCacheDataElseLoad
+            request.setValue("image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8", forHTTPHeaderField: "Accept")
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+                throw YouCamTryOnError.server("The store would not provide this product image. Choose another result or add a clearer product photo.")
+            }
+            guard data.count < 25_000_000,
                   let normalized = await ImageEncoding.normalizedJPEGAsync(from: data)
-            else { errorMessage = "\(product.title) could not be added to Try On."; return }
+            else {
+                throw YouCamTryOnError.server("The found product image could not be prepared for YouCam.")
+            }
             let category = TryOnCategory.infer(category: product.category, title: product.title)
             appendTrayItem(TryOnTrayItem(title: product.title, category: category, imageData: normalized, sourceProduct: product))
-        } catch { errorMessage = error.localizedDescription }
+            foundProductStatus = "\(category.title) ready"
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func appendTrayItem(_ item: TryOnTrayItem) {
@@ -414,6 +590,224 @@ struct TryOnView: View {
         photoContext = itemContext
     }
 
+}
+
+private struct TryOnCameraCaptureView: View {
+    @Environment(\.dismiss) private var dismiss
+    let context: TryOnPhotoContext
+    let onCapture: (Data) -> Void
+
+    @State private var camera = CameraSessionController()
+    @State private var captureTask: Task<Void, Never>?
+    @State private var didCapture = false
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if camera.isReady {
+                CameraPreview(
+                    session: camera.driver.session,
+                    rotationChanged: camera.driver.setVideoRotationAngle
+                )
+                .ignoresSafeArea()
+            } else if let error = camera.errorMessage {
+                cameraUnavailable(error)
+            } else {
+                ProgressView("Opening camera")
+                    .tint(.white)
+                    .foregroundStyle(.white)
+            }
+
+            LinearGradient(
+                colors: [.black.opacity(0.55), .clear, .black.opacity(0.78)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+
+            cameraChrome
+        }
+        .statusBarHidden()
+        .task { await camera.start() }
+        .onDisappear {
+            captureTask?.cancel()
+            camera.stop()
+        }
+        .sensoryFeedback(.success, trigger: didCapture)
+    }
+
+    private var cameraChrome: some View {
+        VStack(spacing: 0) {
+            HStack {
+                toolButton(icon: "xmark", label: "Close camera") { dismiss() }
+                Spacer()
+                VStack(spacing: 2) {
+                    Text("TRY-ON PHOTO")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.1)
+                    Text(context.title)
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(.white)
+                Spacer()
+                toolButton(
+                    icon: camera.flashEnabled ? "bolt.fill" : "bolt.slash",
+                    label: camera.flashEnabled ? "Turn flash off" : "Turn flash on"
+                ) {
+                    camera.flashEnabled.toggle()
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.top, 12)
+
+            Spacer()
+
+            VStack(spacing: 20) {
+                VStack(spacing: 5) {
+                    Text(context.captureTitle)
+                        .font(.headline)
+                    Text(context.captureGuidance)
+                        .font(.caption)
+                        .foregroundStyle(.white.opacity(0.72))
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 330)
+                }
+                .foregroundStyle(.white)
+
+                HStack {
+                    toolButton(
+                        icon: "arrow.triangle.2.circlepath.camera",
+                        label: "Switch camera"
+                    ) {
+                        Task { await camera.switchCamera() }
+                    }
+
+                    Spacer()
+
+                    Button {
+                        capture()
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .stroke(.white, lineWidth: 4)
+                                .frame(width: 78, height: 78)
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 64, height: 64)
+                                .scaleEffect(camera.isCapturingPhoto ? 0.86 : 1)
+                        }
+                    }
+                    .buttonStyle(TryOnShutterButtonStyle())
+                    .disabled(!camera.isReady || camera.isCapturingPhoto || captureTask != nil)
+                    .accessibilityLabel("Take try-on photo")
+
+                    Spacer()
+
+                    Color.clear
+                        .frame(width: 48, height: 48)
+                }
+                .padding(.horizontal, 28)
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func capture() {
+        guard captureTask == nil else { return }
+        captureTask = Task {
+            defer { captureTask = nil }
+            guard let data = await camera.capturePhoto(), !Task.isCancelled else { return }
+            didCapture = true
+            onCapture(data)
+            try? await Task.sleep(for: .milliseconds(120))
+            dismiss()
+        }
+    }
+
+    private func toolButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.white)
+                .frame(width: 48, height: 48)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay { Circle().stroke(.white.opacity(0.16), lineWidth: 0.5) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func cameraUnavailable(_ message: String) -> some View {
+        VStack(spacing: 14) {
+            Image(systemName: "camera.fill")
+                .font(.system(size: 34))
+            Text("Camera unavailable")
+                .font(.title2.weight(.semibold))
+            Text(message)
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.68))
+                .multilineTextAlignment(.center)
+            Button("Close") { dismiss() }
+                .stylezamGlassButton(prominent: true)
+                .tint(.white)
+                .foregroundStyle(.black)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 34)
+    }
+}
+
+private struct TryOnShutterButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.93 : 1)
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+private extension TryOnPhotoContext {
+    var photoNoun: String {
+        switch self {
+        case .outfit: "outfit"
+        case .handAndWrist: "hand or wrist"
+        case .faceAndNeck: "face and neck"
+        }
+    }
+
+    var emptyPhotoTitle: String {
+        switch self {
+        case .outfit: "Take a photo of yourself"
+        case .handAndWrist: "Take a hand or wrist photo"
+        case .faceAndNeck: "Take a face and neck photo"
+        }
+    }
+
+    var cameraSymbol: String {
+        switch self {
+        case .outfit: "person.crop.rectangle.badge.plus"
+        case .handAndWrist: "hand.raised"
+        case .faceAndNeck: "person.crop.square"
+        }
+    }
+
+    var captureTitle: String {
+        switch self {
+        case .outfit: "Keep one person in frame"
+        case .handAndWrist: "Show the full hand or wrist"
+        case .faceAndNeck: "Face forward with ears visible"
+        }
+    }
+
+    var captureGuidance: String {
+        switch self {
+        case .outfit: "Stand facing forward. Keep the body area needed for the selected clothing fully visible."
+        case .handAndWrist: "Use a clear close-up with no sleeve, hair, or object covering the target area."
+        case .faceAndNeck: "Use even light and keep your face, ears, shoulders, and neckline unobstructed."
+        }
+    }
 }
 
 private struct TryOnLibraryPicker: View {
