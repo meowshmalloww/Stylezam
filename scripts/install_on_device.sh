@@ -7,6 +7,9 @@ device_id=${STYLEZAM_DEVICE_ID:-00008130-000E25423460001C}
 team_id=${STYLEZAM_DEVELOPMENT_TEAM:-BM3KAX5ARZ}
 derived_data="$project_root/DerivedDataDeviceSearch"
 
+. "$project_root/scripts/require_xcode27.sh"
+stylezam_require_xcode27 "$project_root"
+
 if [ -f "$environment_file" ]; then
     set -a
     # The file is local, ignored, and expected to contain shell-compatible KEY=value pairs.

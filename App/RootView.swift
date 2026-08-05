@@ -54,7 +54,17 @@ struct RootView: View {
             }
             .environment(model)
         }
-        .onOpenURL { model.handleURL($0) }
+        .alert(
+            "Live Screen",
+            isPresented: Binding(
+                get: { model.liveScreenNotice != nil },
+                set: { if !$0 { model.liveScreenNotice = nil } }
+            )
+        ) {
+            Button("OK") { model.liveScreenNotice = nil }
+        } message: {
+            Text(model.liveScreenNotice ?? "")
+        }
         .onReceive(NotificationCenter.default.publisher(for: .stylezamOpenScan)) { note in
             model.handlePendingScanNotification(scanID: note.object as? String)
         }
@@ -75,6 +85,7 @@ struct RootView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 model.handleExternalCaptureRequest()
+                model.activatePendingLiveScreenPicker()
             }
         }
     }

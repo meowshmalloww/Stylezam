@@ -110,6 +110,10 @@ final class LiveScreenCaptureManager: NSObject {
         errorMessage = nil
     }
 
+    fileprivate func setPickerError(_ message: String?) {
+        errorMessage = message
+    }
+
     fileprivate func captureDidStart() async {
         isCapturing = true
         errorMessage = nil
@@ -194,7 +198,9 @@ private final class LiveScreenCaptureAdapter: NSObject,
     @MainActor
     func presentSystemPicker() {
         guard picker.isAvailable else {
-            manager?.errorMessage = "Screen capture is not available on this device or is restricted by system policy."
+            manager?.setPickerError(
+                "Screen capture is not available on this device or is restricted by system policy."
+            )
             return
         }
         var configuration = SCContentSharingPickerConfiguration()
@@ -204,7 +210,7 @@ private final class LiveScreenCaptureAdapter: NSObject,
             picker.add(self)
             picker.isActive = true
         }
-        manager?.errorMessage = nil
+        manager?.setPickerError(nil)
         picker.present()
     }
 
@@ -292,7 +298,7 @@ private final class LiveScreenCaptureAdapter: NSObject,
 
     nonisolated func contentSharingPickerStartDidFailWithError(_ error: Error) {
         Task { @MainActor [weak manager] in
-            manager?.errorMessage = error.localizedDescription
+            manager?.setPickerError(error.localizedDescription)
         }
     }
 }

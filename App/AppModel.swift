@@ -24,6 +24,7 @@ final class AppModel {
     var pendingTryOnProducts: [ProductResultDTO] = []
     var pendingTryOnItems: [TryOnTrayItem] = []
     var isTryOnPresented = false
+    var liveScreenNotice: String?
 
     @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
     @ObservationIgnored private let visionEngine = GarmentVisionEngine()
@@ -32,6 +33,10 @@ final class AppModel {
     @ObservationIgnored private let productSearchService = ProductSearchService()
     @ObservationIgnored private var lastCaptureRequest: Double = 0
     @ObservationIgnored private var lastLiveScreenRequest: Double = 0
+    @ObservationIgnored private var liveScreenPickerTask: Task<Void, Never>?
+    @ObservationIgnored private var isLiveScreenPickerPending = false
+    @ObservationIgnored private var isStartupComplete = false
+    @ObservationIgnored private var pendingDeepLink: URL?
 
     init(
         settings: SettingsStore = SettingsStore(),
@@ -74,6 +79,11 @@ final class AppModel {
         handlePendingScanNotification()
         if let pending = library.consumePendingShare() {
             await consumePendingInput(pending)
+        }
+        isStartupComplete = true
+        if let pendingDeepLink {
+            self.pendingDeepLink = nil
+            handleURL(pendingDeepLink)
         }
     }
 
@@ -626,9 +636,15 @@ final class AppModel {
 
     func handleURL(_ url: URL) {
         guard url.scheme == "stylezam" else { return }
+        guard isStartupComplete else {
+            pendingDeepLink = url
+            return
+        }
         switch url.host {
         case "capture":
             presentCamera()
+        case "capture-request":
+            captureFromControl()
         case "import":
             if let pending = library.consumePendingShare() {
                 Task { await consumePendingInput(pending) }
@@ -639,7 +655,7 @@ final class AppModel {
             selectedTab = .search
             lastError = nil
         case "live-screen":
-            if account.isAuthenticated { liveScreen.presentSystemPicker() }
+            requestLiveScreenPicker()
         case "try-on":
             isTryOnPresented = true
         case "library":
@@ -650,32 +666,79 @@ final class AppModel {
     }
 
     func handleExternalCaptureRequest() {
+        let defaults = StylezamShared.defaults
         let liveRequestedAt = StylezamShared.defaults.double(
             forKey: StylezamShared.liveScreenRequestKey
         )
         if liveRequestedAt > lastLiveScreenRequest {
             lastLiveScreenRequest = liveRequestedAt
-            if account.isAuthenticated { liveScreen.presentSystemPicker() }
+            defaults.removeObject(forKey: StylezamShared.liveScreenRequestKey)
+            requestLiveScreenPicker()
         }
-        let requestedAt = StylezamShared.defaults.double(
+        let requestedAt = defaults.double(
             forKey: StylezamShared.captureRequestKey
         )
         if requestedAt > lastCaptureRequest {
             lastCaptureRequest = requestedAt
-            if let liveFrame = liveScreen.consumeLatestFrame() {
-                Task {
-                    await processCapture(
-                        imageData: liveFrame,
-                        origin: .screenCapture,
-                        mode: .screen
-                    )
-                }
-            } else {
-                presentCamera()
-            }
+            defaults.removeObject(forKey: StylezamShared.captureRequestKey)
+            captureFromControl()
         }
         if let pending = library.consumePendingShare() {
             Task { await consumePendingInput(pending) }
+        }
+    }
+
+    func activatePendingLiveScreenPicker() {
+        guard isLiveScreenPickerPending,
+              UIApplication.shared.applicationState == .active
+        else { return }
+
+        liveScreenPickerTask?.cancel()
+        liveScreenPickerTask = Task { @MainActor [weak self] in
+            // A Control Center OpenURL handoff can arrive a moment before the
+            // application window is ready to present Apple's system picker.
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled,
+                  let self,
+                  self.isLiveScreenPickerPending,
+                  UIApplication.shared.applicationState == .active
+            else { return }
+            self.isLiveScreenPickerPending = false
+            self.liveScreen.presentSystemPicker()
+        }
+    }
+
+    private func requestLiveScreenPicker() {
+        guard account.isAuthenticated else {
+            liveScreenNotice = "Sign in with Google before starting Live Screen."
+            return
+        }
+        guard ScreenCaptureAvailability.isSDKAvailable else {
+            liveScreen.presentSystemPicker()
+            liveScreenNotice = liveScreen.errorMessage ?? ScreenCaptureAvailability.summary
+            return
+        }
+        liveScreenNotice = nil
+        isLiveScreenPickerPending = true
+        activatePendingLiveScreenPicker()
+    }
+
+    private func captureFromControl() {
+        guard account.isAuthenticated else {
+            lastError = "Sign in with Google before capturing a look."
+            selectedTab = .search
+            return
+        }
+        if let liveFrame = liveScreen.consumeLatestFrame() {
+            Task {
+                await processCapture(
+                    imageData: liveFrame,
+                    origin: .screenCapture,
+                    mode: .screen
+                )
+            }
+        } else {
+            presentCamera()
         }
     }
 

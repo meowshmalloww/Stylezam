@@ -11,6 +11,6 @@ struct StylezamLiveScreenControl: ControlWidget {
             }
         }
         .displayName("Live Screen")
-        .description("Open Stylezam and choose a screen using Apple's required system picker.")
+        .description("Open Stylezam and immediately choose a screen using Apple's system picker.")
     }
 }

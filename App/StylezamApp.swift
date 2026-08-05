@@ -28,6 +28,7 @@ struct StylezamApp: App {
             .task { await model.start() }
             .onOpenURL { url in
                 _ = GIDSignIn.sharedInstance.handle(url)
+                model.handleURL(url)
             }
         }
     }

@@ -4,6 +4,9 @@ set -eu
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 derived_data="$project_root/DerivedData"
 
+. "$project_root/scripts/require_xcode27.sh"
+stylezam_require_xcode27 "$project_root"
+
 cd "$project_root"
 python3 scripts/verify_model_pack_catalog.py
 ./scripts/generate_project.sh

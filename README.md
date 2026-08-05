@@ -74,7 +74,7 @@ working directory containing ignored credentials.
 - Explicit deletion for captures and completed match history.
 - Duplicate suppression for recent Live and screen captures.
 - Photo import, clipboard input, Share extension, App Intents, separate Capture a Look and Live Screen Control Center controls, Live Activities, and Dynamic Island state.
-- iOS 18–27 runtime compatibility. The conditional iOS 27 ScreenCaptureKit adapter remains compile-gated until the project is built with the iOS 27 SDK; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems.
+- iOS 18–27 runtime compatibility. Xcode 27 builds include the conditional iOS 27 ScreenCaptureKit adapter; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems. Verification and device-install scripts reject an older SDK so Live Screen cannot silently disappear from a replacement build.
 - Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with an in-app front/rear camera, Photos import, selectable Library pieces, connection checks, actionable API errors, and saved results.
 - Every detected piece in Library Recent links directly into its saved-or-live provider search with prices, and can also be sent straight to the Try On rail as a local crop.
 - Developer Debug can pin visual discovery to a preferred eligible provider; unavailable choices fall back without changing the saved preference.
@@ -173,7 +173,7 @@ scripts/                project generation, model research/export, and verificat
 - Prices are current provider observations, not tracked price history.
 - YouCam photo try-on requires network access, explicit per-session upload consent, an eligible YouCam account, and category-compatible source/reference photos.
 - Transparent masks from the current Core ML export are diagnostic-only on iOS; Library deliberately stores the reliable bounding-box crop instead of presenting a broken cutout as final output.
-- The deployment target is iOS 18 and the app runs on iOS 18–27. The conditional iOS 27 screen-recognition path is not compiled by the installed Xcode 26.6 / iOS 26.5 SDK. Install Xcode 27, regenerate, and complete a physical-device verification pass before claiming that SDK-gated path.
+- The deployment target is iOS 18 and the app runs on iOS 18–27. Live Screen is compiled only by the iOS 27 SDK, and its signed binary plus Apple system-picker handoff are verified on an iOS 27 physical device; older systems keep the camera, Photos, clipboard, Share, Screenshot Shortcut, and Control Center entry points.
 - Physical-device camera performance, thermals, Live Activity, extensions, and App Group provisioning must be tested with the final signing team.
 - App Store privacy disclosures and model/dataset legal review remain release tasks.
 

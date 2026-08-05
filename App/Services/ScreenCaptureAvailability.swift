@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 
+@MainActor
 enum ScreenCaptureAvailability {
     static var isSDKAvailable: Bool {
         LiveScreenCaptureManager.isSupportedBySDK

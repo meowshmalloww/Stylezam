@@ -166,12 +166,12 @@ Extracting Apple’s ScreenCaptureKit sample ZIP is only a reference step. It do
 
 To finish verification:
 
-1. move the extracted beta to `/Applications/Xcode-beta.app`, open it once, and install its required components;
-2. select it with `sudo xcode-select -s /Applications/Xcode-beta.app/Contents/Developer` or set the command-line tools inside Xcode Settings;
+1. move the extracted beta to `/Applications/Xcode-beta.app` or keep it beside the Stylezam project, open it once, accept its license, and install its required components;
+2. run `./scripts/check.sh`; the script automatically selects a nearby Xcode 27 beta and rejects an older iOS SDK, or honors an explicit `DEVELOPER_DIR`;
 3. run Apple’s sample separately on the intended device;
 4. regenerate and open Stylezam with that Xcode;
 5. compile the conditional ScreenCaptureKit adapter;
-6. add both **Capture a Look** and **Live Screen** from the Control Center gallery;
+6. add both **Capture a Look** and **Live Screen** from the Control Center gallery; their direct URL handoff does not require an App Group entitlement;
 7. use Live Screen and confirm Apple’s picker appears before a recent real frame becomes a Library scan;
 8. test stop, denial, interruption, protected content, memory pressure, and app termination.
 
