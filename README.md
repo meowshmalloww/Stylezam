@@ -18,7 +18,7 @@
 
 Stylezam keeps fashion detection local. Its RF-DETR Core ML model is included in the app, compiled by Xcode, and loaded directly on the iPhone. Capture, live boxes, garment crops, diagnostic masks, duplicate filtering, and Library storage do not require a cloud host, a laptop acting as a server, an API token, or a first-run model download.
 
-Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. A bounded router keeps an eligible provider for no more than two consecutive requests before advancing. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and user-approved refinements, which then perform one Serper shopping query. No sample products, simulated progress, invented prices, or invented confidence scores are used.
+Product retrieval is real and explicitly user-triggered. One tap makes one visual-provider request for one selected garment; that single request can return several products. Developer Debug can pin an eligible preferred provider and uses an eligible fallback when that preference cannot accept the current local crop. Lykdat can receive the private crop bytes directly. SearchAPI.io, SerpApi, and Bright Data become eligible only when their credential and required public-crop configuration are both present. Fireworks Qwen 3.7 Plus is reserved for the visible Stylezam AI chat and user-approved refinements, which then perform one Serper shopping query. No sample products, simulated progress, invented prices, or invented confidence scores are used.
 
 Photo-based virtual try-on is also real and explicitly user-triggered. A product result or saved Library piece can be sent with a user-selected photo to YouCam's category-specific clothes, bag, scarf, shoes, hat, ring, bracelet, earring, watch, or necklace endpoint. Completed previews are downloaded into the local Library.
 
@@ -65,7 +65,7 @@ working directory containing ignored credentials.
 - Real Vision Inspector with source overlays, crop previews, normalized geometry, confidence, byte counts, and measured local inference time.
 - Local Library containing the source look, detected pieces, capture source, and timestamp.
 - One-successful-search-per-garment safety ledger by default. Failed provider attempts remain in diagnostics but are retryable and do not consume the garment or membership allowance.
-- Smart visual-provider routing: one request at a time, no more than two consecutive requests to the same healthy eligible provider, immediate advancement after a failed route.
+- Preferred visual-provider routing: one request at a time to the selected eligible provider, with a visible eligible fallback when the preference cannot accept the crop.
 - Direct Lykdat visual retrieval, plus a separate Fireworks Qwen image chat and Fireworks → Serper AI-guided similar-search path.
 - SearchAPI.io, SerpApi, and Bright Data adapters with truthful eligibility checks, local monthly limits, result caps, latency, outcomes, and request diagnostics.
 - Result normalization that ranks provider evidence, groups repeated regional/store listings, and labels results as visual alternatives rather than claiming SKU identity.
@@ -74,6 +74,8 @@ working directory containing ignored credentials.
 - Photo import, clipboard input, Share extension, App Intents, separate Capture a Look and Live Screen Control Center controls, Live Activities, and Dynamic Island state.
 - iOS 18–27 runtime compatibility. The conditional iOS 27 ScreenCaptureKit adapter remains compile-gated until the project is built with the iOS 27 SDK; camera, import, clipboard, Share, Screenshot Shortcut, and controls remain available on earlier systems.
 - Photo try-on workspace for clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces, with an in-app front/rear camera, Photos import, selectable Library pieces, connection checks, actionable API errors, and saved results.
+- Every detected piece in Library Recent links directly into its saved-or-live provider search with prices, and can also be sent straight to the Try On rail as a local crop.
+- Developer Debug can pin visual discovery to a preferred eligible provider; unavailable choices fall back without changing the saved preference.
 
 <table>
   <tr>
@@ -97,7 +99,7 @@ flowchart LR
     Masks --> Inspector
     Crops --> Choice["User selects one piece"]
     Choice --> Meter["Reserve one request"]
-    Meter --> Router["Eligible-provider router · max streak 2"]
+    Meter --> Router["Preferred eligible provider · safe fallback"]
     Router --> Direct["One visual-provider request"]
     Choice --> Chat["Stylezam AI question"]
     Chat --> Qwen["Fireworks Qwen vision"]

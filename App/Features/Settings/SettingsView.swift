@@ -431,18 +431,25 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
-                LabeledContent("Routing", value: "Smart rotation")
+                Picker("Preferred provider", selection: $settings.imageSearchProvider) {
+                    ForEach(ImageSearchProvider.allCases) { provider in
+                        Text(provider.title).tag(provider)
+                    }
+                }
+                LabeledContent(
+                    "Routing",
+                    value: model.eligibleImageSearchProviders.contains(settings.imageSearchProvider)
+                        ? "Pinned to preference"
+                        : "Eligible fallback"
+                )
                 LabeledContent("Eligible providers") {
                     Text(model.eligibleImageSearchProviders.count, format: .number)
                         .monospacedDigit()
                 }
                 LabeledContent(
-                    "Next provider",
-                    value: model.searchUsage
-                        .routedImageProvider(from: model.eligibleImageSearchProviders)?
-                        .title ?? "None ready"
+                    "Active provider",
+                    value: model.activeImageSearchProvider?.title ?? "None ready"
                 )
-                LabeledContent("Maximum provider streak", value: "2 requests")
 
                 Stepper(
                     "Successful searches per piece: \(settings.productSearchesPerPiece)",
@@ -461,7 +468,7 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Product search")
             } footer: {
-                Text("One tap makes one provider request, which can return several products. Stylezam keeps a healthy provider for no more than two consecutive requests, then rotates to the next eligible route. Fireworks remains exclusive to Stylezam AI and AI-guided refinements.")
+                Text("One tap makes one request to the preferred eligible provider and can return several products. If that provider requires a public image URL or is not configured, Stylezam uses an eligible fallback. Fireworks remains exclusive to Stylezam AI and AI-guided refinements.")
             }
 
             Section {
@@ -479,7 +486,7 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Provider readiness")
             } footer: {
-                Text("Search-provider status is read-only. This private build imports developer credentials from the ignored .env launch environment into this iPhone's Keychain. Try On also exposes a local YouCam connection field when its credential is missing.")
+                Text("Provider credentials remain read-only. This private build imports them from the ignored .env launch environment into this iPhone's Keychain. Try On also exposes a local YouCam connection field when its credential is missing.")
             }
 
             Section {

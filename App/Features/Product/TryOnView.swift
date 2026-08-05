@@ -92,6 +92,18 @@ struct TryOnView: View {
             isLoadingFoundProducts = false
             if !tray.isEmpty { foundProductStatus = "Found piece ready" }
         }
+        .task(id: model.pendingTryOnItems.map(\.id)) {
+            let pending = model.pendingTryOnItems
+            guard !pending.isEmpty else { return }
+            for item in pending {
+                appendTrayItem(item)
+            }
+            let handledIDs = Set(pending.map(\.id))
+            model.pendingTryOnItems.removeAll { handledIDs.contains($0.id) }
+            foundProductStatus = pending.count == 1
+                ? "Detected crop ready"
+                : "\(pending.count) detected crops ready"
+        }
         .sheet(isPresented: $isLibraryPresented) {
             TryOnLibraryPicker { item in
                 appendTrayItem(item)

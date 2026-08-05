@@ -41,6 +41,8 @@ The default private developer route is:
 3. select the provider result group that best matches the chosen local garment label;
 4. normalize, cap, display, and persist the real provider results.
 
+Each detected piece in Library Recent exposes both routes directly. **Find products & prices** hands the existing scan and garment identifiers to Search and starts one provider request only when no saved search exists. **Try on crop** adds the already-saved local crop to the YouCam rail without performing a product search. Developer Debug can pin an eligible visual provider; if that provider needs configuration the current capture cannot satisfy, Search names and uses an eligible fallback.
+
 Stylezam AI is separate: a question sends the selected crop and user prompt to Fireworks Qwen 3.7 Plus. Only when the user explicitly converts a question or suggestion into a similar-product search does Stylezam send one generated text query—not the photo—to Serper shopping.
 
 The default is one successful product search per garment. Logical reservations and provider counts survive relaunches. Failed requests remain in the diagnostic ledger because providers may still count them, but they do not consume the user's successful-search allowance and can be retried.

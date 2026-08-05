@@ -650,6 +650,11 @@ private struct ScanDetailView: View {
                                 detail: "\(visibleItems(scan).count)"
                             )
 
+                            Text("Search a detected crop for live products and prices, or send the crop directly to Try On.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
                             if visibleItems(scan).isEmpty {
                                 ContentUnavailableView(
                                     "No distinct pieces found",
@@ -664,7 +669,7 @@ private struct ScanDetailView: View {
                                 .padding(.vertical, 22)
                             } else {
                                 ForEach(visibleItems(scan)) { item in
-                                    garmentRow(item)
+                                    garmentRow(item, scan: scan)
                                 }
                             }
                         }
@@ -713,45 +718,116 @@ private struct ScanDetailView: View {
         }
     }
 
-    private func garmentRow(_ item: SavedGarment) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            Group {
-                if let cropURL = model.library.cropURL(for: item) {
-                    LocalFileImage(url: cropURL, contentMode: .fit)
-                } else {
-                    Color(uiColor: .secondarySystemBackground)
-                        .overlay { Image(systemName: "tshirt") }
-                }
-            }
-            .frame(width: 92, height: 108)
-            .background(Color(uiColor: .secondarySystemBackground))
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    private func garmentRow(_ item: SavedGarment, scan: SavedScan) -> some View {
+        let key = "\(scan.id.uuidString):\(item.id)"
+        let savedSearch = model.library.search(for: key)
 
-            VStack(alignment: .leading, spacing: 7) {
-                Text(item.title)
-                    .font(.headline)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let brand = item.brand {
-                    Text(brand.uppercased())
-                        .font(.caption2.weight(.bold))
-                        .tracking(0.8)
-                        .foregroundStyle(.secondary)
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
+                Group {
+                    if let cropURL = model.library.cropURL(for: item) {
+                        LocalFileImage(url: cropURL, contentMode: .fit)
+                    } else {
+                        Color(uiColor: .secondarySystemBackground)
+                            .overlay { Image(systemName: "tshirt") }
+                    }
                 }
-                let attributes = item.colors + item.materials + item.patterns + item.details
-                if !attributes.isEmpty {
-                    Text(attributes.prefix(4).joined(separator: " · "))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                .frame(width: 92, height: 108)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(item.title)
+                        .font(.headline)
                         .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    Text("On-device confidence \(item.localConfidence.formatted(.percent.precision(.fractionLength(0))))")
+                    if let brand = item.brand {
+                        Text(brand.uppercased())
+                            .font(.caption2.weight(.bold))
+                            .tracking(0.8)
+                            .foregroundStyle(.secondary)
+                    }
+                    let attributes = item.colors + item.materials + item.patterns + item.details
+                    if !attributes.isEmpty {
+                        Text(attributes.prefix(4).joined(separator: " · "))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("On-device confidence \(item.localConfidence.formatted(.percent.precision(.fractionLength(0))))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let savedSearch {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(savedSearch.providerSummary)
+                                .lineLimit(1)
+                            Text(searchPriceSummary(savedSearch))
+                        }
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    }
                 }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+
+            VStack(spacing: 8) {
+                Button {
+                    dismiss()
+                    model.openProductSearch(
+                        scanID: scan.id,
+                        garmentID: item.id,
+                        startsImmediately: savedSearch == nil
+                    )
+                } label: {
+                    Label(
+                        savedSearch.map { "View \($0.results.count) products" } ?? "Find products & prices",
+                        systemImage: savedSearch == nil ? "magnifyingglass" : "checkmark"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                }
+                .stylezamGlassButton(prominent: true)
+                .tint(StylezamDesign.cobalt)
+
+                Button {
+                    dismiss()
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(250))
+                        model.addGarmentToTryOn(scanID: scan.id, garmentID: item.id)
+                    }
+                } label: {
+                    Label("Try on crop", systemImage: "wand.and.sparkles")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                }
+                .stylezamGlassButton()
+            }
         }
-        .padding(.vertical, 4)
+        .padding(14)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        }
+    }
+
+    private func searchPriceSummary(_ search: SavedProductSearch) -> String {
+        guard !search.results.isEmpty else { return "No priced products returned" }
+        let prices = search.results.compactMap(\.price)
+        guard let first = prices.first else {
+            return "\(search.results.count) products · prices unavailable"
+        }
+        let comparable = prices.filter { $0.currency == first.currency }
+        guard let lowest = comparable.min(by: { $0.amount < $1.amount }) else {
+            return "\(search.results.count) products"
+        }
+        return "\(search.results.count) products · from \(lowest.formatted)"
     }
 }
 

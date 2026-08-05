@@ -77,6 +77,9 @@ struct SearchView: View {
             guard let item else { return }
             Task { await loadReference(item) }
         }
+        .task(id: model.pendingGarmentSearch?.id) {
+            await consumePendingGarmentSearch()
+        }
         .onDisappear {
             searchProgressTask?.cancel()
             assistantProgressTask?.cancel()
@@ -300,8 +303,14 @@ struct SearchView: View {
             .disabled(selectedGarment == nil || isSearching)
 
             HStack(spacing: 6) {
-                Image(systemName: "gauge.with.dots.needle.33percent")
-                Text("\(model.settings.productSearchesPerPiece) visual search per piece · up to \(model.settings.productResultLimit) live results")
+                Image(systemName: "network")
+                Text(
+                    currentSearch?.providerSummary
+                        ?? model.activeImageSearchProvider?.title
+                        ?? "No visual provider ready"
+                )
+                Text("·")
+                Text("up to \(model.settings.productResultLimit) products")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -516,6 +525,37 @@ struct SearchView: View {
             return
         }
         await performSearch(scan: scan, garment: garment, refinement: nil)
+    }
+
+    @MainActor
+    private func consumePendingGarmentSearch() async {
+        guard let request = model.pendingGarmentSearch else { return }
+        guard let requestedScan = model.library.scans.first(where: { $0.id == request.scanID }),
+              let requestedGarment = requestedScan.items.first(where: { $0.id == request.garmentID })
+        else {
+            message = "That detected piece is no longer available in Library."
+            if model.pendingGarmentSearch?.id == request.id {
+                model.pendingGarmentSearch = nil
+            }
+            return
+        }
+
+        scanID = requestedScan.id
+        selectedGarmentID = requestedGarment.id
+        referenceImageData = nil
+        assistantReply = nil
+        lastAssistantQuestion = nil
+        message = nil
+        let key = "\(requestedScan.id.uuidString):\(requestedGarment.id)"
+        currentSearch = model.library.search(for: key)
+
+        if request.startsImmediately, currentSearch == nil {
+            await search(scan: requestedScan, garment: requestedGarment)
+        }
+
+        if model.pendingGarmentSearch?.id == request.id {
+            model.pendingGarmentSearch = nil
+        }
     }
 
     private func refineSearch(_ refinement: String, scan: SavedScan, garment: SavedGarment) async {

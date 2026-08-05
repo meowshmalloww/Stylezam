@@ -20,7 +20,9 @@ final class AppModel {
     var isAnalyzingCapture = false
     var captureStatus: String?
     var latestPreviewCandidates: [GarmentCandidate] = []
+    var pendingGarmentSearch: PendingGarmentSearch?
     var pendingTryOnProducts: [ProductResultDTO] = []
+    var pendingTryOnItems: [TryOnTrayItem] = []
     var isTryOnPresented = false
 
     @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
@@ -87,6 +89,48 @@ final class AppModel {
         if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
             pendingTryOnProducts.append(product)
         }
+        isTryOnPresented = true
+    }
+
+    func openProductSearch(
+        scanID: UUID,
+        garmentID: String,
+        startsImmediately: Bool
+    ) {
+        pendingGarmentSearch = PendingGarmentSearch(
+            scanID: scanID,
+            garmentID: garmentID,
+            startsImmediately: startsImmediately
+        )
+        activeScanID = nil
+        selectedTab = .search
+    }
+
+    func addGarmentToTryOn(scanID: UUID, garmentID: String) {
+        guard let scan = library.scans.first(where: { $0.id == scanID }),
+              let garment = scan.items.first(where: { $0.id == garmentID }),
+              let cropURL = library.cropURL(for: garment),
+              let cropData = try? Data(contentsOf: cropURL)
+        else {
+            lastError = "The detected crop is unavailable. Capture the piece again or choose a product match."
+            return
+        }
+
+        let category = TryOnCategory.infer(
+            category: garment.category,
+            title: garment.title
+        )
+        pendingTryOnItems.removeAll { item in
+            item.title == garment.title && item.imageData == cropData
+        }
+        pendingTryOnItems.append(
+            TryOnTrayItem(
+                title: garment.title,
+                category: category,
+                imageData: cropData
+            )
+        )
+        lastError = nil
         isTryOnPresented = true
     }
 
@@ -310,8 +354,7 @@ final class AppModel {
             }
             providers = ["fireworks", "serper"]
         case .directImage:
-            let eligibleProviders = eligibleImageSearchProviders
-            guard let selected = searchUsage.routedImageProvider(from: eligibleProviders) else {
+            guard let selected = activeImageSearchProvider else {
                 throw ProductSearchError.provider(
                     "No visual-search route is ready. This private build needs a Lykdat key, or a provider key plus a public HTTPS crop URL."
                 )
@@ -399,10 +442,9 @@ final class AppModel {
                 )
                 results = response.results
                 understanding = nil
-                let eligibleCount = eligibleImageSearchProviders.count
-                providerSummary = eligibleCount > 1
-                    ? "\(selected.title) · smart route"
-                    : selected.title
+                providerSummary = selected == settings.imageSearchProvider
+                    ? selected.title
+                    : "\(selected.title) · fallback"
                 diagnostic = response.diagnostic
             }
 
@@ -458,6 +500,14 @@ final class AppModel {
             }
             return true
         }
+    }
+
+    var activeImageSearchProvider: ImageSearchProvider? {
+        let eligible = eligibleImageSearchProviders
+        if eligible.contains(settings.imageSearchProvider) {
+            return settings.imageSearchProvider
+        }
+        return searchUsage.routedImageProvider(from: eligible)
     }
 
     func askStylezamAI(scanID: UUID, garmentID: String, question: String) async throws -> String {

@@ -122,6 +122,25 @@ struct TryOnTrayItem: Identifiable, Hashable, Sendable {
     }
 }
 
+struct PendingGarmentSearch: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let scanID: UUID
+    let garmentID: String
+    let startsImmediately: Bool
+
+    init(
+        id: UUID = UUID(),
+        scanID: UUID,
+        garmentID: String,
+        startsImmediately: Bool
+    ) {
+        self.id = id
+        self.scanID = scanID
+        self.garmentID = garmentID
+        self.startsImmediately = startsImmediately
+    }
+}
+
 enum CaptureOrigin: String, Codable, Sendable {
     case camera
     case photoLibrary
