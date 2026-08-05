@@ -46,6 +46,7 @@ Detection, segmentation, cropping, and Library capture remain local. Network act
 - Fireworks receives the selected garment crop, the bounded recent conversation, and the new prompt for Qwen vision.
 - Serper receives generated or user-refined text, not the photo.
 - Lykdat receives the selected crop when chosen as the direct image provider.
+- Google Cloud Vision receives the selected crop only when Web Detection is chosen. Stylezam requests no label, text, face, logo, or other Vision feature in that call.
 - SearchAPI.io and SerpApi receive only an explicitly configured public image URL.
 - Bright Data receives the configured public image URL and zone when selected.
 

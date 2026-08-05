@@ -119,6 +119,7 @@ enum ProductSearchProgress: Equatable, Sendable {
 
 enum ImageSearchProvider: String, Codable, CaseIterable, Identifiable, Sendable {
     case lykdat
+    case googleVision = "googlevision"
     case searchAPI = "searchapi"
     case serpAPI = "serpapi"
     case brightData = "brightdata"
@@ -128,17 +129,21 @@ enum ImageSearchProvider: String, Codable, CaseIterable, Identifiable, Sendable 
     var title: String {
         switch self {
         case .lykdat: "Lykdat Global Search"
+        case .googleVision: "Google Cloud Vision Web Detection"
         case .searchAPI: "SearchAPI.io Google Lens"
         case .serpAPI: "SerpApi Google Lens"
         case .brightData: "Bright Data Google Lens"
         }
     }
 
-    var acceptsPrivateImageData: Bool { self == .lykdat }
+    var acceptsPrivateImageData: Bool {
+        self == .lykdat || self == .googleVision
+    }
 
     var credential: SearchCredentialKind {
         switch self {
         case .lykdat: .lykdat
+        case .googleVision: .googleVision
         case .searchAPI: .searchAPI
         case .serpAPI: .serpAPI
         case .brightData: .brightData
@@ -150,6 +155,7 @@ enum SearchCredentialKind: String, CaseIterable, Identifiable, Sendable {
     case fireworks
     case serper
     case lykdat
+    case googleVision = "googlevision"
     case searchAPI = "searchapi"
     case serpAPI = "serpapi"
     case brightData = "brightdata"
@@ -161,6 +167,7 @@ enum SearchCredentialKind: String, CaseIterable, Identifiable, Sendable {
         case .fireworks: "Fireworks AI"
         case .serper: "Serper.dev"
         case .lykdat: "Lykdat"
+        case .googleVision: "Google Cloud Vision"
         case .searchAPI: "SearchAPI.io"
         case .serpAPI: "SerpApi"
         case .brightData: "Bright Data"
@@ -172,6 +179,7 @@ enum SearchCredentialKind: String, CaseIterable, Identifiable, Sendable {
         case .fireworks: "STYLEZAM_FIREWORKS_API_KEY"
         case .serper: "STYLEZAM_SERPER_API_KEY"
         case .lykdat: "STYLEZAM_LYKDAT_API_KEY"
+        case .googleVision: "STYLEZAM_GOOGLE_VISION_API_KEY"
         case .searchAPI: "STYLEZAM_SEARCHAPI_API_KEY"
         case .serpAPI: "STYLEZAM_SERPAPI_API_KEY"
         case .brightData: "STYLEZAM_BRIGHTDATA_API_KEY"

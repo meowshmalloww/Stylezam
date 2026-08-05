@@ -4,10 +4,17 @@ import Observation
 @MainActor
 @Observable
 final class SearchUsageStore {
+    private static let googleVisionProviderID = "googlevision"
+
     private(set) var snapshot = SearchUsageSnapshot()
     private(set) var loadError: String?
 
     private let fileURL: URL
+    private let googleVisionCounterURL: URL
+    private var googleVisionCounter = GoogleVisionMonthlyCounter(
+        month: SearchUsageStore.monthIdentifier(),
+        reservedUnits: 0
+    )
 
     init() {
         let root = FileManager.default.urls(
@@ -16,7 +23,9 @@ final class SearchUsageStore {
         )[0].appending(path: "Stylezam", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         fileURL = root.appending(path: "search-usage.json")
+        googleVisionCounterURL = root.appending(path: "google-vision-usage.json")
         load()
+        loadGoogleVisionCounter()
     }
 
     var currentMonthRecords: [SearchUsageRecord] {
@@ -25,10 +34,13 @@ final class SearchUsageStore {
     }
 
     func requestCount(provider: String) -> Int {
-        currentMonthRecords
+        let diagnosticCount = currentMonthRecords
             .reduce(0) { count, record in
                 count + record.providers.filter { $0 == provider }.count
             }
+        guard provider == Self.googleVisionProviderID else { return diagnosticCount }
+        normalizeGoogleVisionCounterMonth()
+        return max(diagnosticCount, googleVisionCounter.reservedUnits)
     }
 
     var estimatedFireworksSpend: Double {
@@ -107,6 +119,7 @@ final class SearchUsageStore {
         if providers.contains("fireworks"), estimatedFireworksSpend >= fireworksBudgetUSD {
             throw ProductSearchError.fireworksBudgetReached(fireworksBudgetUSD)
         }
+        try reserveGoogleVisionUnits(in: providers)
         let id = UUID()
         snapshot.records.append(
             SearchUsageRecord(
@@ -141,6 +154,7 @@ final class SearchUsageStore {
         if provider == "fireworks", estimatedFireworksSpend >= fireworksBudgetUSD {
             throw ProductSearchError.fireworksBudgetReached(fireworksBudgetUSD)
         }
+        try reserveGoogleVisionUnits(in: [provider])
         let id = UUID()
         snapshot.records.append(
             SearchUsageRecord(
@@ -194,6 +208,69 @@ final class SearchUsageStore {
         try? persist()
     }
 
+    private func reserveGoogleVisionUnits(in providers: [String]) throws {
+        let requestedUnits = providers.filter { $0 == Self.googleVisionProviderID }.count
+        guard requestedUnits > 0 else { return }
+        normalizeGoogleVisionCounterMonth()
+        let hardLimit = SettingsStore.googleVisionHardMonthlyLimit
+        guard googleVisionCounter.reservedUnits + requestedUnits <= hardLimit else {
+            throw ProductSearchError.monthlyRequestLimitReached(Self.googleVisionProviderID, hardLimit)
+        }
+
+        let previous = googleVisionCounter
+        googleVisionCounter.reservedUnits += requestedUnits
+        do {
+            try persistGoogleVisionCounter()
+        } catch {
+            googleVisionCounter = previous
+            throw ProductSearchError.provider(
+                "Stylezam could not safely reserve the Google Vision unit locally, so no network request was sent."
+            )
+        }
+    }
+
+    private func normalizeGoogleVisionCounterMonth() {
+        let month = Self.monthIdentifier()
+        guard googleVisionCounter.month != month else { return }
+        googleVisionCounter = GoogleVisionMonthlyCounter(month: month, reservedUnits: 0)
+        try? persistGoogleVisionCounter()
+    }
+
+    private func loadGoogleVisionCounter() {
+        let month = Self.monthIdentifier()
+        if let data = try? Data(contentsOf: googleVisionCounterURL),
+           let saved = try? JSONDecoder().decode(GoogleVisionMonthlyCounter.self, from: data),
+           saved.month == month
+        {
+            googleVisionCounter = saved
+        } else {
+            googleVisionCounter = GoogleVisionMonthlyCounter(month: month, reservedUnits: 0)
+        }
+
+        // Migrate any current-month calls recorded before the durable hard-stop
+        // counter existed. The separate counter is never cleared by diagnostics.
+        let recordedUnits = currentMonthRecords.reduce(0) { count, record in
+            count + record.providers.filter { $0 == Self.googleVisionProviderID }.count
+        }
+        googleVisionCounter.reservedUnits = max(googleVisionCounter.reservedUnits, recordedUnits)
+        try? persistGoogleVisionCounter()
+    }
+
+    private func persistGoogleVisionCounter() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(googleVisionCounter).write(to: googleVisionCounterURL, options: .atomic)
+    }
+
+    private static func monthIdentifier(for date: Date = .now) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM"
+        return formatter.string(from: date)
+    }
+
     private func update(
         _ id: UUID,
         status: SearchUsageStatus,
@@ -236,4 +313,9 @@ final class SearchUsageStore {
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(snapshot).write(to: fileURL, options: .atomic)
     }
+}
+
+private struct GoogleVisionMonthlyCounter: Codable, Equatable {
+    var month: String
+    var reservedUnits: Int
 }

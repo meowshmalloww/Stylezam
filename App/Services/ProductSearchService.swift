@@ -241,6 +241,14 @@ actor ProductSearchService {
                 limit: limit,
                 searchID: searchID
             )
+        case .googleVision:
+            return try await googleVisionWebSearch(
+                imageData: imageData,
+                targetLabel: targetLabel,
+                apiKey: apiKey,
+                limit: limit,
+                searchID: searchID
+            )
         case .searchAPI:
             guard let publicImageURL else {
                 throw ProductSearchError.publicImageURLRequired(provider.title)
@@ -279,6 +287,217 @@ actor ProductSearchService {
                 targetLabel: targetLabel
             )
         }
+    }
+
+    private func googleVisionWebSearch(
+        imageData: Data,
+        targetLabel: String,
+        apiKey: String,
+        limit: Int,
+        searchID: String
+    ) async throws -> SearchProviderResponse {
+        // One image and exactly one feature keeps this Stylezam action to one
+        // Google Cloud Vision billable unit. Do not add LABEL/TEXT/LOGO features
+        // to this request without revisiting the unit budget.
+        let body: [String: Any] = [
+            "requests": [[
+                "image": ["content": imageData.base64EncodedString()],
+                "features": [[
+                    "type": "WEB_DETECTION",
+                    "maxResults": min(20, max(1, limit)),
+                ]],
+            ]],
+        ]
+        let bundleIdentifier = Bundle.main.bundleIdentifier ?? "com.stylezam.app"
+        let (data, response) = try await sendJSON(
+            url: URL(string: "https://vision.googleapis.com/v1/images:annotate")!,
+            body: body,
+            headers: [
+                "X-Goog-Api-Key": apiKey,
+                "X-Ios-Bundle-Identifier": bundleIdentifier,
+            ],
+            provider: "Google Cloud Vision"
+        )
+        let root = try jsonObject(data, provider: "Google Cloud Vision")
+        guard let responses = root["responses"] as? [[String: Any]],
+              let annotation = responses.first
+        else {
+            throw ProductSearchError.invalidResponse("Google Cloud Vision")
+        }
+        if let error = annotation["error"] as? [String: Any] {
+            let message = string(error["message"])
+                ?? "Google Cloud Vision could not analyze this crop."
+            throw ProductSearchError.provider("Google Cloud Vision: \(message)")
+        }
+        guard let web = annotation["webDetection"] as? [String: Any] else {
+            throw ProductSearchError.noResults
+        }
+
+        let bestGuess = (web["bestGuessLabels"] as? [[String: Any]])?
+            .compactMap { string($0["label"]) }
+            .first
+        let topEntity = (web["webEntities"] as? [[String: Any]])?
+            .sorted { (number($0["score"]) ?? 0) > (number($1["score"]) ?? 0) }
+            .compactMap { string($0["description"]) }
+            .first
+        let subject = bestGuess ?? topEntity ?? targetLabel
+        let pages = web["pagesWithMatchingImages"] as? [[String: Any]] ?? []
+        let fullImages = web["fullMatchingImages"] as? [[String: Any]] ?? []
+        let partialImages = web["partialMatchingImages"] as? [[String: Any]] ?? []
+        let similarImages = web["visuallySimilarImages"] as? [[String: Any]] ?? []
+
+        var candidates: [ProductResultDTO] = []
+        var seenURLs: Set<String> = []
+
+        for page in pages {
+            guard let rawURL = string(page["url"]),
+                  let pageURL = webURL(rawURL),
+                  seenURLs.insert(pageURL.absoluteString).inserted
+            else { continue }
+            let pageFullImages = page["fullMatchingImages"] as? [[String: Any]] ?? []
+            let pagePartialImages = page["partialMatchingImages"] as? [[String: Any]] ?? []
+            let matchingImage = (pageFullImages + pagePartialImages).first
+            let imageURL = string(matchingImage?["url"]).flatMap(webURL)
+            let hasFullMatch = !pageFullImages.isEmpty
+            let score = boundedGoogleVisionScore(
+                number(page["score"]) ?? number(matchingImage?["score"]),
+                evidence: hasFullMatch ? .exact : .likely
+            )
+            let rawTitle = string(page["pageTitle"])
+            let title = rawTitle.map(cleanWebTitle)
+                .flatMap { $0.isEmpty ? nil : $0 }
+                ?? "\(subject) on \(pageURL.host() ?? "the web")"
+            candidates.append(
+                googleVisionResult(
+                    searchID: searchID,
+                    pageURL: pageURL,
+                    imageURL: imageURL,
+                    title: title,
+                    evidence: hasFullMatch ? "Full matching image page" : "Partial matching image page",
+                    matchTier: hasFullMatch ? .exact : .likely,
+                    score: score
+                )
+            )
+        }
+
+        let standalone: [(objects: [[String: Any]], evidence: String, tier: MatchTier)] = [
+            (fullImages, "Full matching web image", .exact),
+            (partialImages, "Partial matching web image", .likely),
+            (similarImages, "Visually similar web image", .similar),
+        ]
+        for group in standalone {
+            for object in group.objects {
+                guard let rawURL = string(object["url"]),
+                      let imageURL = webURL(rawURL),
+                      seenURLs.insert(imageURL.absoluteString).inserted
+                else { continue }
+                let host = imageURL.host() ?? "the web"
+                candidates.append(
+                    googleVisionResult(
+                        searchID: searchID,
+                        pageURL: imageURL,
+                        imageURL: imageURL,
+                        title: "\(subject) · \(host)",
+                        evidence: group.evidence,
+                        matchTier: group.tier,
+                        score: boundedGoogleVisionScore(number(object["score"]), evidence: group.tier)
+                    )
+                )
+            }
+        }
+
+        let results = Array(
+            candidates
+                .sorted { left, right in
+                    if left.matchTier != right.matchTier {
+                        return googleVisionTierRank(left.matchTier) > googleVisionTierRank(right.matchTier)
+                    }
+                    return left.score > right.score
+                }
+                .prefix(max(1, limit))
+        )
+        guard !results.isEmpty else { throw ProductSearchError.noResults }
+        return SearchProviderResponse(
+            results: results,
+            providerRequestID: response.value(forHTTPHeaderField: "x-guploader-uploadid")
+                ?? response.value(forHTTPHeaderField: "x-request-id"),
+            inputTokens: nil,
+            outputTokens: nil,
+            diagnostic: "One Google Web Detection unit returned \(results.count) usable matching pages or images"
+        )
+    }
+
+    private func googleVisionResult(
+        searchID: String,
+        pageURL: URL,
+        imageURL: URL?,
+        title: String,
+        evidence: String,
+        matchTier: MatchTier,
+        score: Double
+    ) -> ProductResultDTO {
+        let provider = "Google Cloud Vision"
+        let stable = SHA256.hash(data: Data("\(provider)|\(pageURL.absoluteString)".utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return ProductResultDTO(
+            id: stable,
+            searchID: searchID,
+            provider: provider,
+            providerResultID: nil,
+            title: title,
+            brand: nil,
+            category: nil,
+            color: nil,
+            imageURL: imageURL,
+            productURL: pageURL,
+            merchant: pageURL.host() ?? provider,
+            price: nil,
+            matchTier: matchTier,
+            score: score,
+            rating: nil,
+            reviewCount: nil,
+            attributes: ["webEvidence": .string(evidence)],
+            offers: []
+        )
+    }
+
+    private func boundedGoogleVisionScore(_ score: Double?, evidence: MatchTier) -> Double {
+        if let score { return min(1, max(0, score)) }
+        // Some Web Detection response surfaces omit their score. Keep a neutral
+        // ordering value rather than fabricating provider precision.
+        switch evidence {
+        case .exact: return 0.5
+        case .likely: return 0.49
+        case .similar: return 0.48
+        case .inspired: return 0.47
+        }
+    }
+
+    private func googleVisionTierRank(_ tier: MatchTier) -> Int {
+        switch tier {
+        case .exact: 4
+        case .likely: 3
+        case .similar: 2
+        case .inspired: 1
+        }
+    }
+
+    private func webURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw),
+              ["http", "https"].contains(url.scheme?.lowercased() ?? "")
+        else { return nil }
+        return url
+    }
+
+    private func cleanWebTitle(_ raw: String) -> String {
+        raw.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "&quot;", with: "\"")
+            .replacingOccurrences(of: "&#39;", with: "'")
+            .replacingOccurrences(of: "&lt;", with: "<")
+            .replacingOccurrences(of: "&gt;", with: ">")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func lykdatSearch(
@@ -487,11 +706,26 @@ actor ProductSearchService {
             }
             guard 200..<300 ~= response.statusCode else {
                 let hint: String
-                switch response.statusCode {
-                case 401, 403: hint = "Check the saved credential and account access."
-                case 402: hint = "The provider requires billing or has exhausted its allowance."
-                case 429: hint = "The provider rate or monthly limit was reached."
-                default: hint = "The provider returned HTTP \(response.statusCode)."
+                if provider == "Google Cloud Vision",
+                   let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let error = root["error"] as? [String: Any],
+                   let message = string(error["message"])
+                {
+                    let normalized = message.lowercased()
+                    if normalized.contains("billing") {
+                        hint = "Cloud Billing must be enabled on the key's Google Cloud project before Vision will run. The app will still stop locally before unit 1,001."
+                    } else if normalized.contains("has not been used") || normalized.contains("is disabled") {
+                        hint = "Enable Cloud Vision API on the key's Google Cloud project, then wait for the setting to propagate."
+                    } else {
+                        hint = message
+                    }
+                } else {
+                    switch response.statusCode {
+                    case 401, 403: hint = "Check the saved credential and account access."
+                    case 402: hint = "The provider requires billing or has exhausted its allowance."
+                    case 429: hint = "The provider rate or monthly limit was reached."
+                    default: hint = "The provider returned HTTP \(response.statusCode)."
+                    }
                 }
                 throw ProductSearchError.provider("\(provider): \(hint)")
             }

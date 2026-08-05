@@ -37,7 +37,7 @@ No camera frame or accepted photo is sent during detection. A selected garment c
 The default private developer route is:
 
 1. persist a logical search reservation before networking;
-2. send the selected crop directly to Lykdat Global Search;
+2. send the selected crop directly to Lykdat Global Search or Google Cloud Vision Web Detection;
 3. select the provider result group that best matches the chosen local garment label;
 4. normalize, cap, display, and persist the real provider results.
 
@@ -47,7 +47,7 @@ Stylezam AI is separate: each garment has a bounded, locally persisted conversat
 
 The default is one successful product search per garment. Logical reservations and provider counts survive relaunches. Failed requests remain in the diagnostic ledger because providers may still count them, but they do not consume the user's successful-search allowance and can be retried.
 
-Lykdat Global Search accepts binary image data. SearchAPI.io and SerpApi Google Lens accept public image URLs, so Stylezam refuses to publish a private crop automatically. The Bright Data adapter requires a user-created compatible SERP zone and token and remains unavailable until both exist.
+Lykdat Global Search and Google Cloud Vision Web Detection accept binary image data. The Google adapter sends one image with exactly one `WEB_DETECTION` feature and reserves one unit in a separately persisted, non-increasable 1,000-unit monthly safety counter before networking. SearchAPI.io and SerpApi Google Lens accept public image URLs, so Stylezam refuses to publish a private crop automatically. The Bright Data adapter requires a user-created compatible SERP zone and token and remains unavailable until both exist.
 
 ## Inputs
 

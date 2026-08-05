@@ -357,7 +357,7 @@ final class AppModel {
         case .directImage:
             guard let selected = activeImageSearchProvider else {
                 throw ProductSearchError.provider(
-                    "No visual-search route is ready. This private build needs a Lykdat key, or a provider key plus a public HTTPS crop URL."
+                    "No visual-search route is ready. This private build needs a Lykdat or Google Cloud Vision key, or another provider key plus a public HTTPS crop URL."
                 )
             }
             directKey = try credentials.credential(for: selected.credential)

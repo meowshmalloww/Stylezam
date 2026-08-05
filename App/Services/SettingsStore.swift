@@ -4,6 +4,8 @@ import Observation
 @MainActor
 @Observable
 final class SettingsStore {
+    static let googleVisionHardMonthlyLimit = 1_000
+
     var notificationsEnabled: Bool {
         didSet {
             UserDefaults.standard.set(notificationsEnabled, forKey: Keys.notificationsEnabled)
@@ -63,6 +65,14 @@ final class SettingsStore {
         didSet { clampAndStore(&lykdatMonthlyLimit, key: Keys.lykdatMonthlyLimit) }
     }
 
+    var googleVisionMonthlyLimit: Int {
+        didSet {
+            let clamped = min(Self.googleVisionHardMonthlyLimit, max(1, googleVisionMonthlyLimit))
+            if googleVisionMonthlyLimit != clamped { googleVisionMonthlyLimit = clamped; return }
+            UserDefaults.standard.set(googleVisionMonthlyLimit, forKey: Keys.googleVisionMonthlyLimit)
+        }
+    }
+
     var serperMonthlyLimit: Int {
         didSet { clampAndStore(&serperMonthlyLimit, key: Keys.serperMonthlyLimit) }
     }
@@ -117,6 +127,11 @@ final class SettingsStore {
         serpAPIMonthlyLimit = Self.storedInt(Keys.serpAPIMonthlyLimit, default: 250, range: 1...100_000)
         brightDataMonthlyLimit = Self.storedInt(Keys.brightDataMonthlyLimit, default: 5_000, range: 1...100_000)
         lykdatMonthlyLimit = Self.storedInt(Keys.lykdatMonthlyLimit, default: 500, range: 1...100_000)
+        googleVisionMonthlyLimit = Self.storedInt(
+            Keys.googleVisionMonthlyLimit,
+            default: Self.googleVisionHardMonthlyLimit,
+            range: 1...Self.googleVisionHardMonthlyLimit
+        )
         serperMonthlyLimit = Self.storedInt(Keys.serperMonthlyLimit, default: 2_500, range: 1...100_000)
         let storedBudget = UserDefaults.standard.double(forKey: Keys.fireworksMonthlyBudgetUSD)
         fireworksMonthlyBudgetUSD = storedBudget == 0 ? 50 : min(500, max(1, storedBudget))
@@ -138,6 +153,7 @@ final class SettingsStore {
                 "serpapi": serpAPIMonthlyLimit,
                 "brightdata": brightDataMonthlyLimit,
                 "lykdat": lykdatMonthlyLimit,
+                "googlevision": min(Self.googleVisionHardMonthlyLimit, googleVisionMonthlyLimit),
             ]
         }
     }
@@ -168,6 +184,7 @@ final class SettingsStore {
         static let serpAPIMonthlyLimit = "stylezam.search.serpapi-monthly-limit"
         static let brightDataMonthlyLimit = "stylezam.search.brightdata-monthly-limit"
         static let lykdatMonthlyLimit = "stylezam.search.lykdat-monthly-limit"
+        static let googleVisionMonthlyLimit = "stylezam.search.google-vision-monthly-limit"
         static let serperMonthlyLimit = "stylezam.search.serper-monthly-limit"
         static let fireworksMonthlyBudgetUSD = "stylezam.search.fireworks-monthly-budget-usd"
         static let fireworksModelID = "stylezam.search.fireworks-model-id"

@@ -623,6 +623,20 @@ private struct SearchLimitsDebugView: View {
             requestLimit("SerpApi", value: $settings.serpAPIMonthlyLimit)
             requestLimit("Bright Data", value: $settings.brightDataMonthlyLimit)
             requestLimit("Lykdat", value: $settings.lykdatMonthlyLimit)
+            Section {
+                HStack {
+                    Text("Web Detection units per month")
+                    Spacer()
+                    TextField("Limit", value: $settings.googleVisionMonthlyLimit, format: .number)
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 92)
+                }
+            } header: {
+                Text("Google Cloud Vision")
+            } footer: {
+                Text("Hard-stopped at 1,000. Stylezam sends one image with only one WEB_DETECTION feature, so each dispatched search reserves one unit. This limit can be lowered but not raised.")
+            }
             requestLimit("Serper", value: $settings.serperMonthlyLimit)
 
             Section("Fireworks") {
@@ -674,6 +688,7 @@ private struct SearchDiagnosticsView: View {
                 diagnosticCount("Fireworks", provider: "fireworks")
                 diagnosticCount("Serper", provider: "serper")
                 diagnosticCount("Lykdat", provider: "lykdat")
+                diagnosticCount("Google Vision", provider: "googlevision")
                 diagnosticCount("SearchAPI.io", provider: "searchapi")
                 diagnosticCount("SerpApi", provider: "serpapi")
                 diagnosticCount("Bright Data", provider: "brightdata")
@@ -724,15 +739,15 @@ private struct SearchDiagnosticsView: View {
             }
 
             Section {
-                Button("Reset local usage ledger", role: .destructive) { confirmReset = true }
+                Button("Clear local diagnostics", role: .destructive) { confirmReset = true }
             } footer: {
-                Text("This resets only Stylezam's local safety ledger. It does not restore provider credits or reset provider billing counters.")
+                Text("This clears local request diagnostics and normal feature counters. The separate Google Vision hard-stop counter is intentionally preserved, because clearing app history cannot restore Google units or billing allowances.")
             }
         }
         .navigationTitle("Search Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("Reset local usage ledger?", isPresented: $confirmReset) {
-            Button("Reset ledger", role: .destructive) { model.searchUsage.resetUsage() }
+        .confirmationDialog("Clear local diagnostics?", isPresented: $confirmReset) {
+            Button("Clear diagnostics", role: .destructive) { model.searchUsage.resetUsage() }
         }
     }
 

@@ -75,7 +75,17 @@ chmod 600 .env
 
 Add only the providers you intend to test. `.env` is ignored by Git and is not bundled into the app. `scripts/install_on_device.sh` passes the values into one Debug launch; Stylezam immediately stores them in the device-only Keychain. Developer Debug is status-only—keys cannot be viewed, pasted, or replaced inside the app. Rotate a key in the local `.env`, then reinstall/relaunch the Debug build.
 
-The visual path sends one request for a selected garment to the preferred eligible provider chosen in Developer Debug. If that preference cannot accept the current local crop, Stylezam names and uses an eligible fallback. Lykdat accepts selected crop bytes directly. Fireworks powers the separate persistent Stylezam AI chat. Serper is used only after the user explicitly chooses **Find similar** or **Find cheaper**; it receives Qwen-generated keyword text, not the photo. SearchAPI.io and SerpApi Google Lens require a public HTTPS crop URL. Bright Data is also currently an image-search route and requires both that URL and a compatible SERP zone; the configured zone authenticates but returns an inner Lens HTTP 502, so it is not eligible until both conditions are corrected.
+The visual path sends one request for a selected garment to the preferred eligible provider chosen in Developer Debug. If that preference cannot accept the current local crop, Stylezam names and uses an eligible fallback. Lykdat and Google Cloud Vision Web Detection accept selected crop bytes directly. Fireworks powers the separate persistent Stylezam AI chat. Serper is used only after the user explicitly chooses **Find similar** or **Find cheaper**; it receives Qwen-generated keyword text, not the photo. SearchAPI.io and SerpApi Google Lens require a public HTTPS crop URL. Bright Data is also currently an image-search route and requires both that URL and a compatible SERP zone; the configured zone authenticates but returns an inner Lens HTTP 502, so it is not eligible until both conditions are corrected.
+
+### Google Cloud Vision Web Detection
+
+1. Attach a Cloud Billing account to the Google Cloud project. Google requires billing to be enabled before Vision runs, even though its pricing tier lists the first 1,000 units per month as free.
+2. Enable **Cloud Vision API** in the Google Cloud project that owns the key.
+3. In **APIs & Services → Credentials**, restrict the key's API target to **Cloud Vision API** and its application restriction to the iOS bundle ID `com.stylezam.app`. Stylezam sends that bundle ID in `X-Ios-Bundle-Identifier`.
+4. Add `STYLEZAM_GOOGLE_VISION_API_KEY` to the ignored `.env`, reinstall/launch the Debug build, then choose **Google Cloud Vision Web Detection** under Developer Debug → Product search.
+5. Confirm Search Usage & Diagnostics reports `Google Vision` after each explicit search.
+
+Each request contains one image and only one `WEB_DETECTION` feature, making the Stylezam action one Vision feature unit. The local monthly setting defaults to 1,000, can be lowered, and cannot be raised past 1,000. A separate counter reserves the unit before networking and is not cleared with diagnostics. This is a device-side safety boundary: key reuse, another client, reinstalling the app, or deleting app data is outside it, so Google Cloud restrictions and monitoring remain required. Web Detection returns pages and matching or visually similar images; it does not promise shopping listings or prices.
 
 ## 4. Generate and sign the iOS project
 
@@ -137,6 +147,7 @@ On the connected iPhone, verify:
 - scan deletion removes source and crop files;
 - one selected garment produces one persisted product-search attempt by default;
 - Search diagnostics records the actual provider-call count, latency, outcome, and result count;
+- Google Vision stops locally at the configured limit and never allows a value above 1,000;
 - Stylezam AI remembers prior turns for the selected piece, generates usable follow-up prompts, and clears only the selected conversation from its menu;
 - Find similar and Find cheaper each make one Fireworks request followed by one Serper Shopping request, with no Bright Data keyword call;
 - completed searches remain under Library → Matches and can be deleted;
