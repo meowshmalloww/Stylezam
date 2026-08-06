@@ -101,9 +101,10 @@ struct SearchView: View {
             Spacer(minLength: 0)
             if scan != nil {
                 Button(action: startOver) {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.semibold))
-                        .frame(width: 40, height: 40)
+                    Label("New", systemImage: "arrow.counterclockwise")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 13)
+                        .frame(height: 40)
                 }
                 .stylezamGlassButton()
                 .accessibilityLabel("Search another image")
@@ -413,8 +414,11 @@ struct SearchView: View {
                 chatContext = StylezamChatContext(scanID: scan.id, garmentID: garment.id)
             } label: {
                 HStack(spacing: 13) {
-                    Image(systemName: "bubble.left.and.bubble.right")
-                        .font(.title3)
+                    Image(systemName: "sparkles")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(StylezamDesign.cobalt)
+                        .frame(width: 42, height: 42)
+                        .background(StylezamDesign.cobalt.opacity(0.09), in: Circle())
                     VStack(alignment: .leading, spacing: 3) {
                         Text(conversationCount == 0 ? "Start a conversation" : "Continue conversation")
                             .font(.headline)
@@ -437,7 +441,11 @@ struct SearchView: View {
             }
             .buttonStyle(.plain)
             .background(
-                Color(uiColor: .secondarySystemBackground),
+                LinearGradient(
+                    colors: [Color(uiColor: .secondarySystemBackground), StylezamDesign.cobalt.opacity(0.055)],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
                 in: RoundedRectangle(cornerRadius: 18, style: .continuous)
             )
             .overlay {
@@ -467,12 +475,16 @@ struct SearchView: View {
     }
 
     private func longOperationProgress(title: String) -> some View {
-        VStack(alignment: .leading, spacing: 9) {
-            Text(title)
-                .font(.caption.weight(.semibold))
-            ProgressView()
-                .progressViewStyle(.linear)
-                .tint(StylezamDesign.cobalt)
+        HStack(spacing: 12) {
+            SearchThinkingDots()
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Working on this piece")
+                    .font(.subheadline.weight(.semibold))
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -630,6 +642,32 @@ private struct StylezamChatContext: Identifiable {
     let garmentID: String
 
     var id: String { "\(scanID.uuidString):\(garmentID)" }
+}
+
+private struct SearchThinkingDots: View {
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(StylezamDesign.cobalt)
+                    .frame(width: 7, height: 7)
+                    .scaleEffect(phase == index ? 1.32 : 0.72)
+                    .opacity(phase == index ? 1 : 0.28)
+            }
+        }
+        .frame(width: 36, height: 28)
+        .animation(.spring(response: 0.34, dampingFraction: 0.7), value: phase)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(330))
+                guard !Task.isCancelled else { return }
+                phase = (phase + 1) % 3
+            }
+        }
+        .accessibilityLabel("Search is working")
+    }
 }
 
 private struct SearchSourceLabel: View {

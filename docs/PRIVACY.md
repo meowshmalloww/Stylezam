@@ -16,11 +16,12 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
 
 - The bundled Core ML garment model and compiled representation.
 - Live preview inference, boxes, masks, quality guidance, and duplicate fingerprints.
-- Accepted camera/import/share/screen images.
+- Accepted camera/import/share images. For Live Screen, Library persists the confirmed garment crop rather than the full display frame or status-area chrome.
 - Individual garment box crops and structured detection records. Raw
   transparent-mask output is shown only during the local Vision Inspector run.
 - Per-garment Stylezam AI conversation history and generated follow-up prompts.
-- The recent iOS 27 screen-frame buffer, which remains in memory rather than becoming a rolling recording.
+- Compact per-garment visual signatures used to recognize an item already in Library. They contain no recoverable source photograph and are deleted with the scan.
+- The recent iOS 27 screen-frame buffer and latest Inspector frame, which remain in memory rather than becoming a rolling recording.
 
 Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
 
@@ -33,11 +34,11 @@ The capture and garment-detection pipeline has no remote inference call. The sep
 - Clipboard is read only after the user taps Paste image.
 - The Share extension runs only after the user chooses Stylezam.
 - iOS 27 screen capture begins only after Apple’s system picker grants a filter.
-- While that authorized iOS 27 stream is active, two agreeing on-device garment observations can automatically save one source frame and its local crops. Repeated frames are perceptually suppressed.
+- While that authorized iOS 27 stream is active, two agreeing on-device garment observations can automatically save confirmed local crops. Repeated frames and garments already in Library are perceptually suppressed.
 - Protected content can appear blank; Stylezam does not bypass platform protection.
 - iOS owns screen-capture indicators and privacy UI.
 
-The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure. Camera inference backs off on an unchanged empty view and stops repeating after an unchanged view is saved; it resumes immediately when the view changes. Live Screen runs a bounded global detector on newly sampled content, uses low-resolution hashes to decide when a deeper paused-page scan is useful, and stops ML work while a captured or known-empty page remains unchanged. Those hashes stay on device and are never persisted. Developer Debug can optionally retain only the latest authorized frame and detections in memory until the stream restarts or the toggle is disabled. Only an automatic capture or manual shutter result is persisted with its crops.
+The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure. Camera inference backs off on an unchanged empty view and stops repeating after an unchanged view is saved; it resumes immediately when the view changes. Live Screen runs a bounded global detector on newly sampled content, uses low-resolution page hashes to decide when a deeper paused-page scan is useful, and stops ML work while a captured or known-empty page remains unchanged. Those temporary page hashes are not persisted. Compact garment signatures do persist with accepted crops so front/rear Live camera and Live Screen share the same repeat memory across launches. Developer Debug always retains only the latest authorized frame and detections in memory while the stream is active. Only an accepted automatic capture or manual shutter result is persisted with its crops.
 
 ## Network boundary
 
@@ -56,7 +57,7 @@ Photo try-on requires network access. The user must consent immediately before s
 
 ## Deletion
 
-Users can clear one garment conversation, delete individual scans, completed product searches, saved products, and previews, or clear the Library. A scan deletion removes its source image, associated crop files, chat history, and associated search history. Clearing Library removes captures, crops, conversations, searches, saved products, and appearance previews. The usage ledger is intentionally separate because clearing local history does not restore provider credits. Stopping live screen capture clears its in-memory frame buffer.
+Users can clear one garment conversation; individually or multi-select delete scans, completed product searches, saved products, and previews; or clear the Library. A scan deletion removes its source image, associated crop files and visual signatures, chat history, and associated search history. Clearing Library removes captures, crops, signatures, conversations, searches, saved products, and appearance previews. The usage ledger is intentionally separate because clearing local history does not restore provider credits. Stopping live screen capture clears its in-memory frame buffer.
 
 ## Release checklist
 

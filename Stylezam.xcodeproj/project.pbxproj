@@ -22,6 +22,7 @@
 		3031C041FFC99D16D2089A61 /* CameraSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D7CD24096454F2142A32276 /* CameraSessionController.swift */; };
 		370DC13159B1D9A573AC57AC /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */; };
 		375DF52023B702EBA4328FE7 /* CaptureActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810938F0D56327572F4CCF7B /* CaptureActivityManager.swift */; };
+		396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */; };
 		3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */; };
 		40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */; };
 		40EF33336865700EB2439199 /* StylezamGarmentSegmentation.mlpackage in Resources */ = {isa = PBXBuildFile; fileRef = 7D750C5C73D66F384DEB282B /* StylezamGarmentSegmentation.mlpackage */; };
@@ -143,6 +144,7 @@
 		13CB7E4C165132539BE264F9 /* StylezamControlUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamControlUITests.swift; sourceTree = "<group>"; };
 		186586B04572ED4CBAC07684 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
 		1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDuplicateGuardTests.swift; sourceTree = "<group>"; };
 		253C45E1C87F7D4022EEFEEE /* StylezamTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StylezamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28EDEA4381FED85305717CBF /* Stylezam.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stylezam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDuplicateGuard.swift; sourceTree = "<group>"; };
@@ -368,6 +370,7 @@
 		755E13DCD528FB4F986FDDF5 /* StylezamTests */ = {
 			isa = PBXGroup;
 			children = (
+				1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */,
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
 			);
 			path = StylezamTests;
@@ -728,6 +731,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */,
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

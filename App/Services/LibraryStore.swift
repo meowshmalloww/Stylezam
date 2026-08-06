@@ -69,7 +69,8 @@ final class LibraryStore {
         imageData: Data,
         origin: CaptureOrigin,
         mode: CaptureMode,
-        detection: GarmentDetectionBatch
+        detection: GarmentDetectionBatch,
+        visualFingerprints: [String: GarmentVisualFingerprint] = [:]
     ) throws -> SavedScan {
         let previousSnapshot = snapshot
         let id = UUID()
@@ -79,7 +80,13 @@ final class LibraryStore {
         do {
             let captureURL = capturesURL.appending(path: imageFilename)
             createdURLs.append(captureURL)
-            try imageData.write(to: captureURL, options: .atomic)
+            // A full-display frame can contain private browser/app chrome and the Dynamic Island.
+            // Keep only the first confirmed garment crop as the screen scan's Library cover. All
+            // detected garments are still written individually below.
+            let storedCaptureData = mode == .screen
+                ? detection.candidates.first?.boxCropData ?? imageData
+                : imageData
+            try storedCaptureData.write(to: captureURL, options: .atomic)
 
             let items = try detection.candidates.map { candidate in
                 var cropFilename: String?
@@ -106,7 +113,9 @@ final class LibraryStore {
                     materials: [],
                     patterns: [],
                     details: [],
-                    visibleText: []
+                    visibleText: [],
+                    perceptualHash: visualFingerprints[candidate.id]?.perceptualHash,
+                    featurePrintData: visualFingerprints[candidate.id]?.featurePrintData
                 )
             }
             let scan = SavedScan(
@@ -121,14 +130,7 @@ final class LibraryStore {
                 items: items
             )
             snapshot.scans.insert(scan, at: 0)
-            let removed = Array(snapshot.scans.dropFirst(60))
-            snapshot.scans = Array(snapshot.scans.prefix(60))
             try persist()
-
-            // Delete trimmed media only after the new snapshot is durable.
-            for oldScan in removed {
-                removeFiles(for: oldScan)
-            }
             return scan
         } catch {
             snapshot = previousSnapshot
@@ -143,27 +145,44 @@ final class LibraryStore {
         capturesURL.appending(path: scan.imageFilename)
     }
 
+    /// Crop-first artwork for Library and Home. Existing full-screen captures are also presented
+    /// using their first saved garment, so old entries no longer show app chrome.
+    func displayImageURL(for scan: SavedScan) -> URL {
+        if let first = scan.items.first(where: { $0.accepted }),
+           let crop = cropURL(for: first)
+        {
+            return crop
+        }
+        return imageURL(for: scan)
+    }
+
     func cropURL(for item: SavedGarment) -> URL? {
         guard let filename = item.cropFilename else { return nil }
         return garmentsURL.appending(path: filename)
     }
 
-    func recentGarmentFingerprintSources(
-        since cutoff: Date,
-        limit: Int = 40
-    ) -> [GarmentFingerprintSource] {
+    func garmentFingerprintSources(limit: Int = 1_200) -> [GarmentFingerprintSource] {
         var values: [GarmentFingerprintSource] = []
-        for scan in snapshot.scans where scan.createdAt >= cutoff {
-            guard scan.mode == .live || scan.mode == .screen else { continue }
+        for scan in snapshot.scans {
             for item in scan.items {
-                guard let url = cropURL(for: item),
-                      let data = try? Data(contentsOf: url)
-                else { continue }
+                // New entries seed from their tiny stored signatures without loading large crop
+                // files. Crop bytes are read only once for Library items created before durable
+                // signatures shipped.
+                let needsLegacySignature = item.featurePrintData == nil
+                    && item.perceptualHash == nil
+                let data = needsLegacySignature
+                    ? cropURL(for: item).flatMap { try? Data(contentsOf: $0) }
+                    : nil
+                guard data != nil || item.featurePrintData != nil || item.perceptualHash != nil else {
+                    continue
+                }
                 values.append(
                     GarmentFingerprintSource(
+                        id: "\(scan.id.uuidString):\(item.id)",
                         label: item.localLabel,
                         data: data,
-                        createdAt: scan.createdAt
+                        perceptualHash: item.perceptualHash,
+                        featurePrintData: item.featurePrintData
                     )
                 )
                 if values.count == limit { return values }
@@ -431,6 +450,42 @@ final class LibraryStore {
             removeFiles(for: scan)
         } catch {
             snapshot = previousSnapshot
+            loadError = error.localizedDescription
+        }
+    }
+
+    func deleteBatch(
+        scanIDs: Set<UUID>,
+        searchIDs: Set<String>,
+        wardrobeIDs: Set<UUID>,
+        productIDs: Set<String>,
+        tryOnIDs: Set<String>
+    ) {
+        let previous = snapshot
+        let removedScans = snapshot.scans.filter { scanIDs.contains($0.id) }
+        let removedWardrobe = snapshot.wardrobeItems.filter { wardrobeIDs.contains($0.id) }
+        let removedTryOns = snapshot.tryOns.filter { tryOnIDs.contains($0.id) }
+
+        snapshot.scans.removeAll { scanIDs.contains($0.id) }
+        snapshot.searches.removeAll {
+            searchIDs.contains($0.id) || scanIDs.contains($0.scanID)
+        }
+        snapshot.chats.removeAll { scanIDs.contains($0.scanID) }
+        snapshot.wardrobeItems.removeAll { wardrobeIDs.contains($0.id) }
+        snapshot.products.removeAll { productIDs.contains($0.id) }
+        snapshot.tryOns.removeAll { tryOnIDs.contains($0.id) }
+
+        do {
+            try persist()
+            for scan in removedScans { removeFiles(for: scan) }
+            for item in removedWardrobe {
+                try? FileManager.default.removeItem(at: imageURL(for: item))
+            }
+            for tryOn in removedTryOns {
+                try? FileManager.default.removeItem(at: imageURL(for: tryOn))
+            }
+        } catch {
+            snapshot = previous
             loadError = error.localizedDescription
         }
     }

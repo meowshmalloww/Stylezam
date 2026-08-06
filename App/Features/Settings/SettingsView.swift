@@ -294,7 +294,7 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "On this iPhone",
                 icon: "iphone",
-                detail: "Garment detection and cropping run on this iPhone. Captures, crops, searches, saved products, and previews are stored locally."
+                detail: "Detection and cropping run on this iPhone. Live Screen saves the garment crop—not the full display. Tiny local visual signatures remember pieces already in Library and disappear when you delete their capture."
             )
             privacySection(
                 title: "Only when you search",
@@ -319,7 +319,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Your data")
             } footer: {
-                Text("This removes local captures, garment crops, legacy searches, saved products, and appearance previews. Nothing is deleted from another device or service.")
+                Text("This removes local captures, garment crops, scan-memory signatures, searches, saved products, and appearance previews. Nothing is deleted from another device or service.")
             }
         }
         .navigationTitle("Privacy")
@@ -391,7 +391,13 @@ private struct DeveloperSettingsView: View {
                             .foregroundStyle(StylezamDesign.cobalt)
                     }
                 }
+            } header: {
+                Text("Inspection tools")
+            } footer: {
+                Text("Live Screen always retains the latest authorized analysis while it is running, so its real boxes and crop results are immediately available here.")
+            }
 
+            Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Garment model")
@@ -457,19 +463,10 @@ private struct DeveloperSettingsView: View {
                     isOn: $settings.liveScreenAutoCaptureEnabled
                 )
                     .tint(StylezamDesign.cobalt)
-
-                Toggle(
-                    "Retain Live Screen detection boxes",
-                    isOn: Binding(
-                        get: { settings.liveScreenBoundingBoxDebugEnabled },
-                        set: { model.setLiveScreenDebugArtifactsEnabled($0) }
-                    )
-                )
-                    .tint(StylezamDesign.cobalt)
             } header: {
                 Text("Capture behavior")
             } footer: {
-                Text("Five is the safe default. Live Screen saves after two agreeing observations. The debug toggle retains only the latest authorized frame and its real model boxes in memory; it never draws over another app. Increasing the item limit uses more memory and can make local crop generation slower.")
+                Text("Five is the safe default. Live Screen saves after two agreeing observations. Increasing the item limit uses more memory and can make local crop generation slower.")
             }
 
             Section {
@@ -514,21 +511,44 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
+                imageProviderReadinessRow(.lykdat)
+                imageProviderReadinessRow(.googleVision)
+            } header: {
+                Text("Image search · private crops")
+            } footer: {
+                Text("These routes accept garment image bytes directly, so the crop does not need to be published on the web.")
+            }
+
+            Section {
+                imageProviderReadinessRow(.searchAPI)
+                imageProviderReadinessRow(.serpAPI)
+                imageProviderReadinessRow(.brightData)
+            } header: {
+                Text("Google Lens routes · link required")
+            } footer: {
+                Text("These APIs ask for an HTTPS image link. Stylezam deliberately does not upload private iPhone crops just to create that link, so configured credentials stay on standby unless you supply a public test-image URL.")
+            }
+
+            Section {
+                providerReadinessRow(kind: .fireworks, detail: "Understands the piece and conversation")
+                providerReadinessRow(kind: .serper, detail: "Runs AI-generated shopping keywords")
+            } header: {
+                Text("Stylezam AI search")
+            } footer: {
+                Text("Fireworks writes one focused shopping query. Serper can return several products from that one dispatched request.")
+            }
+
+            Section {
                 readinessRow(
                     title: "YouCam",
                     detail: "Photo virtual try-on",
-                    status: YouCamCredentialStore.isConfigured ? "Configured" : "Not configured",
+                    status: YouCamCredentialStore.isConfigured ? "Ready" : "Not configured",
                     isReady: YouCamCredentialStore.isConfigured
                 )
-                providerReadinessRow(kind: .fireworks, detail: "Stylezam AI")
-                providerReadinessRow(kind: .serper, detail: "AI-guided shopping")
-                ForEach(ImageSearchProvider.allCases) { provider in
-                    imageProviderReadinessRow(provider)
-                }
             } header: {
-                Text("Provider readiness")
+                Text("Virtual try-on")
             } footer: {
-                Text("Provider credentials remain read-only. This private build imports them from the ignored .env launch environment into this iPhone's Keychain. Try On also exposes a local YouCam connection field when its credential is missing.")
+                Text("Credentials stay in this iPhone's Keychain. This private build imports development values from the ignored .env launch environment.")
             }
 
             Section {
@@ -590,13 +610,13 @@ private struct DeveloperSettingsView: View {
         {
             status = "Needs SERP zone"
         } else if !provider.acceptsPrivateImageData && !isEligible {
-            status = "Needs crop hosting"
+            status = "Standby · needs link"
         } else {
             status = "Ready"
         }
         return readinessRow(
             title: provider.title,
-            detail: provider.acceptsPrivateImageData ? "Private crop upload" : "Public HTTPS crop required",
+            detail: provider.acceptsPrivateImageData ? "Private crop bytes" : "Public image link",
             status: status,
             isReady: isEligible
         )
@@ -711,18 +731,28 @@ private struct SearchDiagnosticsView: View {
 
     var body: some View {
         List {
-            Section("This month") {
+            Section("AI & keyword search") {
                 diagnosticCount("Fireworks", provider: "fireworks")
                 diagnosticCount("Serper", provider: "serper")
-                diagnosticCount("Lykdat", provider: "lykdat")
-                diagnosticCount("Google Vision", provider: "googlevision")
-                diagnosticCount("SearchAPI.io", provider: "searchapi")
-                diagnosticCount("SerpApi", provider: "serpapi")
-                diagnosticCount("Bright Data", provider: "brightdata")
                 LabeledContent("Estimated Fireworks spend") {
                     Text(model.searchUsage.estimatedFireworksSpend, format: .currency(code: "USD"))
                         .monospacedDigit()
                 }
+            }
+
+            Section("Private image routes") {
+                diagnosticCount("Lykdat", provider: "lykdat")
+                diagnosticCount("Google Vision", provider: "googlevision")
+            }
+
+            Section {
+                diagnosticCount("SearchAPI.io", provider: "searchapi")
+                diagnosticCount("SerpApi", provider: "serpapi")
+                diagnosticCount("Bright Data", provider: "brightdata")
+            } header: {
+                Text("Hosted-link Lens routes")
+            } footer: {
+                Text("These counters remain at zero unless a public HTTPS test-image URL is configured. A key alone is not enough because those Lens endpoints request an image link, not private crop bytes.")
             }
 
             Section("Latest dispatched calls") {
@@ -731,13 +761,19 @@ private struct SearchDiagnosticsView: View {
                 } else {
                     ForEach(model.searchUsage.snapshot.records.reversed().prefix(40)) { record in
                         VStack(alignment: .leading, spacing: 5) {
-                            HStack {
+                            HStack(alignment: .firstTextBaseline) {
                                 Text(record.providers.joined(separator: " + "))
                                     .font(.subheadline.weight(.semibold))
                                 Spacer()
-                                Text(record.status.rawValue.uppercased())
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(record.status == .succeeded ? StylezamDesign.cobalt : record.status == .failed ? .red : .secondary)
+                                Text(record.status.rawValue.capitalized)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(record.status == .failed ? Color.red : StylezamDesign.cobalt)
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 22)
+                                    .background(
+                                        (record.status == .failed ? Color.red : StylezamDesign.cobalt).opacity(0.09),
+                                        in: Capsule()
+                                    )
                             }
                             HStack(spacing: 7) {
                                 Text(record.createdAt.formatted(date: .abbreviated, time: .standard))
@@ -768,7 +804,7 @@ private struct SearchDiagnosticsView: View {
             Section {
                 Button("Clear local diagnostics", role: .destructive) { confirmReset = true }
             } footer: {
-                Text("This clears local request diagnostics and normal feature counters. The separate Google Vision hard-stop counter is intentionally preserved, because clearing app history cannot restore Google units or billing allowances.")
+                Text("A call is one dispatched provider request; one call can return several results. Clearing this local history does not restore provider allowances. The separate Google Vision hard-stop counter is intentionally preserved.")
             }
         }
         .navigationTitle("Search Diagnostics")

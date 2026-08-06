@@ -118,23 +118,6 @@ final class AppModel {
         isCapturePresented = true
     }
 
-    func setLiveScreenDebugArtifactsEnabled(_ enabled: Bool) {
-        settings.liveScreenBoundingBoxDebugEnabled = enabled
-        if enabled {
-            // Force one fresh analysis even if the current page was previously suppressed as
-            // empty or already handled, so Developer Debug never waits on stale hidden state.
-            liveScreenSuppressedContentFingerprint = nil
-            liveScreenSuppressionStatus = nil
-            liveScreenLastContentFingerprint = nil
-            liveScreenStableContentFrames = 0
-            liveScreenEmptyAdaptiveAttempts = 0
-            liveScreenPreviewFocus = nil
-            liveScreen.setAutomaticAnalysisIdle(false)
-        } else {
-            liveScreen.clearDebugSnapshot()
-        }
-    }
-
     func addToTryOn(_ product: ProductResultDTO) {
         if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
             pendingTryOnProducts.append(product)
@@ -231,10 +214,9 @@ final class AppModel {
                 enableAdaptiveDetail: true
             )
             let detection: GarmentDetectionBatch
+            var visualFingerprints: [String: GarmentVisualFingerprint] = [:]
             if mode == .live || mode == .screen {
-                let history = library.recentGarmentFingerprintSources(
-                    since: Date.now.addingTimeInterval(-20 * 60)
-                )
+                let history = library.garmentFingerprintSources()
                 let novel = await duplicateGuard.novelCandidates(
                     rawDetection.candidates,
                     history: history
@@ -254,8 +236,13 @@ final class AppModel {
                 }
                 detection = GarmentDetectionBatch(
                     method: rawDetection.method,
-                    candidates: novel,
+                    candidates: novel.map(\.candidate),
                     metrics: rawDetection.metrics
+                )
+                visualFingerprints = Dictionary(
+                    uniqueKeysWithValues: novel.map {
+                        ($0.candidate.id, $0.fingerprint)
+                    }
                 )
             } else {
                 detection = rawDetection
@@ -265,7 +252,8 @@ final class AppModel {
                 imageData: imageData,
                 origin: origin,
                 mode: mode,
-                detection: detection
+                detection: detection,
+                visualFingerprints: visualFingerprints
             )
             activeScanID = scan.id
             if navigateToLibrary {
@@ -282,7 +270,13 @@ final class AppModel {
                     failed: false
                 )
             }
-            if settings.notificationsEnabled,
+            if UIApplication.shared.applicationState == .active, count > 0 {
+                let feedback = UINotificationFeedbackGenerator()
+                feedback.prepare()
+                feedback.notificationOccurred(.success)
+            }
+            if mode != .screen,
+               settings.notificationsEnabled,
                await notifications.requestAuthorization()
             {
                 await notifications.captureFinished(
@@ -453,7 +447,7 @@ final class AppModel {
                 stage: preview.candidates.isEmpty
                     ? "Analyzed · no garment in this pass"
                     : "Detected \(preview.candidates.count) garment region(s)",
-                retainDebugArtifacts: self.settings.liveScreenBoundingBoxDebugEnabled
+                retainDebugArtifacts: true
             )
 
             guard let anchor = preview.candidates.max(by: { left, right in
@@ -578,7 +572,7 @@ final class AppModel {
                     frame: frame,
                     candidates: debugCandidates,
                     cropData: debugCrops,
-                    retainDebugArtifacts: self.settings.liveScreenBoundingBoxDebugEnabled
+                    retainDebugArtifacts: true
                 )
                 self.liveScreenSuppressedContentFingerprint = contentFingerprint
                 self.liveScreenSuppressionStatus =
@@ -685,6 +679,7 @@ final class AppModel {
 
     func deleteScan(_ scan: SavedScan) {
         library.deleteScan(scan)
+        Task { await duplicateGuard.reset() }
         if activeScanID == scan.id {
             activeScanID = nil
         }
@@ -693,8 +688,28 @@ final class AppModel {
     func clearLibrary() {
         do {
             try library.clear()
+            Task { await duplicateGuard.reset() }
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    func deleteLibraryItems(
+        scanIDs: Set<UUID>,
+        searchIDs: Set<String>,
+        wardrobeIDs: Set<UUID>,
+        productIDs: Set<String>,
+        tryOnIDs: Set<String>
+    ) {
+        library.deleteBatch(
+            scanIDs: scanIDs,
+            searchIDs: searchIDs,
+            wardrobeIDs: wardrobeIDs,
+            productIDs: productIDs,
+            tryOnIDs: tryOnIDs
+        )
+        if !scanIDs.isEmpty {
+            Task { await duplicateGuard.reset() }
         }
     }
 

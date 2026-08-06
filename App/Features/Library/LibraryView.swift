@@ -6,6 +6,9 @@ struct LibraryView: View {
     @State private var selectedTryOn: SavedTryOn?
     @State private var selectedScan: SavedScan?
     @State private var selectedSearch: SavedProductSearch?
+    @State private var isSelecting = false
+    @State private var selection: Set<LibrarySelection> = []
+    @State private var isConfirmingSelectionDelete = false
     @Namespace private var productTransition
 
     private var galleryColumns: [GridItem] {
@@ -18,11 +21,16 @@ struct LibraryView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 24) {
-                Text("Captures, separated pieces, saved products, and appearance previews kept on this iPhone.")
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 8)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Your visual wardrobe")
+                        .font(.title2.weight(.semibold))
+                        .tracking(-0.45)
+                    Text("Every scan becomes a reusable piece—not another screenshot to sort through.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 8)
 
                 categoryBar
 
@@ -51,6 +59,23 @@ struct LibraryView: View {
         .background(StylezamDesign.canvas)
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(isSelecting ? "Done" : "Select") {
+                    withAnimation(.snappy(duration: 0.25)) {
+                        isSelecting.toggle()
+                        if !isSelecting { selection.removeAll() }
+                    }
+                }
+                .disabled(count(for: section) == 0)
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if isSelecting {
+                selectionBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .navigationDestination(for: ProductResultDTO.self) { product in
             ProductDetailView(product: product)
                 .navigationTransition(.zoom(sourceID: product.id, in: productTransition))
@@ -69,6 +94,19 @@ struct LibraryView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: section)
         .sensoryFeedback(.selection, trigger: section)
+        .sensoryFeedback(.selection, trigger: selection.count)
+        .confirmationDialog(
+            "Delete \(selection.count) selected item\(selection.count == 1 ? "" : "s")?",
+            isPresented: $isConfirmingSelectionDelete,
+            titleVisibility: .visible
+        ) {
+            Button("Delete selected", role: .destructive, action: deleteSelection)
+        } message: {
+            Text("The selected local captures, crops, searches, saves, or try-ons will be removed from this iPhone.")
+        }
+        .onChange(of: section) { _, _ in
+            selection.removeAll()
+        }
         .onChange(of: model.activeScanID, initial: true) { _, scanID in
             guard let scanID,
                   let scan = model.library.scans.first(where: { $0.id == scanID })
@@ -77,6 +115,66 @@ struct LibraryView: View {
             selectedScan = scan
             model.activeScanID = nil
         }
+    }
+
+    private var selectionBar: some View {
+        HStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(selection.isEmpty ? "Choose items" : "\(selection.count) selected")
+                    .font(.headline)
+                Text("Tap any card to add or remove it")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button(role: .destructive) {
+                isConfirmingSelectionDelete = true
+            } label: {
+                Label("Delete", systemImage: "trash")
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .frame(height: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.red)
+            .disabled(selection.isEmpty)
+        }
+        .padding(.horizontal, StylezamDesign.pageInset)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .top) { Divider() }
+    }
+
+    private func toggle(_ item: LibrarySelection) {
+        if !selection.insert(item).inserted {
+            selection.remove(item)
+        }
+    }
+
+    private func deleteSelection() {
+        var scanIDs: Set<UUID> = []
+        var searchIDs: Set<String> = []
+        var wardrobeIDs: Set<UUID> = []
+        var productIDs: Set<String> = []
+        var tryOnIDs: Set<String> = []
+        for item in selection {
+            switch item {
+            case let .scan(id): scanIDs.insert(id)
+            case let .search(id): searchIDs.insert(id)
+            case let .wardrobe(id): wardrobeIDs.insert(id)
+            case let .product(id): productIDs.insert(id)
+            case let .tryOn(id): tryOnIDs.insert(id)
+            }
+        }
+        model.deleteLibraryItems(
+            scanIDs: scanIDs,
+            searchIDs: searchIDs,
+            wardrobeIDs: wardrobeIDs,
+            productIDs: productIDs,
+            tryOnIDs: tryOnIDs
+        )
+        selection.removeAll()
+        isSelecting = false
     }
 
     private var categoryBar: some View {
@@ -137,9 +235,14 @@ struct LibraryView: View {
                     ForEach(model.library.scans) { scan in
                         RecentScanCard(
                             scan: scan,
-                            imageURL: model.library.imageURL(for: scan),
+                            imageURL: model.library.displayImageURL(for: scan),
                             onOpen: { selectedScan = scan },
                             onDelete: { model.deleteScan(scan) }
+                        )
+                        .librarySelectionOverlay(
+                            isSelecting: isSelecting,
+                            isSelected: selection.contains(.scan(scan.id)),
+                            action: { toggle(.scan(scan.id)) }
                         )
                     }
                 }
@@ -166,6 +269,11 @@ struct LibraryView: View {
                             search: search,
                             onOpen: { selectedSearch = search },
                             onDelete: { model.library.deleteSearch(search) }
+                        )
+                        .librarySelectionOverlay(
+                            isSelecting: isSelecting,
+                            isSelected: selection.contains(.search(search.id)),
+                            action: { toggle(.search(search.id)) }
                         )
                     }
                 }
@@ -207,6 +315,11 @@ struct LibraryView: View {
                         .contextMenu {
                             Button("Remove from saved", role: .destructive) { model.library.deleteWardrobeItem(item) }
                         }
+                        .librarySelectionOverlay(
+                            isSelecting: isSelecting,
+                            isSelected: selection.contains(.wardrobe(item.id)),
+                            action: { toggle(.wardrobe(item.id)) }
+                        )
                     }
                     ForEach(model.library.products) { saved in
                         ZStack(alignment: .topTrailing) {
@@ -226,6 +339,11 @@ struct LibraryView: View {
                                 model.library.toggleSaved(saved.product)
                             }
                         }
+                        .librarySelectionOverlay(
+                            isSelecting: isSelecting,
+                            isSelected: selection.contains(.product(saved.id)),
+                            action: { toggle(.product(saved.id)) }
+                        )
                     }
                 }
             }
@@ -283,6 +401,11 @@ struct LibraryView: View {
                                 model.library.deleteTryOn(tryOn)
                             }
                         }
+                        .librarySelectionOverlay(
+                            isSelecting: isSelecting,
+                            isSelected: selection.contains(.tryOn(tryOn.id)),
+                            action: { toggle(.tryOn(tryOn.id)) }
+                        )
                     }
                 }
             }
@@ -321,6 +444,53 @@ private enum LibrarySection: String, CaseIterable, Identifiable {
         case .matches: "Matches"
         case .saved: "Saved"
         case .tryOns: "Try-ons"
+        }
+    }
+}
+
+private enum LibrarySelection: Hashable {
+    case scan(UUID)
+    case search(String)
+    case wardrobe(UUID)
+    case product(String)
+    case tryOn(String)
+}
+
+private extension View {
+    func librarySelectionOverlay(
+        isSelecting: Bool,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        overlay {
+            if isSelecting {
+                Button(action: action) {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .overlay(alignment: .topLeading) {
+                            Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(isSelected ? .white : .primary)
+                                .symbolRenderingMode(.hierarchical)
+                                .frame(width: 38, height: 38)
+                                .background(
+                                    isSelected ? StylezamDesign.cobalt : Color.white.opacity(0.88),
+                                    in: Circle()
+                                )
+                                .shadow(color: .black.opacity(0.14), radius: 9, y: 3)
+                                .padding(10)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(
+                                    isSelected ? StylezamDesign.cobalt : Color.clear,
+                                    lineWidth: 3
+                                )
+                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(isSelected ? "Deselect item" : "Select item")
+            }
         }
     }
 }
@@ -618,7 +788,7 @@ private struct ScanDetailView: View {
                 if let scan {
                     VStack(alignment: .leading, spacing: 24) {
                         LocalFileImage(
-                            url: model.library.imageURL(for: scan),
+                            url: model.library.displayImageURL(for: scan),
                             contentMode: .fit
                         )
                         .frame(maxWidth: .infinity)
@@ -686,7 +856,7 @@ private struct ScanDetailView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if let scan {
-                        ShareLink(item: model.library.imageURL(for: scan)) {
+                        ShareLink(item: model.library.displayImageURL(for: scan)) {
                             Image(systemName: "square.and.arrow.up")
                         }
                         .accessibilityLabel("Share capture")

@@ -149,7 +149,7 @@ struct HomeView: View {
                             } label: {
                                 HomeRecentCard(
                                     scan: scan,
-                                    imageURL: model.library.imageURL(for: scan)
+                                    imageURL: model.library.displayImageURL(for: scan)
                                 )
                             }
                             .buttonStyle(.plain)

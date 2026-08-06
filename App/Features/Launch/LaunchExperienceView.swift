@@ -10,45 +10,95 @@ struct LaunchExperienceView: View {
     @State private var markBlur = 10.0
     @State private var wordmarkReveal = 0.0
     @State private var taglineOpacity = 0.0
+    @State private var poweredOpacity = 0.0
+    @State private var scanPosition = -1.0
     @State private var exitScale = 1.0
     @State private var exitOpacity = 1.0
 
     var body: some View {
         ZStack {
-            StylezamDesign.cobalt
+            LinearGradient(
+                colors: [
+                    Color(red: 0.025, green: 0.16, blue: 0.58),
+                    StylezamDesign.cobalt,
+                    Color(red: 0.13, green: 0.43, blue: 1),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
                 .ignoresSafeArea()
 
-            VStack(spacing: 24) {
-                BrandMarkView(size: 148, cornerRadius: 32)
-                    .mask {
-                        IconRevealMask(progress: markReveal)
-                    }
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.1), lineWidth: 1)
+                    .frame(width: 292, height: 292)
                     .scaleEffect(markScale)
-                    .blur(radius: markBlur)
-                    .shadow(color: .black.opacity(0.16), radius: 28, y: 18)
+                Circle()
+                    .stroke(.white.opacity(0.06), lineWidth: 1)
+                    .frame(width: 380, height: 380)
+                    .scaleEffect(markScale)
 
-                VStack(spacing: 8) {
-                    Text("Stylezam")
-                        .font(.system(size: 38, weight: .semibold, design: .default))
-                        .tracking(-1.2)
-                        .foregroundStyle(.white)
-                        .frame(width: 178, height: 46)
-                        .mask(alignment: .leading) {
+                VStack(spacing: 24) {
+                    BrandMarkView(size: 148, cornerRadius: 32)
+                        .mask {
+                            IconRevealMask(progress: markReveal)
+                        }
+                        .overlay {
                             GeometryReader { proxy in
                                 Rectangle()
-                                    .frame(width: proxy.size.width * wordmarkReveal)
-                                    .blur(radius: wordmarkReveal < 1 ? 3 : 0)
+                                    .fill(
+                                        LinearGradient(
+                                            colors: [.clear, .white.opacity(0.75), .clear],
+                                            startPoint: .leading,
+                                            endPoint: .trailing
+                                        )
+                                    )
+                                    .frame(width: 42)
+                                    .rotationEffect(.degrees(14))
+                                    .offset(x: scanPosition * (proxy.size.width + 72))
+                                    .blendMode(.plusLighter)
+                                    .mask { RoundedRectangle(cornerRadius: 32) }
                             }
                         }
-                        .offset(y: 5 * (1 - wordmarkReveal))
+                        .scaleEffect(markScale)
+                        .blur(radius: markBlur)
+                        .shadow(color: .black.opacity(0.16), radius: 28, y: 18)
 
-                    Text("FIND THE LOOK")
-                        .font(.system(size: 10, weight: .semibold))
-                        .tracking(2.5)
-                        .foregroundStyle(.white.opacity(0.68))
-                        .opacity(taglineOpacity)
+                    VStack(spacing: 8) {
+                        Text("Stylezam")
+                            .font(.system(size: 38, weight: .semibold, design: .default))
+                            .tracking(-1.2)
+                            .foregroundStyle(.white)
+                            .frame(width: 178, height: 46)
+                            .mask(alignment: .leading) {
+                                GeometryReader { proxy in
+                                    Rectangle()
+                                        .frame(width: proxy.size.width * wordmarkReveal)
+                                        .blur(radius: wordmarkReveal < 1 ? 3 : 0)
+                                }
+                            }
+                            .offset(y: 5 * (1 - wordmarkReveal))
+
+                        Text("FIND THE LOOK")
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(2.5)
+                            .foregroundStyle(.white.opacity(0.68))
+                            .opacity(taglineOpacity)
+                    }
+                    .frame(width: 178)
                 }
-                .frame(width: 178)
+            }
+            .scaleEffect(exitScale)
+            .opacity(exitOpacity)
+
+            VStack {
+                Spacer()
+                Text("Powered by YouCam")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.white.opacity(0.72))
+                    .tracking(0.2)
+                    .opacity(poweredOpacity)
+                    .padding(.bottom, 28)
             }
             .scaleEffect(exitScale)
             .opacity(exitOpacity)
@@ -67,6 +117,7 @@ struct LaunchExperienceView: View {
                 markReveal = 1
                 wordmarkReveal = 1
                 taglineOpacity = 1
+                poweredOpacity = 1
             }
             try? await Task.sleep(for: .milliseconds(700))
             guard !Task.isCancelled else { return }
@@ -81,6 +132,9 @@ struct LaunchExperienceView: View {
             markScale = 1
             markBlur = 0
         }
+        withAnimation(.easeInOut(duration: 0.9)) {
+            scanPosition = 1.2
+        }
 
         try? await Task.sleep(for: .milliseconds(650))
         guard !Task.isCancelled else { return }
@@ -92,6 +146,7 @@ struct LaunchExperienceView: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.3)) {
             taglineOpacity = 1
+            poweredOpacity = 1
         }
 
         try? await Task.sleep(for: .milliseconds(820))

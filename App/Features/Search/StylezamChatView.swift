@@ -105,7 +105,7 @@ struct StylezamChatView: View {
             .safeAreaInset(edge: .bottom, spacing: 0) {
                 composer
             }
-            .navigationTitle("Ask Stylezam")
+            .navigationTitle("Stylezam AI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -134,45 +134,49 @@ struct StylezamChatView: View {
     }
 
     private var itemContext: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 16) {
             Group {
                 if let garment, let url = model.library.cropURL(for: garment) {
                     LocalFileImage(url: url, contentMode: .fit)
                 } else {
                     Color(uiColor: .tertiarySystemFill)
-                        .overlay {
-                            Image(systemName: "tshirt")
-                                .foregroundStyle(.secondary)
-                        }
+                        .overlay { Image(systemName: "tshirt").foregroundStyle(.secondary) }
                 }
             }
-            .frame(width: 72, height: 82)
+            .frame(width: 92, height: 108)
             .background(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("IN THIS CHAT")
-                    .font(.caption2.weight(.bold))
-                    .tracking(1.1)
-                    .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .foregroundStyle(StylezamDesign.cobalt)
+                    Text("SELECTED PIECE")
+                        .font(.caption2.weight(.bold))
+                        .tracking(1.05)
+                        .foregroundStyle(.secondary)
+                }
                 Text(garment?.title.capitalized ?? "Selected piece")
                     .font(.title3.weight(.semibold))
                     .lineLimit(2)
-                Label("AI keeps this crop in context", systemImage: "viewfinder")
+                Text("AI keeps this crop in context for every answer and shopping request.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
             Spacer(minLength: 0)
         }
-        .padding(12)
+        .padding(14)
         .background(
-            Color(uiColor: .secondarySystemBackground),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            LinearGradient(
+                colors: [Color(uiColor: .secondarySystemBackground), StylezamDesign.cobalt.opacity(0.055)],
+                startPoint: .leading,
+                endPoint: .trailing
+            ),
+            in: RoundedRectangle(cornerRadius: 24, style: .continuous)
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
                 .stroke(StylezamDesign.hairline, lineWidth: 0.75)
         }
     }
@@ -297,18 +301,12 @@ struct StylezamChatView: View {
     private var assistantThinking: some View {
         HStack(spacing: 9) {
             assistantMark
-            HStack(spacing: 9) {
-                ProgressView()
-                    .controlSize(.small)
-                Text("Looking closely at the piece…")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 14)
-            .frame(height: 44)
-            .background(
-                Color(uiColor: .secondarySystemBackground),
-                in: Capsule()
+            ChatThinkingIndicator(
+                statuses: [
+                    "Looking closely at the crop",
+                    "Reading visible details",
+                    "Composing a useful answer",
+                ]
             )
             Spacer()
         }
@@ -338,9 +336,7 @@ struct StylezamChatView: View {
 
     private func searchStatus(_ intent: AIShoppingSearchIntent) -> some View {
         HStack(spacing: 13) {
-            ProgressView()
-                .controlSize(.regular)
-                .tint(StylezamDesign.cobalt)
+            ChatThinkingDots()
             VStack(alignment: .leading, spacing: 3) {
                 Text(intent == .cheaper ? "Finding lower prices" : "Finding similar pieces")
                     .font(.subheadline.weight(.semibold))
@@ -543,6 +539,62 @@ struct StylezamChatView: View {
                 proxy.scrollTo("chat-bottom", anchor: .bottom)
             }
         }
+    }
+}
+
+private struct ChatThinkingIndicator: View {
+    let statuses: [String]
+    @State private var statusIndex = 0
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ChatThinkingDots()
+            Text(statuses[statusIndex % max(1, statuses.count)])
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .contentTransition(.interpolate)
+                .animation(.easeInOut(duration: 0.25), value: statusIndex)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 46)
+        .background(
+            Color(uiColor: .secondarySystemBackground),
+            in: Capsule()
+        )
+        .task {
+            guard statuses.count > 1 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(1_050))
+                guard !Task.isCancelled else { return }
+                statusIndex = (statusIndex + 1) % statuses.count
+            }
+        }
+    }
+}
+
+private struct ChatThinkingDots: View {
+    @State private var phase = 0
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(0..<3, id: \.self) { index in
+                Circle()
+                    .fill(StylezamDesign.cobalt)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(phase == index ? 1.35 : 0.75)
+                    .opacity(phase == index ? 1 : 0.35)
+            }
+        }
+        .frame(width: 30, height: 20)
+        .animation(.spring(response: 0.34, dampingFraction: 0.68), value: phase)
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(330))
+                guard !Task.isCancelled else { return }
+                phase = (phase + 1) % 3
+            }
+        }
+        .accessibilityLabel("AI is working")
     }
 }
 

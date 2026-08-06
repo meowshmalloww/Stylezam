@@ -5,6 +5,7 @@ import Foundation
 final class CaptureActivityManager {
     private var activity: Activity<StylezamCaptureActivityAttributes>?
     private var activeCaptureID: String?
+    private var sequence = 0
 
     func start(
         id: String,
@@ -18,6 +19,7 @@ final class CaptureActivityManager {
         }
         activity = nil
         activeCaptureID = nil
+        sequence = 0
         do {
             activity = try Activity.request(
                 attributes: StylezamCaptureActivityAttributes(
@@ -30,7 +32,8 @@ final class CaptureActivityManager {
                         itemCount: 0,
                         isComplete: false,
                         failed: false,
-                        visualState: visualState
+                        visualState: visualState,
+                        sequence: nextSequence()
                     ),
                     staleDate: .now.addingTimeInterval(90)
                 )
@@ -51,6 +54,13 @@ final class CaptureActivityManager {
         visualState: StylezamCaptureActivityVisualState = .detecting
     ) async {
         guard let activity, matches(captureID) else { return }
+        let alert: AlertConfiguration? = visualState == .saved
+            ? AlertConfiguration(
+                title: "Piece saved",
+                body: "Open Stylezam to see the new crop.",
+                sound: .default
+            )
+            : nil
         await activity.update(
             ActivityContent(
                 state: .init(
@@ -58,10 +68,12 @@ final class CaptureActivityManager {
                     itemCount: itemCount,
                     isComplete: isComplete,
                     failed: failed,
-                    visualState: visualState
+                    visualState: visualState,
+                    sequence: nextSequence()
                 ),
                 staleDate: .now.addingTimeInterval(90)
-            )
+            ),
+            alertConfiguration: alert
         )
     }
 
@@ -88,7 +100,8 @@ final class CaptureActivityManager {
                     itemCount: itemCount,
                     isComplete: !failed,
                     failed: failed,
-                    visualState: failed ? .failed : .saved
+                    visualState: failed ? .failed : .saved,
+                    sequence: nextSequence()
                 ),
                 staleDate: nil
             ),
@@ -111,7 +124,8 @@ final class CaptureActivityManager {
                     itemCount: 0,
                     isComplete: !failed,
                     failed: failed,
-                    visualState: failed ? .failed : .saved
+                    visualState: failed ? .failed : .saved,
+                    sequence: nextSequence()
                 ),
                 staleDate: nil
             ),
@@ -123,5 +137,10 @@ final class CaptureActivityManager {
 
     private func matches(_ captureID: String?) -> Bool {
         captureID == nil || captureID == activeCaptureID
+    }
+
+    private func nextSequence() -> Int {
+        sequence += 1
+        return sequence
     }
 }

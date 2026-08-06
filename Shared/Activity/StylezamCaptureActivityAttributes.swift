@@ -17,6 +17,9 @@ struct StylezamCaptureActivityAttributes: ActivityAttributes {
         var isComplete: Bool
         var failed: Bool
         var visualState: StylezamCaptureActivityVisualState
+        /// Changes on every meaningful pipeline transition so WidgetKit can animate repeated
+        /// scanning states instead of treating them as identical content.
+        var sequence: Int?
     }
 
     var captureID: String

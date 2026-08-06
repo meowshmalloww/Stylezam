@@ -90,7 +90,6 @@ struct CaptureSheet: View {
             captureTask?.cancel()
             camera.stop()
         }
-        .sensoryFeedback(.impact(weight: .medium), trigger: confirmationText)
     }
 
     private var cameraChrome: some View {

@@ -35,7 +35,7 @@ struct FirstRunExperienceView: View {
             BrandMarkView(size: 34)
             StylezamWordmark()
             Spacer()
-            Text("\(page.rawValue + 1, format: .number.precision(.integerLength(2))) / 04")
+            Text("\(page.rawValue + 1, format: .number.precision(.integerLength(2))) / 05")
                 .font(.caption.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText())
@@ -100,6 +100,7 @@ struct FirstRunExperienceView: View {
 private enum FirstRunPage: Int, CaseIterable, Identifiable {
     case welcome
     case separate
+    case remember
     case discover
     case ready
 
@@ -126,6 +127,8 @@ private struct FirstRunPageView: View {
                     welcome
                 case .separate:
                     separation
+                case .remember:
+                    memory
                 case .discover:
                     discovery
                 case .ready:
@@ -139,7 +142,7 @@ private struct FirstRunPageView: View {
         }
         .scrollIndicators(.hidden)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Onboarding page \(page.rawValue + 1) of 4")
+        .accessibilityLabel("Onboarding page \(page.rawValue + 1) of 5")
     }
 
     private var welcome: some View {
@@ -226,6 +229,30 @@ private struct FirstRunPageView: View {
         }
     }
 
+    private var memory: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                EditorialKicker(text: "SCAN ONCE · REMEMBERED LOCALLY")
+                Text("Recognize it later.\nSkip the duplicate.")
+                    .onboardingTitle()
+                Text("Live camera and Live Screen share one private visual memory. Once a crop is in your Library, Stylezam recognizes the same piece instead of saving it again.")
+                    .onboardingBody()
+            }
+            .motionReveal()
+
+            ScanMemoryArtwork(
+                height: min(330, max(260, availableHeight * 0.38))
+            )
+            .motionReveal(delay: 0.08, distance: 12)
+
+            Label("The visual signature stays on this iPhone and is forgotten when you delete the capture.", systemImage: "lock.iphone")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .motionReveal(delay: 0.14, distance: 8)
+        }
+    }
+
     private var ready: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
@@ -251,6 +278,90 @@ private struct FirstRunPageView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             .motionReveal(delay: 0.14, distance: 8)
+        }
+    }
+}
+
+private struct ScanMemoryArtwork: View {
+    let height: CGFloat
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white, StylezamDesign.cobalt.opacity(0.07)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+
+                VStack(spacing: 20) {
+                    HStack(spacing: 16) {
+                        sourceTile(icon: "camera", title: "Live camera")
+                        sourceTile(icon: "rectangle.on.rectangle", title: "Live Screen")
+                    }
+
+                    HStack(spacing: 10) {
+                        Rectangle().fill(StylezamDesign.hairline).frame(height: 1)
+                        Image(systemName: "arrow.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(StylezamDesign.cobalt)
+                        Rectangle().fill(StylezamDesign.hairline).frame(height: 1)
+                    }
+
+                    HStack(spacing: 16) {
+                        ZStack {
+                            Image("OnboardingFashionHero")
+                                .resizable()
+                                .scaledToFill()
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .stroke(StylezamDesign.cobalt, lineWidth: 2)
+                                .padding(13)
+                        }
+                        .frame(width: 96, height: 112)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                        VStack(alignment: .leading, spacing: 7) {
+                            Label("Piece saved", systemImage: "checkmark.circle.fill")
+                                .font(.headline)
+                                .foregroundStyle(StylezamDesign.cobalt)
+                            Text("Future matches are recognized without another Library copy.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                }
+                .padding(22)
+            }
+            .frame(width: proxy.size.width, height: height)
+        }
+        .frame(height: height)
+        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Live camera and Live Screen share one private garment memory")
+    }
+
+    private func sourceTile(icon: String, title: String) -> some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.title2.weight(.medium))
+                .foregroundStyle(StylezamDesign.cobalt)
+            Text(title)
+                .font(.caption.weight(.semibold))
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 78)
+        .background(.white.opacity(0.86), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
         }
     }
 }

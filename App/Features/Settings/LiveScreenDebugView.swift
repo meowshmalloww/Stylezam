@@ -5,18 +5,8 @@ struct LiveScreenDebugView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        @Bindable var settings = model.settings
         List {
             Section {
-                Toggle(
-                    "Retain detection boxes",
-                    isOn: Binding(
-                        get: { settings.liveScreenBoundingBoxDebugEnabled },
-                        set: { model.setLiveScreenDebugArtifactsEnabled($0) }
-                    )
-                )
-                .tint(StylezamDesign.cobalt)
-
                 LabeledContent(
                     "Stream",
                     value: model.liveScreen.isCapturing ? "Active" : "Stopped"
@@ -48,18 +38,10 @@ struct LiveScreenDebugView: View {
             } header: {
                 Text("Live pipeline")
             } footer: {
-                Text("This keeps one real authorized frame in memory for inspection. Stylezam cannot place debug rectangles over Reels or another app; the overlay below shows the exact boxes returned by the local model.")
+                Text("While Live Screen is active, Stylezam always keeps only the latest authorized frame in memory for inspection. The overlay below shows the exact boxes returned by the local model.")
             }
 
-            if !settings.liveScreenBoundingBoxDebugEnabled {
-                Section {
-                    ContentUnavailableView(
-                        "Box retention is off",
-                        systemImage: "rectangle.dashed",
-                        description: Text("Enable the toggle, start Live Screen, and pause on a fashion item.")
-                    )
-                }
-            } else if let snapshot = model.liveScreen.latestDebugSnapshot,
+            if let snapshot = model.liveScreen.latestDebugSnapshot,
                       let image = UIImage(data: snapshot.frameData)
             {
                 Section {

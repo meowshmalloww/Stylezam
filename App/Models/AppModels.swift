@@ -250,9 +250,11 @@ struct LiveGarmentPreview: Hashable, Sendable {
 }
 
 struct GarmentFingerprintSource: Sendable {
+    let id: String
     let label: String
-    let data: Data
-    let createdAt: Date
+    let data: Data?
+    let perceptualHash: UInt64?
+    let featurePrintData: Data?
 }
 
 struct SavedGarment: Codable, Identifiable, Hashable, Sendable {
@@ -270,6 +272,9 @@ struct SavedGarment: Codable, Identifiable, Hashable, Sendable {
     var patterns: [String]
     var details: [String]
     var visibleText: [String]
+    /// Durable local-only signatures used to avoid saving the same physical piece again.
+    var perceptualHash: UInt64? = nil
+    var featurePrintData: Data? = nil
 
     var title: String {
         displayName ?? localLabel
