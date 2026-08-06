@@ -23,8 +23,6 @@ final class AppModel {
     var captureStatus: String?
     var latestPreviewCandidates: [GarmentCandidate] = []
     var pendingGarmentSearch: PendingGarmentSearch?
-    var pendingTryOnProducts: [ProductResultDTO] = []
-    var pendingTryOnItems: [TryOnTrayItem] = []
     var isTryOnPresented = false
     var liveScreenNotice: String?
 
@@ -118,11 +116,24 @@ final class AppModel {
         isCapturePresented = true
     }
 
-    func addToTryOn(_ product: ProductResultDTO) {
-        if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
-            pendingTryOnProducts.append(product)
+    @discardableResult
+    func addToTryOn(_ product: ProductResultDTO) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            lastError = nil
+            do {
+                let imageData = try await normalizedProductImage(for: product)
+                let item = try library.upsertProductInTryOnRail(product, imageData: imageData)
+                guard isSelectedInTryOnRail(item.id) else {
+                    throw ProductImageLoadError.libraryPersistence(library.loadError)
+                }
+                isTryOnPresented = true
+            } catch is CancellationError {
+                // The explicit add was cancelled before it completed.
+            } catch {
+                lastError = error.localizedDescription
+            }
         }
-        isTryOnPresented = true
     }
 
     func openProductSearch(
@@ -140,31 +151,22 @@ final class AppModel {
     }
 
     func addGarmentToTryOn(scanID: UUID, garmentID: String) {
-        guard let scan = library.scans.first(where: { $0.id == scanID }),
-              let garment = scan.items.first(where: { $0.id == garmentID }),
-              let cropURL = library.cropURL(for: garment),
-              let cropData = try? Data(contentsOf: cropURL)
-        else {
-            lastError = "The detected crop is unavailable. Capture the piece again or choose a product match."
-            return
+        do {
+            guard let item = try library.addDetectedGarmentToTryOnRail(
+                scanID: scanID,
+                garmentID: garmentID
+            ) else {
+                lastError = "The detected crop is unavailable. Capture the piece again or choose a product match."
+                return
+            }
+            guard isSelectedInTryOnRail(item.id) else {
+                throw ProductImageLoadError.libraryPersistence(library.loadError)
+            }
+            lastError = nil
+            isTryOnPresented = true
+        } catch {
+            lastError = error.localizedDescription
         }
-
-        let category = TryOnCategory.infer(
-            category: garment.category,
-            title: garment.title
-        )
-        pendingTryOnItems.removeAll { item in
-            item.title == garment.title && item.imageData == cropData
-        }
-        pendingTryOnItems.append(
-            TryOnTrayItem(
-                title: garment.title,
-                category: category,
-                imageData: cropData
-            )
-        )
-        lastError = nil
-        isTryOnPresented = true
     }
 
     @discardableResult
@@ -255,14 +257,23 @@ final class AppModel {
                 detection: detection,
                 visualFingerprints: visualFingerprints
             )
+            let railPromotion = persistAcceptedGarmentsInTryOnRail(
+                from: scan,
+                sourceFrameData: imageData
+            )
             activeScanID = scan.id
             if navigateToLibrary {
                 selectedTab = .library
             }
             let count = detection.candidates.count
-            captureStatus = count == 0
-                ? "Saved · no distinct pieces found"
-                : count == 1 ? "1 piece ready" : "\(count) pieces ready"
+            if railPromotion.failed > 0 {
+                let saved = count == 1 ? "1 piece saved" : "\(count) pieces saved"
+                captureStatus = "\(saved) · \(railPromotion.promoted) selected for try-on"
+            } else {
+                captureStatus = count == 0
+                    ? "Saved · no distinct pieces found"
+                    : count == 1 ? "1 piece ready" : "\(count) pieces ready"
+            }
             if usesStandaloneActivity {
                 await captureActivityManager.finish(
                     captureID: activityID,
@@ -734,6 +745,11 @@ final class AppModel {
            let existing = library.search(for: context.key),
            searchUsage.attempts(for: context.key) >= settings.productSearchesPerPiece
         {
+            await enrichTryOnRail(
+                withBestProductFrom: existing.results,
+                scanID: scanID,
+                garmentID: garmentID
+            )
             return existing
         }
 
@@ -897,6 +913,11 @@ final class AppModel {
                 estimatedCostUSD: estimatedCost,
                 diagnostic: diagnostic
             )
+            await enrichTryOnRail(
+                withBestProductFrom: results,
+                scanID: scanID,
+                garmentID: garmentID
+            )
             return saved
         } catch {
             searchUsage.fail(
@@ -1019,6 +1040,151 @@ final class AppModel {
             garmentLabel: item.localLabel,
             imageData: imageData
         )
+    }
+
+    /// Captures are local-only: this promotes the crops already written by `addScan` and never
+    /// starts shopping or YouCam work. Failures do not turn a successfully saved scan into a loss.
+    @discardableResult
+    private func persistAcceptedGarmentsInTryOnRail(
+        from scan: SavedScan,
+        sourceFrameData: Data? = nil
+    ) -> (promoted: Int, failed: Int) {
+        var promoted = 0
+        var failures = 0
+        for garment in scan.items where garment.accepted {
+            do {
+                guard let item = try library.addDetectedGarmentToTryOnRail(
+                    scanID: scan.id,
+                    garmentID: garment.id,
+                    sourceFrameData: sourceFrameData
+                ), isSelectedInTryOnRail(item.id) else {
+                    failures += 1
+                    continue
+                }
+                promoted += 1
+            } catch {
+                failures += 1
+            }
+        }
+
+        if failures > 0 {
+            let noun = failures == 1 ? "piece" : "pieces"
+            lastError = "The capture was saved, but \(failures) \(noun) could not be added to the try-on rail."
+        }
+        return (promoted, failures)
+    }
+
+    /// Search is already an explicit network action. Rail enrichment is best-effort and never
+    /// changes the success or metering outcome of that search.
+    private func enrichTryOnRail(
+        withBestProductFrom results: [ProductResultDTO],
+        scanID: UUID,
+        garmentID: String
+    ) async {
+        guard let product = results.first(where: Self.isShoppable) else { return }
+
+        // The detected crop is already the strongest try-on reference, especially for
+        // lower-body clothing. Attach shopping provenance without making that enrichment
+        // depend on a merchant thumbnail being downloadable.
+        do {
+            if try library.enrichSourceWardrobeItemInTryOnRail(
+                product,
+                sourceScanID: scanID,
+                sourceGarmentID: garmentID
+            ) != nil {
+                return
+            }
+
+            // Restore a legacy or previously removed source crop before considering a
+            // catalog thumbnail. This keeps lower-body references in the worn-photo form
+            // required by clothes v3 whenever the original scan media still exists.
+            if try library.addDetectedGarmentToTryOnRail(
+                scanID: scanID,
+                garmentID: garmentID
+            ) != nil {
+                _ = try library.enrichSourceWardrobeItemInTryOnRail(
+                    product,
+                    sourceScanID: scanID,
+                    sourceGarmentID: garmentID
+                )
+                return
+            }
+        } catch {
+            return
+        }
+
+        do {
+            let imageData = try await normalizedProductImage(for: product)
+            _ = try library.upsertProductInTryOnRail(
+                product,
+                imageData: imageData,
+                sourceScanID: scanID,
+                sourceGarmentID: garmentID
+            )
+        } catch {
+            // Shopping results remain valid even when a merchant image is missing or blocks reuse.
+        }
+    }
+
+    private static func isShoppable(_ product: ProductResultDTO) -> Bool {
+        guard let scheme = product.productURL.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              product.productURL.host != nil
+        else { return false }
+        return !product.merchant.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func normalizedProductImage(for product: ProductResultDTO) async throws -> Data {
+        guard let url = product.imageURL,
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              url.host != nil
+        else {
+            throw ProductImageLoadError.missingImage
+        }
+
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 25
+        request.cachePolicy = .returnCacheDataElseLoad
+        request.setValue(
+            "image/avif,image/webp,image/png,image/jpeg,image/*;q=0.8",
+            forHTTPHeaderField: "Accept"
+        )
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            if Task.isCancelled { throw CancellationError() }
+            throw ProductImageLoadError.downloadFailed
+        }
+        try Task.checkCancellation()
+
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode)
+        else {
+            throw ProductImageLoadError.downloadFailed
+        }
+
+        let maximumImageBytes = 25_000_000
+        guard !data.isEmpty, data.count <= maximumImageBytes else {
+            throw ProductImageLoadError.imageTooLarge
+        }
+        guard let normalized = await ImageEncoding.normalizedJPEGAsync(from: data),
+              !normalized.isEmpty,
+              normalized.count <= maximumImageBytes
+        else {
+            throw ProductImageLoadError.unreadableImage
+        }
+        try Task.checkCancellation()
+        return normalized
+    }
+
+    private func isSelectedInTryOnRail(_ itemID: UUID) -> Bool {
+        library.tryOnRail.contains {
+            $0.wardrobeItemID == itemID && $0.isSelected
+        }
     }
 
     private func fireworksCost(inputTokens: Int?, outputTokens: Int?) -> Double {
@@ -1272,6 +1438,10 @@ private extension AppModel {
                 mode: .imported,
                 detection: detection
             )
+            persistAcceptedGarmentsInTryOnRail(
+                from: scan,
+                sourceFrameData: input
+            )
             try? FileManager.default.removeItem(at: outputDirectory)
             try FileManager.default.createDirectory(
                 at: outputDirectory,
@@ -1399,6 +1569,29 @@ private extension AppModel {
     }
 }
 #endif
+
+private enum ProductImageLoadError: LocalizedError {
+    case missingImage
+    case downloadFailed
+    case imageTooLarge
+    case unreadableImage
+    case libraryPersistence(String?)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingImage:
+            "This result has no usable product image. Choose another match or add a product photo from your library."
+        case .downloadFailed:
+            "The store would not provide this product image. Choose another match or add a product photo from your library."
+        case .imageTooLarge:
+            "This product image is too large to add safely. Choose another match or add a smaller product photo."
+        case .unreadableImage:
+            "This product image could not be prepared for the try-on rail. Choose another match or add a product photo."
+        case let .libraryPersistence(detail):
+            detail ?? "The piece could not be saved to the try-on rail. Check available storage and try again."
+        }
+    }
+}
 
 private extension CaptureMode {
     var activityLabel: String {

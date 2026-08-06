@@ -60,6 +60,7 @@ enum YouCamTryOnError: LocalizedError {
     case invalidResponse
     case server(String)
     case timedOut
+    case videoTimedOut
 
     var errorDescription: String? {
         switch self {
@@ -71,13 +72,135 @@ enum YouCamTryOnError: LocalizedError {
             message
         case .timedOut:
             "YouCam is still processing this look. Try again in a moment."
+        case .videoTimedOut:
+            "YouCam is still creating the motion preview. Try again in a moment."
+        }
+    }
+}
+
+struct YouCamVideoResult: Sendable {
+    let jobID: String
+    let videoData: Data
+}
+
+private enum YouCamTaskCreationRequest: Sendable {
+    case tryOn(
+        endpoint: String,
+        category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion,
+        sourceID: String,
+        referenceID: String,
+        gender: TryOnGender
+    )
+    case video(endpoint: String, sourceID: String)
+
+    var endpoint: String {
+        switch self {
+        case let .tryOn(endpoint, _, _, _, _, _), let .video(endpoint, _):
+            endpoint
+        }
+    }
+}
+
+/// Relays an uncancelled task-creation request back to its caller. Cancellation resumes the
+/// local waiter immediately, while a request that was already dispatched remains alive long
+/// enough to recover its task ID for remote cleanup.
+private actor YouCamTaskCreationRelay {
+    private enum State {
+        case pending
+        case waiting(CheckedContinuation<String, any Error>)
+        case succeeded(String)
+        case failed(any Error)
+        case cancelled
+    }
+
+    private var state: State = .pending
+
+    func beginRequest() -> Bool {
+        if case .cancelled = state { return false }
+        return true
+    }
+
+    func value() async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            switch state {
+            case .pending:
+                state = .waiting(continuation)
+            case let .succeeded(taskID):
+                continuation.resume(returning: taskID)
+            case let .failed(error):
+                continuation.resume(throwing: error)
+            case .cancelled:
+                continuation.resume(throwing: CancellationError())
+            case .waiting:
+                continuation.resume(
+                    throwing: YouCamTryOnError.server("YouCam task creation was already being observed.")
+                )
+            }
+        }
+    }
+
+    /// Returns true when the caller already cancelled and this task now needs detached cleanup.
+    func succeed(_ taskID: String) -> Bool {
+        switch state {
+        case .pending:
+            state = .succeeded(taskID)
+            return false
+        case let .waiting(continuation):
+            state = .succeeded(taskID)
+            continuation.resume(returning: taskID)
+            return false
+        case .cancelled:
+            return true
+        case .succeeded, .failed:
+            return false
+        }
+    }
+
+    func fail(_ error: any Error) {
+        switch state {
+        case .pending:
+            state = .failed(error)
+        case let .waiting(continuation):
+            state = .failed(error)
+            continuation.resume(throwing: error)
+        case .cancelled, .succeeded, .failed:
+            break
+        }
+    }
+
+    /// Returns an accepted task ID when creation won the race with cancellation.
+    func cancel() -> String? {
+        switch state {
+        case .pending:
+            state = .cancelled
+            return nil
+        case let .waiting(continuation):
+            state = .cancelled
+            continuation.resume(throwing: CancellationError())
+            return nil
+        case let .succeeded(taskID):
+            state = .cancelled
+            return taskID
+        case .failed:
+            state = .cancelled
+            return nil
+        case .cancelled:
+            return nil
         }
     }
 }
 
 actor YouCamTryOnService {
+    private static let videoEndpoint = "image-to-video/youcam"
+    private static let remoteCleanupPollLimit = 120
+    private static let remoteCleanupFailureLimit = 3
+    private static let videoPrompt = "Keep the person, face, body, outfit, accessories, colors, textures, lighting, and background consistent. Add only subtle fashion-view motion: slowly turn a few degrees to one side, then gently return toward the camera. Use a fixed camera and natural fabric movement."
+    private static let videoNegativePrompt = "changed clothing, missing accessories, altered colors, altered logos, added garments, body distortion, face distortion, extra limbs, extra fingers, camera cuts, zoom, fast motion, blur, flicker, low quality"
+
     private let baseURL = URL(string: "https://yce-api-01.makeupar.com")!
     private let session: URLSession
+    private var scheduledCleanupTaskIDs: Set<String> = []
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -97,6 +220,17 @@ actor YouCamTryOnService {
         progress: @Sendable (Int, Int, String) async -> Void
     ) async throws -> (jobID: String, imageData: Data) {
         guard !items.isEmpty else { throw YouCamTryOnError.server("Select at least one item.") }
+        let referenceImages = try items.map { item -> Data in
+            guard item.region == .lowerBody else { return item.imageData }
+            guard let referenceImageData = item.referenceImageData,
+                  !referenceImageData.isEmpty
+            else {
+                throw YouCamTryOnError.server(
+                    "\(item.title) needs a photo showing the garment worn for lower-body try-on. Use the worn-reference action in the try-on rail, then try again."
+                )
+            }
+            return referenceImageData
+        }
         var current = personImage
         var lastTaskID = UUID().uuidString
 
@@ -106,18 +240,20 @@ actor YouCamTryOnService {
             await progress(index, items.count, "Uploading your photo")
             let sourceID = try await upload(current, endpoint: endpoint)
             await progress(index, items.count, "Uploading the found piece")
-            let referenceID = try await upload(item.imageData, endpoint: endpoint)
+            let referenceID = try await upload(referenceImages[index], endpoint: endpoint)
             await progress(index, items.count, "Starting YouCam")
-            lastTaskID = try await createTask(
+            let taskID = try await createTask(
                 endpoint: endpoint,
                 category: item.category,
+                garmentRegion: item.region,
                 sourceID: sourceID,
                 referenceID: referenceID,
                 gender: gender
             )
+            lastTaskID = taskID
             do {
                 await progress(index, items.count, "Creating your try-on")
-                let resultURL = try await poll(endpoint: endpoint, taskID: lastTaskID)
+                let resultURL = try await poll(endpoint: endpoint, taskID: taskID)
                 await progress(index, items.count, "Downloading the result")
                 let (data, response) = try await session.data(from: resultURL)
                 guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
@@ -128,13 +264,47 @@ actor YouCamTryOnService {
                 }
                 current = normalized
             } catch {
-                try? await deleteFinishedTask(lastTaskID)
+                scheduleRemoteCleanup(endpoint: endpoint, taskID: taskID)
                 throw error
             }
-            try? await deleteFinishedTask(lastTaskID)
+            await deleteFinishedTaskIgnoringCancellation(taskID)
         }
         await progress(items.count, items.count, "Look ready")
         return (lastTaskID, current)
+    }
+
+    func animate(imageData: Data) async throws -> YouCamVideoResult {
+        try await animate(imageData: imageData, progress: { _ in })
+    }
+
+    func animate(
+        imageData: Data,
+        progress: @Sendable (String) async -> Void
+    ) async throws -> YouCamVideoResult {
+        try Task.checkCancellation()
+        await progress("Preparing motion preview")
+        let sourceID = try await uploadVideoSource(imageData)
+        try Task.checkCancellation()
+
+        await progress("Starting YouCam video")
+        let taskID = try await createVideoTask(sourceID: sourceID)
+
+        do {
+            await progress("Creating motion preview")
+            let resultURL = try await pollVideo(taskID: taskID)
+            try Task.checkCancellation()
+
+            await progress("Downloading motion preview")
+            let videoData = try await downloadVideo(from: resultURL)
+            try Task.checkCancellation()
+
+            await deleteFinishedTaskIgnoringCancellation(taskID)
+            await progress("Motion preview ready")
+            return YouCamVideoResult(jobID: taskID, videoData: videoData)
+        } catch {
+            scheduleRemoteCleanup(endpoint: Self.videoEndpoint, taskID: taskID)
+            throw error
+        }
     }
 
     private func upload(_ sourceData: Data, endpoint: String) async throws -> String {
@@ -151,6 +321,37 @@ actor YouCamTryOnService {
         else {
             throw YouCamTryOnError.server("Try-on images must be readable, at least 512 pixels per side, and no larger than 4096 pixels on the longest side.")
         }
+        return try await uploadPrepared(prepared, endpoint: endpoint)
+    }
+
+    private func uploadVideoSource(_ sourceData: Data) async throws -> String {
+        guard let prepared = preparedUpload(from: sourceData) else {
+            throw YouCamTryOnError.server("The finished try-on could not be prepared for video.")
+        }
+        let data = prepared.data
+        guard data.count < 10_000_000 else {
+            throw YouCamTryOnError.server("The image for the motion preview must be smaller than 10 MB.")
+        }
+        guard let image = UIImage(data: data),
+              image.size.width > 0,
+              image.size.height > 0,
+              max(image.size.width, image.size.height) <= 4096
+        else {
+            throw YouCamTryOnError.server("The image for the motion preview must be readable and no larger than 4096 pixels on the longest side.")
+        }
+        let aspectRatio = max(image.size.width, image.size.height) / min(image.size.width, image.size.height)
+        guard aspectRatio <= 2.5 else {
+            throw YouCamTryOnError.server("The image is too wide or tall for YouCam video. Choose a portrait or landscape photo with less empty space.")
+        }
+        return try await uploadPrepared(prepared, endpoint: Self.videoEndpoint)
+    }
+
+    private func uploadPrepared(
+        _ prepared: (data: Data, fileExtension: String, contentType: String),
+        endpoint: String
+    ) async throws -> String {
+        try Task.checkCancellation()
+        let data = prepared.data
         let filename = "stylezam-\(UUID().uuidString).\(prepared.fileExtension)"
         let body: [String: Any] = [
             "files": [[
@@ -173,6 +374,7 @@ actor YouCamTryOnService {
             headers.forEach { request.setValue(String(describing: $1), forHTTPHeaderField: $0) }
         }
         let (_, response) = try await session.upload(for: request, from: data)
+        try Task.checkCancellation()
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw YouCamTryOnError.server("YouCam rejected an image upload.")
         }
@@ -214,25 +416,108 @@ actor YouCamTryOnService {
     private func createTask(
         endpoint: String,
         category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion = .unknown,
         sourceID: String,
         referenceID: String,
         gender: TryOnGender
     ) async throws -> String {
-        var body: [String: Any] = ["src_file_id": sourceID]
-        if category.isJewelry {
-            body["ref_file_ids"] = [referenceID]
-        } else {
-            body["ref_file_id"] = referenceID
-            if category == .clothes {
-                body["garment_category"] = "auto"
-            } else {
-                body["gender"] = gender.rawValue
-                if category == .shoes {
-                    body["style"] = "random"
+        try await createTaskCapturingAcceptedResponse(
+            .tryOn(
+                endpoint: endpoint,
+                category: category,
+                garmentRegion: garmentRegion,
+                sourceID: sourceID,
+                referenceID: referenceID,
+                gender: gender
+            )
+        )
+    }
+
+    private func createVideoTask(sourceID: String) async throws -> String {
+        try await createTaskCapturingAcceptedResponse(
+            .video(endpoint: Self.videoEndpoint, sourceID: sourceID)
+        )
+    }
+
+    private func createTaskCapturingAcceptedResponse(
+        _ creationRequest: YouCamTaskCreationRequest
+    ) async throws -> String {
+        let relay = YouCamTaskCreationRelay()
+
+        Task.detached(priority: .userInitiated) { [self] in
+            guard await relay.beginRequest() else { return }
+            do {
+                let taskID = try await submitTask(creationRequest)
+                if await relay.succeed(taskID) {
+                    await scheduleRemoteCleanup(
+                        endpoint: creationRequest.endpoint,
+                        taskID: taskID
+                    )
+                }
+            } catch {
+                await relay.fail(error)
+            }
+        }
+
+        let taskID = try await withTaskCancellationHandler {
+            try await relay.value()
+        } onCancel: { [self] in
+            Task.detached(priority: .utility) {
+                if let acceptedTaskID = await relay.cancel() {
+                    await self.scheduleRemoteCleanup(
+                        endpoint: creationRequest.endpoint,
+                        taskID: acceptedTaskID
+                    )
                 }
             }
         }
-        let json = try await requestJSON(path: "/s2s/v2.0/task/\(endpoint)", method: "POST", body: body)
+        try Task.checkCancellation()
+        return taskID
+    }
+
+    private func submitTask(_ creationRequest: YouCamTaskCreationRequest) async throws -> String {
+        let endpoint = creationRequest.endpoint
+        let body: [String: Any]
+
+        switch creationRequest {
+        case let .tryOn(_, category, garmentRegion, sourceID, referenceID, gender):
+            var tryOnBody: [String: Any] = ["src_file_id": sourceID]
+            if category.isJewelry {
+                tryOnBody["ref_file_ids"] = [referenceID]
+                tryOnBody["source_info"] = ["name": sourceID]
+                var objectInfo: [String: Any] = ["name": referenceID]
+                if let parameters = category.youCamObjectParameters {
+                    objectInfo["parameter"] = parameters
+                }
+                tryOnBody["object_infos"] = [objectInfo]
+            } else {
+                tryOnBody["ref_file_id"] = referenceID
+                if category == .clothes {
+                    tryOnBody["garment_category"] = garmentRegion.youCamGarmentCategory
+                } else {
+                    tryOnBody["gender"] = gender.rawValue
+                    if category == .shoes {
+                        tryOnBody["style"] = "random"
+                    }
+                }
+            }
+            body = tryOnBody
+        case let .video(_, sourceID):
+            body = [
+                "src_file_id": sourceID,
+                "resolution": "480",
+                "dst_duration": 5,
+                "prompt": Self.videoPrompt,
+                "negative_prompt": Self.videoNegativePrompt,
+                "model": "youcam-video-v2"
+            ]
+        }
+
+        let json = try await requestJSON(
+            path: "/s2s/v2.0/task/\(endpoint)",
+            method: "POST",
+            body: body
+        )
         guard let taskID = recursiveValue(for: "task_id", in: json) as? String else {
             throw serverError(from: json)
         }
@@ -245,6 +530,79 @@ actor YouCamTryOnService {
             method: "POST",
             body: ["task_id": taskID]
         )
+    }
+
+    private func deleteFinishedTaskIgnoringCancellation(_ taskID: String) async {
+        let cleanup = Task.detached(priority: .utility) { [self] in
+            _ = await deleteFinishedTaskWithRetries(taskID)
+        }
+        await cleanup.value
+    }
+
+    /// Cancellation is local and immediate. The detached monitor keeps the provider task alive
+    /// only long enough to reach a deletable terminal state, then removes its inputs and outputs.
+    /// If polling or deletion remains unavailable after the bounds below, YouCam's documented
+    /// automatic retention period remains the fallback.
+    private func scheduleRemoteCleanup(endpoint: String, taskID: String) {
+        guard scheduledCleanupTaskIDs.insert(taskID).inserted else { return }
+        Task.detached(priority: .utility) { [self] in
+            await waitForTerminalStateAndDelete(endpoint: endpoint, taskID: taskID)
+            await finishScheduledCleanup(taskID)
+        }
+    }
+
+    private func finishScheduledCleanup(_ taskID: String) {
+        scheduledCleanupTaskIDs.remove(taskID)
+    }
+
+    private func waitForTerminalStateAndDelete(endpoint: String, taskID: String) async {
+        if await deleteFinishedTaskWithRetries(taskID, attempts: 1) { return }
+
+        var consecutiveFailures = 0
+        for _ in 0..<Self.remoteCleanupPollLimit {
+            do {
+                let json = try await requestJSON(
+                    path: "/s2s/v2.0/task/\(endpoint)/\(taskID)",
+                    method: "GET"
+                )
+                consecutiveFailures = 0
+                if taskIsTerminal(json) {
+                    _ = await deleteFinishedTaskWithRetries(taskID)
+                    return
+                }
+                try? await Task.sleep(for: pollingDelay(from: json))
+            } catch {
+                consecutiveFailures += 1
+                guard consecutiveFailures < Self.remoteCleanupFailureLimit else { return }
+                try? await Task.sleep(for: .seconds(3))
+            }
+        }
+
+        // The task may have crossed into a terminal state just after the final status poll.
+        _ = await deleteFinishedTaskWithRetries(taskID)
+    }
+
+    private func taskIsTerminal(_ json: Any) -> Bool {
+        let status = (recursiveValue(for: "task_status", in: json) as? String)?.lowercased()
+        if status == "success" || status == "error" { return true }
+        return status == nil && recursiveValue(for: "url", in: json) != nil
+    }
+
+    private func deleteFinishedTaskWithRetries(
+        _ taskID: String,
+        attempts: Int = 3
+    ) async -> Bool {
+        for attempt in 0..<max(1, attempts) {
+            do {
+                try await deleteFinishedTask(taskID)
+                return true
+            } catch {
+                if attempt + 1 < max(1, attempts) {
+                    try? await Task.sleep(for: .seconds(2))
+                }
+            }
+        }
+        return false
     }
 
     private func poll(endpoint: String, taskID: String) async throws -> URL {
@@ -264,7 +622,67 @@ actor YouCamTryOnService {
         throw YouCamTryOnError.timedOut
     }
 
+    private func pollVideo(taskID: String) async throws -> URL {
+        for _ in 0..<100 {
+            try Task.checkCancellation()
+            let json = try await requestJSON(
+                path: "/s2s/v2.0/task/\(Self.videoEndpoint)/\(taskID)",
+                method: "GET"
+            )
+            let status = (recursiveValue(for: "task_status", in: json) as? String)?.lowercased()
+            let rawURL = recursiveValue(for: "url", in: json) as? String
+
+            if status == "error" {
+                throw serverError(from: json)
+            }
+            if status == "success" || (status == nil && rawURL != nil) {
+                guard let rawURL, let url = URL(string: rawURL) else {
+                    throw YouCamTryOnError.invalidResponse
+                }
+                return url
+            }
+
+            try await Task.sleep(for: pollingDelay(from: json))
+        }
+        throw YouCamTryOnError.videoTimedOut
+    }
+
+    private func pollingDelay(from json: Any) -> Duration {
+        let value = recursiveValue(for: "polling_interval", in: json)
+        let seconds: Double
+        if let number = value as? NSNumber {
+            seconds = number.doubleValue
+        } else if let string = value as? String, let number = Double(string) {
+            seconds = number
+        } else {
+            seconds = 3
+        }
+        return .milliseconds(Int(min(5, max(1, seconds)) * 1_000))
+    }
+
+    private func downloadVideo(from url: URL) async throws -> Data {
+        try Task.checkCancellation()
+        var request = URLRequest(url: url)
+        request.setValue("video/mp4,video/*;q=0.9,application/octet-stream;q=0.5", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        try Task.checkCancellation()
+
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw YouCamTryOnError.server("The generated motion preview could not be downloaded.")
+        }
+        guard !data.isEmpty, data.count < 100_000_000, isMP4(data) else {
+            throw YouCamTryOnError.server("YouCam returned an unsupported motion-preview file.")
+        }
+        return data
+    }
+
+    private func isMP4(_ data: Data) -> Bool {
+        guard data.count >= 12 else { return false }
+        return Data(data.dropFirst(4).prefix(4)) == Data("ftyp".utf8)
+    }
+
     private func requestJSON(path: String, method: String, body: [String: Any]? = nil) async throws -> Any {
+        try Task.checkCancellation()
         guard let key = Self.apiKey, !key.isEmpty, !key.contains("$(") else {
             throw YouCamTryOnError.missingAPIKey
         }
@@ -274,6 +692,7 @@ actor YouCamTryOnService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
         let (data, response) = try await session.data(for: request)
+        try Task.checkCancellation()
         let json: Any
         if data.isEmpty {
             json = [String: Any]()
@@ -303,26 +722,61 @@ actor YouCamTryOnService {
             ?? (recursiveValue(for: "code", in: json) as? String)
         let providerMessage = (recursiveValue(for: "message", in: json) as? String)
             ?? (recursiveValue(for: "error", in: json) as? String)
+        let diagnostic = [code, providerMessage]
+            .compactMap {
+                $0?.lowercased()
+                    .replacingOccurrences(of: "_", with: " ")
+                    .replacingOccurrences(of: "-", with: " ")
+            }
+            .joined(separator: " ")
 
         let friendly: String
-        switch code?.lowercased() {
-        case "error_invalid_src", "error_no_face", "photo_detection_fail", "photo_check_invalid":
-            friendly = "YouCam could not detect one clear person in your photo. Retake it facing forward with the requested body area visible."
-        case "object_detection_fail", "input_object_image_empty":
-            friendly = "YouCam could not recognize the found product image. Try another result or add a clearer product photo."
-        case "exceed_max_filesize":
-            friendly = "One of the try-on images is too large for YouCam."
-        case "invalid_parameter":
-            friendly = "YouCam rejected this category or image combination. Confirm the piece category and try again."
-        case "error_nsfw_content_detected":
-            friendly = "YouCam declined this image under its content policy."
-        default:
-            if let providerMessage, !providerMessage.isEmpty {
-                friendly = providerMessage
-            } else if let statusCode {
-                friendly = "YouCam returned HTTP \(statusCode). Check the API allowance and try again."
-            } else {
-                friendly = "YouCam could not generate this try-on. Check the person photo and product image."
+        if statusCode == 429
+            || diagnostic.contains("rate limit")
+            || diagnostic.contains("too many request")
+            || diagnostic.contains("toomanyrequest")
+            || diagnostic.contains("qps")
+            || diagnostic.contains("concurr")
+            || diagnostic.contains("quota exceeded")
+        {
+            friendly = "YouCam is handling too many requests for this account. Wait a moment, then try again."
+        } else if statusCode == 402
+            || diagnostic.contains("insufficient credit")
+            || diagnostic.contains("insufficient unit")
+            || diagnostic.contains("not enough credit")
+            || diagnostic.contains("not enough unit")
+        {
+            friendly = "This YouCam account does not have enough API units for the requested feature. Check the account allowance before trying again."
+        } else if statusCode == 403
+            || diagnostic.contains("not entitled")
+            || diagnostic.contains("not enabled")
+            || diagnostic.contains("feature unavailable")
+            || diagnostic.contains("permission denied")
+            || diagnostic.contains("forbidden")
+        {
+            friendly = "This YouCam API key is not enabled for the requested feature. Enable it for the account or use a key with the required access."
+        } else if statusCode == 401 {
+            friendly = "YouCam rejected this API key. Reconnect YouCam with a valid key and try again."
+        } else {
+            switch code?.lowercased() {
+            case "error_invalid_src", "error_no_face", "photo_detection_fail", "photo_check_invalid":
+                friendly = "YouCam could not detect one clear person in your photo. Retake it facing forward with the requested body area visible."
+            case "object_detection_fail", "input_object_image_empty":
+                friendly = "YouCam could not recognize the found product image. Try another result or add a clearer product photo."
+            case "exceed_max_filesize":
+                friendly = "One of the try-on images is too large for YouCam."
+            case "invalid_parameter":
+                friendly = "YouCam rejected this category or image combination. Confirm the piece category and try again."
+            case "error_nsfw_content_detected":
+                friendly = "YouCam declined this image under its content policy."
+            default:
+                if let providerMessage, !providerMessage.isEmpty {
+                    friendly = providerMessage
+                } else if let statusCode {
+                    friendly = "YouCam returned HTTP \(statusCode). Check the API allowance and try again."
+                } else {
+                    friendly = "YouCam could not generate this try-on. Check the person photo and product image."
+                }
             }
         }
 
@@ -361,6 +815,21 @@ actor YouCamTryOnService {
     }
 }
 
+private extension TryOnGarmentRegion {
+    var youCamGarmentCategory: String {
+        switch self {
+        case .upperBody, .outerwear:
+            "upper_body"
+        case .lowerBody:
+            "lower_body"
+        case .fullBody:
+            "full_body"
+        case .footwear, .accessory, .unknown:
+            "auto"
+        }
+    }
+}
+
 private extension TryOnCategory {
     var endpoint: String {
         switch self {
@@ -381,6 +850,48 @@ private extension TryOnCategory {
         switch self {
         case .ring, .bracelet, .earring, .watch, .necklace: true
         default: false
+        }
+    }
+
+    var youCamObjectParameters: [String: Any]? {
+        switch self {
+        case .ring:
+            [
+                "ring_need_remove_background": true,
+                "ring_wearing_finger": NSNull(),
+                "ring_wearing_location": NSNull(),
+                "ring_shadow_intensity": 0.15,
+                "ring_ambient_light_intensity": 1.0
+            ]
+        case .bracelet:
+            [
+                "bracelet_need_remove_background": true,
+                "bracelet_wearing_location": NSNull(),
+                "bracelet_shadow_intensity": 0.3,
+                "bracelet_ambient_light_intensity": 1.0
+            ]
+        case .earring:
+            [
+                "earring_need_remove_background": true,
+                "earring_is_right_ear": true,
+                "earring_occluded_type": 0,
+                "earring_shadow_intensity": 0.5,
+                "earring_ambient_light_intensity": 0.5
+            ]
+        case .watch:
+            [
+                "watch_need_remove_background": true,
+                "watch_wearing_location": NSNull(),
+                "watch_shadow_intensity": 0.3,
+                "watch_ambient_light_intensity": 1.0
+            ]
+        case .necklace:
+            [
+                "necklace_need_remove_background": true,
+                "necklace_shadow_intensity": 0.5,
+                "necklace_ambient_light_intensity": 0.5
+            ]
+        default: nil
         }
     }
 }

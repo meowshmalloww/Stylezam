@@ -43,7 +43,7 @@ enum TryOnCategory: String, Codable, CaseIterable, Sendable {
     }
 
     static func infer(category: String?, title: String) -> TryOnCategory {
-        if let category, let match = match(from: category) { return match }
+        if let category, let match = match(from: "\(category) \(title)") { return match }
         return match(from: title) ?? .clothes
     }
 
@@ -55,21 +55,83 @@ enum TryOnCategory: String, Codable, CaseIterable, Sendable {
         )
         func containsAny(_ candidates: Set<String>) -> Bool { !words.isDisjoint(with: candidates) }
 
-        if containsAny(["dress", "sweater", "jumper", "shirt", "blouse", "top", "tee", "jacket", "coat", "hoodie", "jean", "jeans", "pants", "trousers", "skirt", "shorts", "belt", "outfit", "clothing", "apparel", "cape", "cardigan", "vest", "suit"]) { return .clothes }
-        if containsAny(["bag", "handbag", "wallet", "purse", "backpack", "tote", "clutch", "satchel"]) { return .bag }
-        if containsAny(["scarf", "shawl", "wrap", "stole"]) { return .scarf }
-        if containsAny(["shoe", "shoes", "boot", "boots", "sneaker", "sneakers", "sandal", "sandals", "heel", "heels", "loafer", "loafers"]) { return .shoes }
-        if containsAny(["hat", "headwear", "cap", "beanie", "beret", "fedora", "visor"]) { return .hat }
+        // Specific accessory evidence wins when broad marketplace taxonomies also say
+        // "clothing" or "apparel" (for example, "Apparel > Pearl Necklace").
         if containsAny(["earring", "earrings", "stud", "studs", "hoop", "hoops"]) { return .earring }
         if containsAny(["bracelet", "bracelets", "bangle", "bangles", "cuff", "cuffs"]) { return .bracelet }
         if containsAny(["watch", "watches", "timepiece"]) { return .watch }
         if containsAny(["necklace", "necklaces", "pendant", "pendants", "chain", "chains", "choker", "chokers"]) { return .necklace }
         if containsAny(["ring", "rings"]) { return .ring }
+        if containsAny(["bag", "handbag", "wallet", "purse", "backpack", "tote", "clutch", "satchel"]) { return .bag }
+        if containsAny(["scarf", "shawl", "wrap", "stole"]) { return .scarf }
+        if containsAny(["shoe", "shoes", "boot", "boots", "sneaker", "sneakers", "sandal", "sandals", "heel", "heels", "loafer", "loafers"]) { return .shoes }
+        if containsAny(["hat", "headwear", "cap", "beanie", "beret", "fedora", "visor"]) { return .hat }
+        if containsAny(["dress", "sweater", "jumper", "shirt", "blouse", "top", "tee", "jacket", "coat", "hoodie", "jean", "jeans", "pants", "trousers", "skirt", "shorts", "belt", "outfit", "clothing", "apparel", "cape", "cardigan", "vest", "suit"]) { return .clothes }
         return nil
     }
 }
 
-enum TryOnPhotoContext: String, CaseIterable, Identifiable, Sendable {
+enum TryOnGarmentRegion: String, Codable, CaseIterable, Sendable {
+    case upperBody
+    case lowerBody
+    case fullBody
+    case outerwear
+    case footwear
+    case accessory
+    case unknown
+
+    var title: String {
+        switch self {
+        case .upperBody: "Upper body"
+        case .lowerBody: "Lower body"
+        case .fullBody: "Full body"
+        case .outerwear: "Outerwear"
+        case .footwear: "Footwear"
+        case .accessory: "Accessory"
+        case .unknown: "Automatic"
+        }
+    }
+
+    var renderPriority: Int {
+        switch self {
+        case .fullBody: 0
+        case .lowerBody: 10
+        case .upperBody: 20
+        case .outerwear: 30
+        case .footwear: 40
+        case .accessory: 50
+        case .unknown: 60
+        }
+    }
+
+    static func infer(category: TryOnCategory, title: String) -> TryOnGarmentRegion {
+        guard category == .clothes else {
+            return category == .shoes ? .footwear : .accessory
+        }
+        let words = Set(
+            title.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+        )
+        func containsAny(_ values: Set<String>) -> Bool { !words.isDisjoint(with: values) }
+
+        if containsAny(["dress", "jumpsuit", "romper", "outfit", "bodysuit", "gown"]) {
+            return .fullBody
+        }
+        if containsAny(["pants", "trousers", "jeans", "jean", "skirt", "shorts", "leggings", "tights", "stockings"]) {
+            return .lowerBody
+        }
+        if containsAny(["jacket", "coat", "blazer", "cape", "parka", "overcoat", "windbreaker"]) {
+            return .outerwear
+        }
+        if containsAny(["shirt", "blouse", "top", "tee", "tshirt", "sweater", "cardigan", "vest", "hoodie", "sweatshirt"]) {
+            return .upperBody
+        }
+        return .unknown
+    }
+}
+
+enum TryOnPhotoContext: String, Codable, CaseIterable, Identifiable, Sendable {
     case outfit, handAndWrist, faceAndNeck
 
     var id: String { rawValue }
@@ -87,16 +149,18 @@ enum TryOnPhotoContext: String, CaseIterable, Identifiable, Sendable {
         case .faceAndNeck: "A clear front-facing face, ears, and neckline"
         }
     }
-    var categories: [TryOnCategory] {
+    var renderCategories: [TryOnCategory] {
         switch self {
-        case .outfit: [.clothes, .bag, .scarf, .shoes, .hat]
+        case .outfit: [.clothes, .bag, .scarf, .shoes, .hat, .necklace]
         case .handAndWrist: [.ring, .bracelet, .watch]
-        case .faceAndNeck: [.earring, .necklace]
+        case .faceAndNeck: [.hat, .scarf, .earring, .necklace]
         }
     }
+
+    var categories: [TryOnCategory] { renderCategories }
 }
 
-enum TryOnGender: String, CaseIterable, Identifiable, Sendable {
+enum TryOnGender: String, Codable, CaseIterable, Identifiable, Sendable {
     case female, male
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
@@ -106,19 +170,52 @@ struct TryOnTrayItem: Identifiable, Hashable, Sendable {
     let id: UUID
     var title: String
     var category: TryOnCategory
+    var region: TryOnGarmentRegion
     var imageData: Data
+    var referenceImageData: Data?
     var isSelected: Bool
     var sourceProduct: ProductResultDTO?
     var sourceWardrobeID: UUID?
+    var contentDigest: String?
+    var referenceContentDigest: String?
 
-    init(id: UUID = UUID(), title: String, category: TryOnCategory, imageData: Data, isSelected: Bool = true, sourceProduct: ProductResultDTO? = nil, sourceWardrobeID: UUID? = nil) {
+    /// The media that is valid to submit as this item's YouCam reference.
+    /// Lower-body clothes require the separately retained source frame; the
+    /// display crop is deliberately not a fallback for that provider contract.
+    var youCamReferenceImageData: Data? {
+        let candidate = region == .lowerBody ? referenceImageData : imageData
+        guard let candidate, !candidate.isEmpty else { return nil }
+        return candidate
+    }
+
+    var isYouCamReferenceReady: Bool {
+        youCamReferenceImageData != nil
+    }
+
+    init(
+        id: UUID = UUID(),
+        title: String,
+        category: TryOnCategory,
+        region: TryOnGarmentRegion? = nil,
+        imageData: Data,
+        referenceImageData: Data? = nil,
+        isSelected: Bool = true,
+        sourceProduct: ProductResultDTO? = nil,
+        sourceWardrobeID: UUID? = nil,
+        contentDigest: String? = nil,
+        referenceContentDigest: String? = nil
+    ) {
         self.id = id
         self.title = title
         self.category = category
+        self.region = region ?? .infer(category: category, title: title)
         self.imageData = imageData
+        self.referenceImageData = referenceImageData
         self.isSelected = isSelected
         self.sourceProduct = sourceProduct
         self.sourceWardrobeID = sourceWardrobeID
+        self.contentDigest = contentDigest
+        self.referenceContentDigest = referenceContentDigest
     }
 }
 
@@ -326,6 +423,106 @@ struct SavedWardrobeItem: Codable, Identifiable, Hashable, Sendable {
     let title: String
     let category: TryOnCategory
     let sourceProduct: ProductResultDTO?
+    let sourceScanID: UUID?
+    let sourceGarmentID: String?
+    let contentDigest: String?
+    let garmentRegion: TryOnGarmentRegion?
+    let tryOnReferenceFilename: String?
+    let tryOnReferenceDigest: String?
+
+    init(
+        id: UUID = UUID(),
+        savedAt: Date = .now,
+        imageFilename: String,
+        title: String,
+        category: TryOnCategory,
+        sourceProduct: ProductResultDTO? = nil,
+        sourceScanID: UUID? = nil,
+        sourceGarmentID: String? = nil,
+        contentDigest: String? = nil,
+        garmentRegion: TryOnGarmentRegion? = nil,
+        tryOnReferenceFilename: String? = nil,
+        tryOnReferenceDigest: String? = nil
+    ) {
+        self.id = id
+        self.savedAt = savedAt
+        self.imageFilename = imageFilename
+        self.title = title
+        self.category = category
+        self.sourceProduct = sourceProduct
+        self.sourceScanID = sourceScanID
+        self.sourceGarmentID = sourceGarmentID
+        self.contentDigest = contentDigest
+        self.garmentRegion = garmentRegion
+        self.tryOnReferenceFilename = tryOnReferenceFilename
+        self.tryOnReferenceDigest = tryOnReferenceDigest
+    }
+}
+
+struct TryOnRailEntry: Codable, Identifiable, Hashable, Sendable {
+    var id: UUID { wardrobeItemID }
+    let wardrobeItemID: UUID
+    var isSelected: Bool
+    var addedAt: Date
+}
+
+struct SavedTryOnPersonPhoto: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let createdAt: Date
+    let imageFilename: String
+    let context: TryOnPhotoContext
+    let contentDigest: String
+}
+
+struct SavedTryOnItemSnapshot: Codable, Identifiable, Hashable, Sendable {
+    let id: UUID
+    let title: String
+    let category: TryOnCategory
+    let garmentRegion: TryOnGarmentRegion
+    let wasSelected: Bool
+    let sourceProduct: ProductResultDTO?
+    let contentDigest: String?
+    let referenceContentDigest: String?
+
+    init(
+        id: UUID,
+        title: String,
+        category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion,
+        wasSelected: Bool,
+        sourceProduct: ProductResultDTO? = nil,
+        contentDigest: String? = nil,
+        referenceContentDigest: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.garmentRegion = garmentRegion
+        self.wasSelected = wasSelected
+        self.sourceProduct = sourceProduct
+        self.contentDigest = contentDigest
+        self.referenceContentDigest = referenceContentDigest
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, category, garmentRegion, wasSelected, sourceProduct, contentDigest
+        case referenceContentDigest
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        category = try container.decode(TryOnCategory.self, forKey: .category)
+        garmentRegion = try container.decode(TryOnGarmentRegion.self, forKey: .garmentRegion)
+        wasSelected = try container.decode(Bool.self, forKey: .wasSelected)
+        sourceProduct = try container.decodeIfPresent(ProductResultDTO.self, forKey: .sourceProduct)
+        contentDigest = try container.decodeIfPresent(String.self, forKey: .contentDigest)
+        referenceContentDigest = try container.decodeIfPresent(
+            String.self,
+            forKey: .referenceContentDigest
+        )
+    }
 }
 
 struct SavedTryOn: Codable, Identifiable, Hashable, Sendable {
@@ -334,8 +531,52 @@ struct SavedTryOn: Codable, Identifiable, Hashable, Sendable {
     let imageFilename: String
     let product: ProductResultDTO?
     let title: String?
+    let personPhotoID: UUID?
+    let photoContext: TryOnPhotoContext?
+    let gender: TryOnGender?
+    let items: [SavedTryOnItemSnapshot]
 
     var displayTitle: String { title ?? product?.title ?? "Styled look" }
+
+    init(
+        id: String,
+        createdAt: Date,
+        imageFilename: String,
+        product: ProductResultDTO? = nil,
+        title: String? = nil,
+        personPhotoID: UUID? = nil,
+        photoContext: TryOnPhotoContext? = nil,
+        gender: TryOnGender? = nil,
+        items: [SavedTryOnItemSnapshot] = []
+    ) {
+        self.id = id
+        self.createdAt = createdAt
+        self.imageFilename = imageFilename
+        self.product = product
+        self.title = title
+        self.personPhotoID = personPhotoID
+        self.photoContext = photoContext
+        self.gender = gender
+        self.items = items
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, createdAt, imageFilename, product, title
+        case personPhotoID, photoContext, gender, items
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        imageFilename = try container.decode(String.self, forKey: .imageFilename)
+        product = try container.decodeIfPresent(ProductResultDTO.self, forKey: .product)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        personPhotoID = try container.decodeIfPresent(UUID.self, forKey: .personPhotoID)
+        photoContext = try container.decodeIfPresent(TryOnPhotoContext.self, forKey: .photoContext)
+        gender = try container.decodeIfPresent(TryOnGender.self, forKey: .gender)
+        items = try container.decodeIfPresent([SavedTryOnItemSnapshot].self, forKey: .items) ?? []
+    }
 }
 
 struct LibrarySnapshot: Codable, Sendable {
@@ -346,6 +587,9 @@ struct LibrarySnapshot: Codable, Sendable {
     var products: [SavedProduct] = []
     var wardrobeItems: [SavedWardrobeItem] = []
     var tryOns: [SavedTryOn] = []
+    var tryOnRail: [TryOnRailEntry] = []
+    var tryOnPersonPhotos: [SavedTryOnPersonPhoto] = []
+    var activeTryOnPhotoID: UUID?
 
     private enum CodingKeys: String, CodingKey {
         case scans
@@ -355,6 +599,9 @@ struct LibrarySnapshot: Codable, Sendable {
         case products
         case wardrobeItems
         case tryOns
+        case tryOnRail
+        case tryOnPersonPhotos
+        case activeTryOnPhotoID
     }
 
     init() {}
@@ -368,5 +615,8 @@ struct LibrarySnapshot: Codable, Sendable {
         products = try container.decodeIfPresent([SavedProduct].self, forKey: .products) ?? []
         wardrobeItems = try container.decodeIfPresent([SavedWardrobeItem].self, forKey: .wardrobeItems) ?? []
         tryOns = try container.decodeIfPresent([SavedTryOn].self, forKey: .tryOns) ?? []
+        tryOnRail = try container.decodeIfPresent([TryOnRailEntry].self, forKey: .tryOnRail) ?? []
+        tryOnPersonPhotos = try container.decodeIfPresent([SavedTryOnPersonPhoto].self, forKey: .tryOnPersonPhotos) ?? []
+        activeTryOnPhotoID = try container.decodeIfPresent(UUID.self, forKey: .activeTryOnPhotoID)
     }
 }

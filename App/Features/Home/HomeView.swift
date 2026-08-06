@@ -85,7 +85,47 @@ struct HomeView: View {
                     model.selectedTab = .search
                 }
             }
+
+            Button {
+                model.isTryOnPresented = true
+            } label: {
+                HStack(spacing: 14) {
+                    Image(systemName: "tshirt")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(StylezamDesign.cobalt)
+                        .frame(width: 42, height: 42)
+                        .background(
+                            StylezamDesign.cobalt.opacity(0.1),
+                            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Open try-on rail")
+                            .font(.headline)
+                        Text(tryOnRailDetail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .foregroundStyle(.primary)
+                .padding(14)
+                .background(
+                    Color(uiColor: .secondarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+            }
+            .buttonStyle(HomePressButtonStyle())
         }
+    }
+
+    private var tryOnRailDetail: String {
+        let entries = model.library.tryOnRail
+        guard !entries.isEmpty else { return "Add pieces from your Library" }
+        let selected = entries.filter(\.isSelected).count
+        return "\(selected) on · \(entries.count) total"
     }
 
     private func quickAction(
