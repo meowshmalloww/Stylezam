@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 import Observation
 
 private enum LibraryStoreError: LocalizedError {
@@ -20,20 +21,22 @@ final class LibraryStore {
     private let garmentsURL: URL
     private let tryOnsURL: URL
     private let wardrobeURL: URL
+    private let tryOnPeopleURL: URL
     private let snapshotURL: URL
     private var acceptsWrites = true
 
-    init() {
+    init(rootURL overrideRootURL: URL? = nil) {
         let fallback = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
         )[0]
-        rootURL = (StylezamShared.containerURL ?? fallback)
+        rootURL = overrideRootURL ?? (StylezamShared.containerURL ?? fallback)
             .appending(path: "Stylezam", directoryHint: .isDirectory)
         capturesURL = rootURL.appending(path: "Captures", directoryHint: .isDirectory)
         garmentsURL = rootURL.appending(path: "Garments", directoryHint: .isDirectory)
         tryOnsURL = rootURL.appending(path: "TryOns", directoryHint: .isDirectory)
         wardrobeURL = rootURL.appending(path: "Wardrobe", directoryHint: .isDirectory)
+        tryOnPeopleURL = rootURL.appending(path: "TryOnPeople", directoryHint: .isDirectory)
         snapshotURL = rootURL.appending(path: "library.json")
         do {
             try FileManager.default.createDirectory(
@@ -49,6 +52,7 @@ final class LibraryStore {
                 withIntermediateDirectories: true
             )
             try FileManager.default.createDirectory(at: wardrobeURL, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: tryOnPeopleURL, withIntermediateDirectories: true)
             try load()
         } catch {
             acceptsWrites = false
@@ -63,6 +67,16 @@ final class LibraryStore {
     var products: [SavedProduct] { snapshot.products }
     var wardrobeItems: [SavedWardrobeItem] { snapshot.wardrobeItems }
     var tryOns: [SavedTryOn] { snapshot.tryOns }
+    var tryOnRail: [TryOnRailEntry] { snapshot.tryOnRail }
+    var tryOnPersonPhotos: [SavedTryOnPersonPhoto] { snapshot.tryOnPersonPhotos }
+
+    var activeTryOnPhoto: SavedTryOnPersonPhoto? {
+        guard let id = snapshot.activeTryOnPhotoID else {
+            return snapshot.tryOnPersonPhotos.first
+        }
+        return snapshot.tryOnPersonPhotos.first(where: { $0.id == id })
+            ?? snapshot.tryOnPersonPhotos.first
+    }
 
     @discardableResult
     func addScan(
@@ -318,22 +332,111 @@ final class LibraryStore {
         wardrobeURL.appending(path: item.imageFilename)
     }
 
+    func tryOnReferenceURL(for item: SavedWardrobeItem) -> URL? {
+        guard let filename = item.tryOnReferenceFilename else { return nil }
+        return wardrobeURL.appending(path: filename)
+    }
+
+    func imageURL(for photo: SavedTryOnPersonPhoto) -> URL {
+        tryOnPeopleURL.appending(path: photo.imageFilename)
+    }
+
+    func wardrobeItem(for id: UUID) -> SavedWardrobeItem? {
+        snapshot.wardrobeItems.first { $0.id == id }
+    }
+
+    func tryOnTrayItems() -> [TryOnTrayItem] {
+        snapshot.tryOnRail.compactMap { entry in
+            guard let item = wardrobeItem(for: entry.wardrobeItemID),
+                  let data = try? Data(contentsOf: imageURL(for: item))
+            else { return nil }
+            let referenceData = tryOnReferenceURL(for: item)
+                .flatMap { try? Data(contentsOf: $0) }
+            return TryOnTrayItem(
+                id: item.id,
+                title: item.title,
+                category: item.category,
+                region: item.garmentRegion,
+                imageData: data,
+                referenceImageData: referenceData,
+                isSelected: entry.isSelected,
+                sourceProduct: item.sourceProduct,
+                sourceWardrobeID: item.id,
+                contentDigest: item.contentDigest ?? Self.digest(for: data),
+                referenceContentDigest: item.tryOnReferenceDigest
+                    ?? referenceData.map { Self.digest(for: $0) }
+            )
+        }
+    }
+
+    func tryOnItemSnapshots(
+        appliedItemIDs: Set<UUID>? = nil
+    ) -> [SavedTryOnItemSnapshot] {
+        snapshot.tryOnRail.compactMap { entry in
+            guard let item = wardrobeItem(for: entry.wardrobeItemID) else { return nil }
+            let contentDigest = item.contentDigest
+                ?? (try? Data(contentsOf: imageURL(for: item))).map { Self.digest(for: $0) }
+            let referenceContentDigest = item.tryOnReferenceDigest
+                ?? tryOnReferenceURL(for: item)
+                    .flatMap { try? Data(contentsOf: $0) }
+                    .map { Self.digest(for: $0) }
+            return SavedTryOnItemSnapshot(
+                id: item.id,
+                title: item.title,
+                category: item.category,
+                garmentRegion: item.garmentRegion ?? .infer(category: item.category, title: item.title),
+                wasSelected: appliedItemIDs?.contains(item.id) ?? entry.isSelected,
+                sourceProduct: item.sourceProduct,
+                contentDigest: contentDigest,
+                referenceContentDigest: referenceContentDigest
+            )
+        }
+    }
+
     @discardableResult
-    func addWardrobeItem(title: String, category: TryOnCategory, imageData: Data, sourceProduct: ProductResultDTO? = nil) throws -> SavedWardrobeItem {
+    func addTryOnPersonPhoto(
+        imageData: Data,
+        context: TryOnPhotoContext
+    ) throws -> SavedTryOnPersonPhoto {
         let previous = snapshot
+        let digest = Self.digest(for: imageData)
+        if let index = snapshot.tryOnPersonPhotos.firstIndex(where: {
+            $0.contentDigest == digest && $0.context == context
+        }) {
+            let existing = snapshot.tryOnPersonPhotos.remove(at: index)
+            snapshot.tryOnPersonPhotos.insert(existing, at: 0)
+            snapshot.activeTryOnPhotoID = existing.id
+            do {
+                try persist()
+                return existing
+            } catch {
+                snapshot = previous
+                throw error
+            }
+        }
+
         let id = UUID()
         let ext = imageData.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "png" : "jpg"
         let filename = "\(id.uuidString).\(ext)"
-        let url = wardrobeURL.appending(path: filename)
+        let url = tryOnPeopleURL.appending(path: filename)
         try imageData.write(to: url, options: .atomic)
-        let item = SavedWardrobeItem(id: id, savedAt: .now, imageFilename: filename, title: title, category: category, sourceProduct: sourceProduct)
-        snapshot.wardrobeItems.insert(item, at: 0)
-        let removed = Array(snapshot.wardrobeItems.dropFirst(100))
-        snapshot.wardrobeItems = Array(snapshot.wardrobeItems.prefix(100))
+        let photo = SavedTryOnPersonPhoto(
+            id: id,
+            createdAt: .now,
+            imageFilename: filename,
+            context: context,
+            contentDigest: digest
+        )
+        snapshot.tryOnPersonPhotos.insert(photo, at: 0)
+        snapshot.activeTryOnPhotoID = photo.id
+        let removed = Array(snapshot.tryOnPersonPhotos.dropFirst(12))
+        snapshot.tryOnPersonPhotos = Array(snapshot.tryOnPersonPhotos.prefix(12))
         do {
             try persist()
-            for old in removed { try? FileManager.default.removeItem(at: imageURL(for: old)) }
-            return item
+            for old in removed {
+                try? FileManager.default.removeItem(at: imageURL(for: old))
+            }
+            return photo
         } catch {
             snapshot = previous
             try? FileManager.default.removeItem(at: url)
@@ -341,12 +444,382 @@ final class LibraryStore {
         }
     }
 
+    func setActiveTryOnPhoto(_ photo: SavedTryOnPersonPhoto) {
+        guard snapshot.tryOnPersonPhotos.contains(where: { $0.id == photo.id }) else { return }
+        let previous = snapshot
+        snapshot.activeTryOnPhotoID = photo.id
+        do {
+            try persist()
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
+    func deleteTryOnPersonPhoto(_ photo: SavedTryOnPersonPhoto) {
+        let previous = snapshot
+        snapshot.tryOnPersonPhotos.removeAll { $0.id == photo.id }
+        if snapshot.activeTryOnPhotoID == photo.id {
+            snapshot.activeTryOnPhotoID = snapshot.tryOnPersonPhotos.first?.id
+        }
+        do {
+            try persist()
+            try? FileManager.default.removeItem(at: imageURL(for: photo))
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
+    func addWardrobeItemToTryOnRail(_ item: SavedWardrobeItem, selected: Bool = true) {
+        let previous = snapshot
+        if let index = snapshot.tryOnRail.firstIndex(where: { $0.wardrobeItemID == item.id }) {
+            snapshot.tryOnRail[index].isSelected = selected
+            snapshot.tryOnRail[index].addedAt = .now
+            let entry = snapshot.tryOnRail.remove(at: index)
+            snapshot.tryOnRail.insert(entry, at: 0)
+        } else {
+            snapshot.tryOnRail.insert(
+                TryOnRailEntry(wardrobeItemID: item.id, isSelected: selected, addedAt: .now),
+                at: 0
+            )
+        }
+        do {
+            try persist()
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
+    func setTryOnRailSelection(_ itemID: UUID, isSelected: Bool) {
+        guard let index = snapshot.tryOnRail.firstIndex(where: { $0.wardrobeItemID == itemID }) else { return }
+        let previous = snapshot
+        snapshot.tryOnRail[index].isSelected = isSelected
+        do {
+            try persist()
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
+    func removeFromTryOnRail(_ itemID: UUID) {
+        let previous = snapshot
+        snapshot.tryOnRail.removeAll { $0.wardrobeItemID == itemID }
+        do {
+            try persist()
+        } catch {
+            snapshot = previous
+            loadError = error.localizedDescription
+        }
+    }
+
+    @discardableResult
+    func addWardrobeItem(
+        title: String,
+        category: TryOnCategory,
+        imageData: Data,
+        tryOnReferenceData: Data? = nil,
+        sourceProduct: ProductResultDTO? = nil,
+        sourceScanID: UUID? = nil,
+        sourceGarmentID: String? = nil,
+        garmentRegion: TryOnGarmentRegion? = nil
+    ) throws -> SavedWardrobeItem {
+        let digest = Self.digest(for: imageData)
+        if let sourceScanID, let sourceGarmentID {
+            if let existingIndex = snapshot.wardrobeItems.firstIndex(where: { item in
+                item.sourceScanID == sourceScanID && item.sourceGarmentID == sourceGarmentID
+            }) {
+                if let tryOnReferenceData {
+                    return try attachTryOnReferenceIfNeeded(
+                        at: existingIndex,
+                        data: tryOnReferenceData
+                    )
+                }
+                return snapshot.wardrobeItems[existingIndex]
+            }
+        } else if sourceScanID == nil, sourceGarmentID == nil {
+            if let existingIndex = snapshot.wardrobeItems.firstIndex(where: { item in
+                guard item.sourceScanID == nil, item.sourceGarmentID == nil else { return false }
+                if let productID = sourceProduct?.id, item.sourceProduct?.id == productID {
+                    return true
+                }
+                return item.contentDigest == digest && item.category == category
+            }) {
+                if let tryOnReferenceData {
+                    return try attachTryOnReferenceIfNeeded(
+                        at: existingIndex,
+                        data: tryOnReferenceData
+                    )
+                }
+                return snapshot.wardrobeItems[existingIndex]
+            }
+        }
+
+        let previous = snapshot
+        let id = UUID()
+        let ext = Self.fileExtension(for: imageData)
+        let filename = "\(id.uuidString).\(ext)"
+        let url = wardrobeURL.appending(path: filename)
+        try imageData.write(to: url, options: .atomic)
+        var createdURLs = [url]
+        let referenceFilename: String?
+        let referenceDigest: String?
+        if let tryOnReferenceData {
+            let reference = Self.contentAddressedTryOnReference(for: tryOnReferenceData)
+            let referenceURL = wardrobeURL.appending(path: reference.filename)
+            do {
+                if !FileManager.default.fileExists(atPath: referenceURL.path) {
+                    try tryOnReferenceData.write(to: referenceURL, options: .atomic)
+                    createdURLs.append(referenceURL)
+                }
+                referenceFilename = reference.filename
+                referenceDigest = reference.digest
+            } catch {
+                for createdURL in createdURLs {
+                    try? FileManager.default.removeItem(at: createdURL)
+                }
+                throw error
+            }
+        } else {
+            referenceFilename = nil
+            referenceDigest = nil
+        }
+        let item = SavedWardrobeItem(
+            id: id,
+            savedAt: .now,
+            imageFilename: filename,
+            title: title,
+            category: category,
+            sourceProduct: sourceProduct,
+            sourceScanID: sourceScanID,
+            sourceGarmentID: sourceGarmentID,
+            contentDigest: digest,
+            garmentRegion: garmentRegion ?? .infer(category: category, title: title),
+            tryOnReferenceFilename: referenceFilename,
+            tryOnReferenceDigest: referenceDigest
+        )
+        snapshot.wardrobeItems.insert(item, at: 0)
+        let removed = Array(snapshot.wardrobeItems.dropFirst(100))
+        snapshot.wardrobeItems = Array(snapshot.wardrobeItems.prefix(100))
+        let removedIDs = Set(removed.map(\.id))
+        snapshot.tryOnRail.removeAll { removedIDs.contains($0.wardrobeItemID) }
+        do {
+            try persist()
+            for old in removed { removeWardrobeFiles(for: old) }
+            return item
+        } catch {
+            snapshot = previous
+            for createdURL in createdURLs {
+                try? FileManager.default.removeItem(at: createdURL)
+            }
+            throw error
+        }
+    }
+
+    @discardableResult
+    func addDetectedGarmentToTryOnRail(
+        scanID: UUID,
+        garmentID: String,
+        sourceFrameData: Data? = nil
+    ) throws -> SavedWardrobeItem? {
+        guard let scan = snapshot.scans.first(where: { $0.id == scanID }),
+              let garment = scan.items.first(where: { $0.id == garmentID && $0.accepted }),
+              let cropURL = cropURL(for: garment),
+              let data = try? Data(contentsOf: cropURL)
+        else { return nil }
+        let category = TryOnCategory.infer(category: garment.category, title: garment.title)
+        let region = TryOnGarmentRegion.infer(category: category, title: garment.localLabel)
+        let referenceData: Data?
+        if region == .lowerBody {
+            // This is a best-effort candidate for YouCam's worn-garment input.
+            // Detection identifies the item region, but cannot prove that a web
+            // frame or photo actually shows the garment worn by one clear person.
+            // Screen scans intentionally keep only a crop as their Library cover,
+            // so their full frame must be handed off during the capture transaction.
+            if let sourceFrameData {
+                referenceData = sourceFrameData
+            } else if scan.mode == .screen {
+                referenceData = nil
+            } else {
+                referenceData = try? Data(contentsOf: imageURL(for: scan))
+            }
+        } else {
+            referenceData = nil
+        }
+        let item = try addWardrobeItem(
+            title: garment.title,
+            category: category,
+            imageData: data,
+            tryOnReferenceData: referenceData,
+            sourceScanID: scanID,
+            sourceGarmentID: garmentID,
+            garmentRegion: region
+        )
+        addWardrobeItemToTryOnRail(item, selected: true)
+        return item
+    }
+
+    @discardableResult
+    func setLowerBodyTryOnReference(
+        for itemID: UUID,
+        imageData: Data
+    ) throws -> SavedWardrobeItem? {
+        guard let index = snapshot.wardrobeItems.firstIndex(where: { $0.id == itemID }) else {
+            return nil
+        }
+        let item = snapshot.wardrobeItems[index]
+        let region = item.garmentRegion
+            ?? .infer(category: item.category, title: item.title)
+        guard region == .lowerBody else { return nil }
+        return try attachTryOnReferenceIfNeeded(
+            at: index,
+            data: imageData,
+            replacingExisting: true
+        )
+    }
+
+    @discardableResult
+    func enrichSourceWardrobeItemInTryOnRail(
+        _ product: ProductResultDTO,
+        sourceScanID: UUID,
+        sourceGarmentID: String
+    ) throws -> SavedWardrobeItem? {
+        guard let index = snapshot.wardrobeItems.firstIndex(where: { item in
+            item.sourceScanID == sourceScanID && item.sourceGarmentID == sourceGarmentID
+        }) else { return nil }
+
+        let previous = snapshot
+        let existing = snapshot.wardrobeItems[index]
+        let enriched = SavedWardrobeItem(
+            id: existing.id,
+            savedAt: existing.savedAt,
+            imageFilename: existing.imageFilename,
+            title: product.title,
+            category: existing.category,
+            sourceProduct: product,
+            sourceScanID: existing.sourceScanID,
+            sourceGarmentID: existing.sourceGarmentID,
+            contentDigest: existing.contentDigest,
+            garmentRegion: existing.garmentRegion,
+            tryOnReferenceFilename: existing.tryOnReferenceFilename,
+            tryOnReferenceDigest: existing.tryOnReferenceDigest
+        )
+        snapshot.wardrobeItems[index] = enriched
+        upsertRailEntry(for: enriched.id, selected: true)
+        do {
+            try persist()
+            return enriched
+        } catch {
+            snapshot = previous
+            throw error
+        }
+    }
+
+    @discardableResult
+    func upsertProductInTryOnRail(
+        _ product: ProductResultDTO,
+        imageData: Data,
+        sourceScanID: UUID? = nil,
+        sourceGarmentID: String? = nil
+    ) throws -> SavedWardrobeItem {
+        if let sourceScanID, let sourceGarmentID,
+           let enriched = try enrichSourceWardrobeItemInTryOnRail(
+               product,
+               sourceScanID: sourceScanID,
+               sourceGarmentID: sourceGarmentID
+           )
+        {
+            return enriched
+        }
+
+        let category = TryOnCategory.infer(category: product.category, title: product.title)
+        let region = TryOnGarmentRegion.infer(
+            category: category,
+            title: product.category ?? product.title
+        )
+        let exactSourceIndex: Int?
+        if let sourceScanID, let sourceGarmentID {
+            exactSourceIndex = snapshot.wardrobeItems.firstIndex { item in
+                item.sourceScanID == sourceScanID && item.sourceGarmentID == sourceGarmentID
+            }
+        } else {
+            exactSourceIndex = nil
+        }
+        let productIndex = snapshot.wardrobeItems.firstIndex { item in
+            item.sourceScanID == nil
+                && item.sourceGarmentID == nil
+                && item.sourceProduct?.id == product.id
+        }
+        let hasExactSourceIdentity = sourceScanID != nil && sourceGarmentID != nil
+        let existingIndex = hasExactSourceIdentity ? exactSourceIndex : productIndex
+
+        if let existingIndex {
+            let previous = snapshot
+            let existing = snapshot.wardrobeItems[existingIndex]
+            let preservesExactSource: Bool
+            if let sourceScanID, let sourceGarmentID {
+                preservesExactSource = existing.sourceScanID == sourceScanID
+                    && existing.sourceGarmentID == sourceGarmentID
+            } else {
+                preservesExactSource = false
+            }
+            let url = imageURL(for: existing)
+            let previousData = try? Data(contentsOf: url)
+            if !preservesExactSource {
+                try imageData.write(to: url, options: .atomic)
+            }
+            let updated = SavedWardrobeItem(
+                id: existing.id,
+                savedAt: existing.savedAt,
+                imageFilename: existing.imageFilename,
+                title: product.title,
+                category: preservesExactSource ? existing.category : category,
+                sourceProduct: product,
+                sourceScanID: sourceScanID ?? existing.sourceScanID,
+                sourceGarmentID: sourceGarmentID ?? existing.sourceGarmentID,
+                contentDigest: preservesExactSource
+                    ? existing.contentDigest ?? previousData.map { Self.digest(for: $0) }
+                    : Self.digest(for: imageData),
+                garmentRegion: preservesExactSource ? existing.garmentRegion : region,
+                tryOnReferenceFilename: existing.tryOnReferenceFilename,
+                tryOnReferenceDigest: existing.tryOnReferenceDigest
+            )
+            snapshot.wardrobeItems[existingIndex] = updated
+            upsertRailEntry(for: updated.id, selected: true)
+            do {
+                try persist()
+                return updated
+            } catch {
+                snapshot = previous
+                if !preservesExactSource, let previousData {
+                    try? previousData.write(to: url, options: .atomic)
+                }
+                throw error
+            }
+        }
+
+        let item = try addWardrobeItem(
+            title: product.title,
+            category: category,
+            imageData: imageData,
+            sourceProduct: product,
+            sourceScanID: sourceScanID,
+            sourceGarmentID: sourceGarmentID,
+            garmentRegion: region
+        )
+        addWardrobeItemToTryOnRail(item, selected: true)
+        return item
+    }
+
     func deleteWardrobeItem(_ item: SavedWardrobeItem) {
         let previous = snapshot
         snapshot.wardrobeItems.removeAll { $0.id == item.id }
+        snapshot.tryOnRail.removeAll { $0.wardrobeItemID == item.id }
         do {
             try persist()
-            try? FileManager.default.removeItem(at: imageURL(for: item))
+            removeWardrobeFiles(for: item)
         } catch {
             snapshot = previous
             loadError = error.localizedDescription
@@ -358,6 +831,10 @@ final class LibraryStore {
         jobID: String,
         product: ProductResultDTO? = nil,
         title: String? = nil,
+        personPhotoID: UUID? = nil,
+        photoContext: TryOnPhotoContext? = nil,
+        gender: TryOnGender? = nil,
+        items: [SavedTryOnItemSnapshot] = [],
         imageData: Data
     ) throws -> SavedTryOn {
         if let existing = snapshot.tryOns.first(where: { $0.id == jobID }) {
@@ -380,7 +857,11 @@ final class LibraryStore {
             createdAt: .now,
             imageFilename: filename,
             product: product,
-            title: title
+            title: title,
+            personPhotoID: personPhotoID,
+            photoContext: photoContext,
+            gender: gender,
+            items: items
         )
         snapshot.tryOns.insert(tryOn, at: 0)
         let removed = Array(snapshot.tryOns.dropFirst(60))
@@ -472,15 +953,14 @@ final class LibraryStore {
         }
         snapshot.chats.removeAll { scanIDs.contains($0.scanID) }
         snapshot.wardrobeItems.removeAll { wardrobeIDs.contains($0.id) }
+        snapshot.tryOnRail.removeAll { wardrobeIDs.contains($0.wardrobeItemID) }
         snapshot.products.removeAll { productIDs.contains($0.id) }
         snapshot.tryOns.removeAll { tryOnIDs.contains($0.id) }
 
         do {
             try persist()
             for scan in removedScans { removeFiles(for: scan) }
-            for item in removedWardrobe {
-                try? FileManager.default.removeItem(at: imageURL(for: item))
-            }
+            for item in removedWardrobe { removeWardrobeFiles(for: item) }
             for tryOn in removedTryOns {
                 try? FileManager.default.removeItem(at: imageURL(for: tryOn))
             }
@@ -536,7 +1016,10 @@ final class LibraryStore {
                 )
             }
             for item in previousSnapshot.wardrobeItems {
-                try? FileManager.default.removeItem(at: imageURL(for: item))
+                removeWardrobeFiles(for: item)
+            }
+            for photo in previousSnapshot.tryOnPersonPhotos {
+                try? FileManager.default.removeItem(at: imageURL(for: photo))
             }
         } catch {
             snapshot = previousSnapshot
@@ -550,6 +1033,13 @@ final class LibraryStore {
             if let cropURL = cropURL(for: item) {
                 try? FileManager.default.removeItem(at: cropURL)
             }
+        }
+    }
+
+    private func removeWardrobeFiles(for item: SavedWardrobeItem) {
+        try? FileManager.default.removeItem(at: imageURL(for: item))
+        if let referenceFilename = item.tryOnReferenceFilename {
+            removeTryOnReferenceIfUnreferenced(filename: referenceFilename)
         }
     }
 
@@ -580,6 +1070,111 @@ final class LibraryStore {
         snapshot = try decoder.decode(
             LibrarySnapshot.self,
             from: Data(contentsOf: snapshotURL)
+        )
+
+        let wardrobeIDs = Set(snapshot.wardrobeItems.map(\.id))
+        snapshot.tryOnRail.removeAll { !wardrobeIDs.contains($0.wardrobeItemID) }
+        let photoIDs = Set(snapshot.tryOnPersonPhotos.map(\.id))
+        if let activeID = snapshot.activeTryOnPhotoID, !photoIDs.contains(activeID) {
+            snapshot.activeTryOnPhotoID = snapshot.tryOnPersonPhotos.first?.id
+        }
+    }
+
+    private func upsertRailEntry(for itemID: UUID, selected: Bool) {
+        if let index = snapshot.tryOnRail.firstIndex(where: { $0.wardrobeItemID == itemID }) {
+            snapshot.tryOnRail[index].isSelected = selected
+            snapshot.tryOnRail[index].addedAt = .now
+            let entry = snapshot.tryOnRail.remove(at: index)
+            snapshot.tryOnRail.insert(entry, at: 0)
+        } else {
+            snapshot.tryOnRail.insert(
+                TryOnRailEntry(wardrobeItemID: itemID, isSelected: selected, addedAt: .now),
+                at: 0
+            )
+        }
+    }
+
+    private func attachTryOnReferenceIfNeeded(
+        at index: Int,
+        data: Data,
+        replacingExisting: Bool = false
+    ) throws -> SavedWardrobeItem {
+        let existing = snapshot.wardrobeItems[index]
+        if !replacingExisting,
+           let existingURL = tryOnReferenceURL(for: existing),
+           FileManager.default.fileExists(atPath: existingURL.path)
+        {
+            return existing
+        }
+
+        let previous = snapshot
+        let previousReferenceFilename = existing.tryOnReferenceFilename
+        let reference = Self.contentAddressedTryOnReference(for: data)
+        let url = wardrobeURL.appending(path: reference.filename)
+        let createdReferenceFile: Bool
+        if FileManager.default.fileExists(atPath: url.path) {
+            createdReferenceFile = false
+        } else {
+            try data.write(to: url, options: .atomic)
+            createdReferenceFile = true
+        }
+        let updated = SavedWardrobeItem(
+            id: existing.id,
+            savedAt: existing.savedAt,
+            imageFilename: existing.imageFilename,
+            title: existing.title,
+            category: existing.category,
+            sourceProduct: existing.sourceProduct,
+            sourceScanID: existing.sourceScanID,
+            sourceGarmentID: existing.sourceGarmentID,
+            contentDigest: existing.contentDigest,
+            garmentRegion: existing.garmentRegion,
+            tryOnReferenceFilename: reference.filename,
+            tryOnReferenceDigest: reference.digest
+        )
+        snapshot.wardrobeItems[index] = updated
+        do {
+            try persist()
+            if let previousReferenceFilename,
+               previousReferenceFilename != reference.filename
+            {
+                removeTryOnReferenceIfUnreferenced(filename: previousReferenceFilename)
+            }
+            return updated
+        } catch {
+            snapshot = previous
+            if createdReferenceFile {
+                try? FileManager.default.removeItem(at: url)
+            }
+            throw error
+        }
+    }
+
+    private func removeTryOnReferenceIfUnreferenced(filename: String) {
+        let remainingReferenceCount = snapshot.wardrobeItems.reduce(into: 0) { count, item in
+            if item.tryOnReferenceFilename == filename {
+                count += 1
+            }
+        }
+        guard remainingReferenceCount == 0 else { return }
+        try? FileManager.default.removeItem(at: wardrobeURL.appending(path: filename))
+    }
+
+    private static func fileExtension(for data: Data) -> String {
+        data.starts(with: [0x89, 0x50, 0x4E, 0x47]) ? "png" : "jpg"
+    }
+
+    private static func digest(for data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func contentAddressedTryOnReference(
+        for data: Data
+    ) -> (filename: String, digest: String) {
+        let contentDigest = Self.digest(for: data)
+        return (
+            filename: "tryon-reference-\(contentDigest).\(fileExtension(for: data))",
+            digest: contentDigest
         )
     }
 

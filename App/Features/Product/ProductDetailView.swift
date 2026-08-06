@@ -7,6 +7,9 @@ struct ProductDetailView: View {
     let product: ProductResultDTO
 
     @State private var heroVisible = false
+    @State private var addToTryOnTask: Task<Void, Never>?
+    @State private var isAddingToTryOn = false
+    @State private var tryOnErrorMessage: String?
 
     var body: some View {
         ScrollView {
@@ -54,6 +57,17 @@ struct ProductDetailView: View {
             }
         }
         .sensoryFeedback(.success, trigger: model.library.isSaved(product))
+        .alert(
+            "Couldn’t add this piece",
+            isPresented: Binding(
+                get: { tryOnErrorMessage != nil },
+                set: { if !$0 { tryOnErrorMessage = nil } }
+            )
+        ) {
+            Button("OK") { tryOnErrorMessage = nil }
+        } message: {
+            Text(tryOnErrorMessage ?? "Try again in a moment.")
+        }
     }
 
     private var productHero: some View {
@@ -178,13 +192,18 @@ struct ProductDetailView: View {
     private var actionBar: some View {
         VStack(spacing: 10) {
             Button {
-                model.addToTryOn(product)
+                addProductToTryOn()
             } label: {
                 HStack {
-                    Text("Try on this piece")
+                    Text(isAddingToTryOn ? "Adding to try-on…" : "Try on this piece")
                         .fontWeight(.semibold)
                     Spacer()
-                    Image(systemName: "wand.and.sparkles")
+                    if isAddingToTryOn {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "wand.and.sparkles")
+                    }
                 }
                 .padding(.horizontal, 18)
                 .frame(maxWidth: .infinity)
@@ -192,6 +211,7 @@ struct ProductDetailView: View {
             }
             .stylezamGlassButton(prominent: true)
             .tint(StylezamDesign.cobalt)
+            .disabled(isAddingToTryOn)
 
             Button {
                 openURL(product.productURL)
@@ -199,6 +219,24 @@ struct ProductDetailView: View {
                 merchantButtonLabel
             }
             .stylezamGlassButton()
+        }
+    }
+
+    private func addProductToTryOn() {
+        guard addToTryOnTask == nil else { return }
+        tryOnErrorMessage = nil
+        isAddingToTryOn = true
+
+        let task = model.addToTryOn(product)
+        addToTryOnTask = task
+        Task { @MainActor in
+            await task.value
+            addToTryOnTask = nil
+            isAddingToTryOn = false
+            if !model.isTryOnPresented {
+                tryOnErrorMessage = model.lastError
+                    ?? "Stylezam couldn’t prepare this product image for try-on. Try again or choose another product photo."
+            }
         }
     }
 

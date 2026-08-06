@@ -33,11 +33,13 @@ Search accepts a fashion reference image, detects its pieces, and lets the user 
 
 ### Try On
 
-Try On opens as a focused full-screen workflow from a real product result rather than taking over a permanent tab. It uses a full-height person-photo stage and a horizontal item rail suited to iPhone. Users can add product photos or detected Library pieces, toggle inclusion, remove items, create a sequential YouCam preview, and save the result. It never represents the generated image as proof of physical fit.
+Try On opens as a focused full-screen workflow rather than taking over a permanent tab. The person-photo stage is swipeable: prior photos are reusable, and the final page adds a new camera or Photos image. An expandable **Pieces / Shop** rail shows the persistent current set, with every accepted detected crop arriving selected by default. Users can toggle several pieces, remove a rail entry, add a product photo or wardrobe item, and open purchase links for selected, parked, and toggled-off products.
+
+The primary Create action requires explicit upload consent, shows its task count, and composes the compatible selected look through sequential category-specific YouCam tasks. Incompatible selected pieces remain visibly parked for another photo type and are not uploaded. The UI describes this as one look-creation action, not as one provider call. After a still is ready, **View as video** plays three seconds from YouCam's 5-second, 480p image-to-video v2 output and then restores the still. Save creates a Past Try-On entry whose applied/parked item manifest and purchase links remain tied to that saved look. Generated media is never represented as proof of physical fit.
 
 ### Library
 
-Library groups recent scans and their detected pieces as media, with meaningful empty states. Relative age uses minutes, days, weeks, and months—never second-by-second counters or year labels. A scan reveals its source look, analysis state, crops, and visible labels.
+Library groups recent scans, wardrobe pieces, product matches, and Past Try-Ons as media, with meaningful empty states. Relative age uses minutes, days, weeks, and months—never second-by-second counters or year labels. A scan reveals its source look, analysis state, crops, and visible labels. Wardrobe detail can preview a piece, add or remove it from the persistent rail, open its merchant link, or delete it. Past Try-On detail separates the immutable **Wearing** and **On the rail** manifests and preserves their available purchase links.
 
 ### Settings
 

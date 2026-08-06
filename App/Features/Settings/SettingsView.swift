@@ -294,7 +294,7 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "On this iPhone",
                 icon: "iphone",
-                detail: "Detection and cropping run on this iPhone. Live Screen saves the garment crop—not the full display. Tiny local visual signatures remember pieces already in Library and disappear when you delete their capture."
+                detail: "Detection and cropping run on this iPhone. A Live Screen scan cover saves the garment crop—not the full display. When a detected lower-body piece needs YouCam's worn-garment input, Stylezam separately keeps that source frame as a disclosed local try-on reference. Tiny local visual signatures remember pieces already in Library and disappear when you delete their capture."
             )
             privacySection(
                 title: "Only when you search",
@@ -304,7 +304,7 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "Only when you create a try-on",
                 icon: "wand.and.sparkles",
-                detail: "After you allow the upload, Stylezam sends the selected person photo and product image to YouCam, downloads the generated preview, and requests remote task deletion."
+                detail: "After you allow the upload, Stylezam sends the selected person photo and each selected item reference to YouCam, downloads the generated preview, and requests remote task deletion. A lower-body reference is a separate full photo that must visibly show the garment worn by one clear person—not the crop shown on the rail—and may include people, surroundings, or page content."
             )
             privacySection(
                 title: "Service credentials",
@@ -319,7 +319,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Your data")
             } footer: {
-                Text("This removes local captures, garment crops, scan-memory signatures, searches, saved products, and appearance previews. Nothing is deleted from another device or service.")
+                Text("This removes local captures, garment crops, scan-memory signatures, searches, saved products, wardrobe pieces, the try-on rail, person photos, past try-ons, and appearance previews. Nothing is deleted from another device or service.")
             }
         }
         .navigationTitle("Privacy")
@@ -329,7 +329,7 @@ private struct PrivacySettingsView: View {
             isPresented: $isConfirmingClear,
             titleVisibility: .visible
         ) {
-            Button("Clear captures, saved products, and try-ons", role: .destructive) {
+            Button("Clear all local Stylezam data", role: .destructive) {
                 model.clearLibrary()
             }
         } message: {

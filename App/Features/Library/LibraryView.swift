@@ -2,13 +2,17 @@ import SwiftUI
 
 struct LibraryView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openURL) private var openURL
     @State private var section: LibrarySection = .recent
     @State private var selectedTryOn: SavedTryOn?
+    @State private var selectedWardrobeItem: SavedWardrobeItem?
     @State private var selectedScan: SavedScan?
     @State private var selectedSearch: SavedProductSearch?
     @State private var isSelecting = false
     @State private var selection: Set<LibrarySelection> = []
     @State private var isConfirmingSelectionDelete = false
+    @State private var pendingWardrobeDeletion: SavedWardrobeItem?
+    @State private var pendingTryOnDeletion: SavedTryOn?
     @Namespace private var productTransition
 
     private var galleryColumns: [GridItem] {
@@ -84,6 +88,10 @@ struct LibraryView: View {
             TryOnArchiveDetail(tryOn: tryOn)
                 .environment(model)
         }
+        .sheet(item: $selectedWardrobeItem) { item in
+            WardrobeItemDetail(item: item)
+                .environment(model)
+        }
         .sheet(item: $selectedScan) { scan in
             ScanDetailView(scanID: scan.id)
                 .environment(model)
@@ -91,6 +99,44 @@ struct LibraryView: View {
         .sheet(item: $selectedSearch) { search in
             SearchArchiveDetail(search: search)
                 .environment(model)
+        }
+        .confirmationDialog(
+            "Remove this item from Library?",
+            isPresented: Binding(
+                get: { pendingWardrobeDeletion != nil },
+                set: { if !$0 { pendingWardrobeDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingWardrobeDeletion
+        ) { item in
+            Button("Remove item", role: .destructive) {
+                model.library.deleteWardrobeItem(item)
+                pendingWardrobeDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingWardrobeDeletion = nil
+            }
+        } message: { item in
+            Text("“\(item.title)” will also be removed from the current try-on rail. Saved try-on manifests will not change.")
+        }
+        .confirmationDialog(
+            "Delete this try-on?",
+            isPresented: Binding(
+                get: { pendingTryOnDeletion != nil },
+                set: { if !$0 { pendingTryOnDeletion = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingTryOnDeletion
+        ) { tryOn in
+            Button("Delete try-on", role: .destructive) {
+                model.library.deleteTryOn(tryOn)
+                pendingTryOnDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingTryOnDeletion = nil
+            }
+        } message: { tryOn in
+            Text("“\(tryOn.displayTitle)” will be removed. Your wardrobe and current try-on rail will stay unchanged.")
         }
         .animation(.easeInOut(duration: 0.2), value: section)
         .sensoryFeedback(.selection, trigger: section)
@@ -301,19 +347,76 @@ struct LibraryView: View {
                     spacing: 26
                 ) {
                     ForEach(model.library.wardrobeItems) { item in
-                        VStack(alignment: .leading, spacing: 8) {
-                            LocalFileImage(url: model.library.imageURL(for: item), contentMode: .fit)
-                                .frame(maxWidth: .infinity)
-                                .aspectRatio(0.78, contentMode: .fit)
-                                .padding(8)
-                                .background(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                            Text(item.category.title.uppercased())
-                                .font(.caption2.weight(.semibold)).tracking(0.8).foregroundStyle(.secondary)
-                            Text(item.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+                        let railEntry = model.library.tryOnRail.first {
+                            $0.wardrobeItemID == item.id
+                        }
+                        ZStack(alignment: .topTrailing) {
+                            Button {
+                                selectedWardrobeItem = item
+                            } label: {
+                                WardrobeItemCard(
+                                    item: item,
+                                    imageURL: model.library.imageURL(for: item),
+                                    isOnRail: railEntry != nil,
+                                    isSelected: railEntry?.isSelected == true
+                                )
+                            }
+                            .buttonStyle(.plain)
+
+                            WardrobeOverflowMenu(
+                                item: item,
+                                isOnRail: railEntry != nil,
+                                isSelected: railEntry?.isSelected == true,
+                                onPreview: { selectedWardrobeItem = item },
+                                onAddToRail: {
+                                    model.library.addWardrobeItemToTryOnRail(item, selected: true)
+                                },
+                                onRemoveFromRail: {
+                                    model.library.removeFromTryOnRail(item.id)
+                                },
+                                onPurchase: item.sourceProduct.map { product in
+                                    { openURL(product.productURL) }
+                                },
+                                onDelete: { pendingWardrobeDeletion = item }
+                            )
+                            .padding(8)
                         }
                         .contextMenu {
-                            Button("Remove from saved", role: .destructive) { model.library.deleteWardrobeItem(item) }
+                            Button {
+                                selectedWardrobeItem = item
+                            } label: {
+                                Label("Preview item", systemImage: "eye")
+                            }
+                            Button {
+                                model.library.addWardrobeItemToTryOnRail(item, selected: true)
+                            } label: {
+                                Label(
+                                    railEntry?.isSelected == true
+                                        ? "Selected on try-on rail"
+                                        : "Select on try-on rail",
+                                    systemImage: railEntry?.isSelected == true
+                                        ? "checkmark.circle.fill"
+                                        : "wand.and.sparkles"
+                                )
+                            }
+                            .disabled(railEntry?.isSelected == true)
+                            if let product = item.sourceProduct {
+                                Button {
+                                    openURL(product.productURL)
+                                } label: {
+                                    Label("View at \(product.merchant)", systemImage: "arrow.up.right")
+                                }
+                            }
+                            if railEntry != nil {
+                                Button {
+                                    model.library.removeFromTryOnRail(item.id)
+                                } label: {
+                                    Label("Remove from try-on rail", systemImage: "minus.circle")
+                                }
+                            }
+                            Button("Remove from saved", systemImage: "trash", role: .destructive) {
+                                pendingWardrobeDeletion = item
+                            }
                         }
                         .librarySelectionOverlay(
                             isSelecting: isSelecting,
@@ -329,7 +432,10 @@ struct LibraryView: View {
                             .buttonStyle(.plain)
                             .matchedTransitionSource(id: saved.product.id, in: productTransition)
 
-                            LibraryOverflowMenu(title: "Remove from saved") {
+                            LibraryOverflowMenu(
+                                title: "Remove from saved",
+                                accessibilityTarget: saved.product.title
+                            ) {
                                 model.library.toggleSaved(saved.product)
                             }
                             .padding(8)
@@ -361,7 +467,7 @@ struct LibraryView: View {
                 emptyState(
                     icon: "tshirt",
                     title: "No try-ons yet",
-                    message: "Completed appearance previews are downloaded and kept here automatically."
+                    message: "Save a completed appearance preview and its outfit details will stay here."
                 )
             } else {
                 LazyVGrid(
@@ -391,14 +497,17 @@ struct LibraryView: View {
                             }
                             .buttonStyle(.plain)
 
-                            LibraryOverflowMenu(title: "Delete try-on") {
-                                model.library.deleteTryOn(tryOn)
+                            LibraryOverflowMenu(
+                                title: "Delete try-on",
+                                accessibilityTarget: tryOn.displayTitle
+                            ) {
+                                pendingTryOnDeletion = tryOn
                             }
                             .padding(8)
                         }
                         .contextMenu {
                             Button("Delete try-on", role: .destructive) {
-                                model.library.deleteTryOn(tryOn)
+                                pendingTryOnDeletion = tryOn
                             }
                         }
                         .librarySelectionOverlay(
@@ -536,7 +645,11 @@ private struct RecentScanCard: View {
                 }
                 .buttonStyle(.plain)
 
-                LibraryOverflowMenu(title: "Delete capture", onDelete: onDelete)
+                LibraryOverflowMenu(
+                    title: "Delete capture",
+                    accessibilityTarget: "capture from \(scan.createdAt.formatted(date: .abbreviated, time: .omitted))",
+                    onDelete: onDelete
+                )
                     .padding(10)
             }
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -616,7 +729,11 @@ private struct SearchHistoryCard: View {
                 }
                 .buttonStyle(.plain)
 
-                LibraryOverflowMenu(title: "Delete search", onDelete: onDelete)
+                LibraryOverflowMenu(
+                    title: "Delete search",
+                    accessibilityTarget: search.generatedQuery ?? "visual product search",
+                    onDelete: onDelete
+                )
                     .padding(10)
             }
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -654,6 +771,7 @@ private struct SearchHistoryCard: View {
 
 private struct LibraryOverflowMenu: View {
     let title: String
+    let accessibilityTarget: String
     let onDelete: () -> Void
 
     var body: some View {
@@ -667,7 +785,57 @@ private struct LibraryOverflowMenu: View {
                 .background(.ultraThinMaterial, in: Circle())
                 .overlay { Circle().stroke(.white.opacity(0.5), lineWidth: 0.75) }
         }
-        .accessibilityLabel("More actions")
+        .accessibilityLabel("More actions for \(accessibilityTarget)")
+    }
+}
+
+private struct WardrobeOverflowMenu: View {
+    let item: SavedWardrobeItem
+    let isOnRail: Bool
+    let isSelected: Bool
+    let onPreview: () -> Void
+    let onAddToRail: () -> Void
+    let onRemoveFromRail: () -> Void
+    let onPurchase: (() -> Void)?
+    let onDelete: () -> Void
+
+    var body: some View {
+        Menu {
+            Button("Preview item", systemImage: "eye", action: onPreview)
+            Button(
+                isSelected ? "Selected on try-on rail" : "Select on try-on rail",
+                systemImage: isSelected ? "checkmark.circle.fill" : "wand.and.sparkles",
+                action: onAddToRail
+            )
+            .disabled(isSelected)
+
+            if let onPurchase, let product = item.sourceProduct {
+                Button(
+                    "View at \(product.merchant)",
+                    systemImage: "arrow.up.right",
+                    action: onPurchase
+                )
+            }
+
+            if isOnRail {
+                Button(
+                    "Remove from try-on rail",
+                    systemImage: "minus.circle",
+                    action: onRemoveFromRail
+                )
+            }
+
+            Divider()
+            Button("Remove from saved", systemImage: "trash", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 34, height: 34)
+                .background(.ultraThinMaterial, in: Circle())
+                .overlay { Circle().stroke(.white.opacity(0.5), lineWidth: 0.75) }
+        }
+        .accessibilityLabel("More actions for \(item.title)")
     }
 }
 
@@ -1040,43 +1208,466 @@ private struct SavedProductCard: View {
     }
 }
 
-private struct TryOnArchiveDetail: View {
+private struct WardrobeItemCard: View {
+    let item: SavedWardrobeItem
+    let imageURL: URL
+    let isOnRail: Bool
+    let isSelected: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LocalFileImage(url: imageURL, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .aspectRatio(0.78, contentMode: .fit)
+                .padding(8)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .bottomLeading) {
+                    if isOnRail {
+                        Label(
+                            isSelected ? "Selected" : "On rail",
+                            systemImage: isSelected ? "checkmark.circle.fill" : "circle"
+                        )
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, 8)
+                        .frame(height: 25)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .padding(8)
+                    }
+                }
+
+            Text(item.category.title.uppercased())
+                .font(.caption2.weight(.semibold))
+                .tracking(0.8)
+                .foregroundStyle(.secondary)
+            Text(item.title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+            if let product = item.sourceProduct {
+                Text(
+                    product.price.map { "\(product.merchant) · \($0.formatted)" }
+                        ?? product.merchant
+                )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(item.title), \(item.category.title)"
+                + (isSelected ? ", selected on try-on rail" : isOnRail ? ", on try-on rail" : "")
+        )
+    }
+}
+
+private struct WardrobeItemDetail: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
-    let tryOn: SavedTryOn
+    let item: SavedWardrobeItem
+    @State private var confirmsDeletion = false
+
+    private var railEntry: TryOnRailEntry? {
+        model.library.tryOnRail.first { $0.wardrobeItemID == item.id }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    LocalFileImage(url: model.library.imageURL(for: tryOn))
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(0.72, contentMode: .fit)
-                        .clipped()
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    Text(tryOn.displayTitle)
-                        .font(.title2.weight(.semibold))
-                    Text("Appearance preview · \(tryOn.createdAt.formatted(date: .long, time: .shortened))")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    ShareLink(item: model.library.imageURL(for: tryOn)) {
-                        Label("Share preview", systemImage: "square.and.arrow.up")
-                            .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 22) {
+                    LocalFileImage(
+                        url: model.library.imageURL(for: item),
+                        contentMode: .fit
+                    )
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(0.78, contentMode: .fit)
+                    .padding(14)
+                    .background(.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(StylezamDesign.hairline, lineWidth: 0.75)
                     }
-                    .stylezamGlassButton(prominent: true)
-                    .tint(StylezamDesign.cobalt)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        EditorialKicker(text: item.category.title)
+                        Text(item.title)
+                            .font(.system(size: 30, weight: .semibold))
+                            .tracking(-0.8)
+                            .fixedSize(horizontal: false, vertical: true)
+                        HStack(spacing: 6) {
+                            Text((item.garmentRegion ?? .infer(
+                                category: item.category,
+                                title: item.title
+                            )).title)
+                            Text("·")
+                            Text("Saved \(StylezamRelativeTime.string(since: item.savedAt)) ago")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    VStack(spacing: 10) {
+                        if railEntry?.isSelected == true {
+                            Label("Selected on the try-on rail", systemImage: "checkmark.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(StylezamDesign.cobalt)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(
+                                    StylezamDesign.cobalt.opacity(0.08),
+                                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                )
+                        } else {
+                            CobaltActionButton(
+                                title: "Select on try-on rail",
+                                systemImage: "wand.and.sparkles"
+                            ) {
+                                model.library.addWardrobeItemToTryOnRail(item, selected: true)
+                            }
+                        }
+
+                        if railEntry != nil {
+                            Button {
+                                model.library.removeFromTryOnRail(item.id)
+                            } label: {
+                                Label("Remove from try-on rail", systemImage: "minus.circle")
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 48)
+                            }
+                            .stylezamGlassButton()
+                        }
+                    }
+
+                    if let product = item.sourceProduct {
+                        VStack(alignment: .leading, spacing: 13) {
+                            EditorialSectionHeader(title: "Purchase", detail: product.merchant)
+                            EditorialRule()
+                            HStack(alignment: .firstTextBaseline) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(product.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .lineLimit(2)
+                                    Text(product.price?.formatted ?? "Price unavailable")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 12)
+                                Link(destination: product.productURL) {
+                                    Label("View", systemImage: "arrow.up.right")
+                                        .font(.subheadline.weight(.semibold))
+                                }
+                            }
+                        }
+                    } else {
+                        Label(
+                            "This detected piece does not have a saved purchase link yet.",
+                            systemImage: "link.badge.plus"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Button("Remove item from Library", systemImage: "trash", role: .destructive) {
+                        confirmsDeletion = true
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.top, 8)
                 }
                 .padding(StylezamDesign.pageInset)
+                .padding(.bottom, 28)
             }
             .background(StylezamDesign.paper)
-            .navigationTitle("Try-on")
+            .navigationTitle("Wardrobe item")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }
                 }
             }
+            .confirmationDialog(
+                "Remove this item from Library?",
+                isPresented: $confirmsDeletion,
+                titleVisibility: .visible
+            ) {
+                Button("Remove item", role: .destructive) {
+                    model.library.deleteWardrobeItem(item)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It will also be removed from the current try-on rail. Saved try-on manifests will not change.")
+            }
         }
+    }
+}
+
+private enum TryOnManifestTab: String, CaseIterable, Identifiable {
+    case wearing
+    case onRail
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wearing: "Wearing"
+        case .onRail: "On the rail"
+        }
+    }
+}
+
+private struct TryOnArchiveDetail: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let tryOn: SavedTryOn
+    @State private var manifestTab: TryOnManifestTab = .wearing
+    @State private var confirmsDeletion = false
+
+    private var wearingItems: [SavedTryOnItemSnapshot] {
+        tryOn.items.filter(\.wasSelected)
+    }
+
+    private var railItems: [SavedTryOnItemSnapshot] {
+        tryOn.items.filter { !$0.wasSelected }
+    }
+
+    private var visibleManifestItems: [SavedTryOnItemSnapshot] {
+        manifestTab == .wearing ? wearingItems : railItems
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    LocalFileImage(url: model.library.imageURL(for: tryOn))
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(0.72, contentMode: .fit)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+                        }
+
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(tryOn.displayTitle)
+                            .font(.title2.weight(.semibold))
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text("Appearance preview · \(tryOn.createdAt.formatted(date: .long, time: .shortened))")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        if let context = tryOn.photoContext {
+                            HStack(spacing: 6) {
+                                Label(context.title, systemImage: "person.crop.rectangle")
+                                if let gender = tryOn.gender {
+                                    Text("·")
+                                    Text(gender.title)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    ShareLink(item: model.library.imageURL(for: tryOn)) {
+                        Label("Share preview", systemImage: "square.and.arrow.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .stylezamGlassButton(prominent: true)
+                    .tint(StylezamDesign.cobalt)
+
+                    manifest
+                }
+                .padding(StylezamDesign.pageInset)
+                .padding(.bottom, 28)
+            }
+            .background(StylezamDesign.paper)
+            .navigationTitle("Try-on")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Delete", role: .destructive) {
+                        confirmsDeletion = true
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .confirmationDialog(
+                "Delete this try-on?",
+                isPresented: $confirmsDeletion,
+                titleVisibility: .visible
+            ) {
+                Button("Delete try-on", role: .destructive) {
+                    model.library.deleteTryOn(tryOn)
+                    dismiss()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The saved preview will be removed. Your wardrobe and current try-on rail will stay unchanged.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var manifest: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            EditorialRule()
+            EditorialSectionHeader(title: "Outfit items", detail: "Saved with this look")
+
+            if tryOn.items.isEmpty {
+                legacyManifest
+            } else {
+                Picker("Saved outfit items", selection: $manifestTab) {
+                    Text("Wearing \(wearingItems.count)")
+                        .tag(TryOnManifestTab.wearing)
+                    Text("On the rail \(railItems.count)")
+                        .tag(TryOnManifestTab.onRail)
+                }
+                .pickerStyle(.segmented)
+
+                Text(
+                    manifestTab == .wearing
+                        ? "These pieces were actually applied when this preview was created."
+                        : "These pieces were available but not applied—they were toggled off or parked for another photo type."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+                VStack(spacing: 0) {
+                    if visibleManifestItems.isEmpty {
+                        Text(
+                            manifestTab == .wearing
+                                ? "No pieces were recorded as worn."
+                                : "Every recorded rail item was applied."
+                        )
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, minHeight: 82, alignment: .leading)
+                        .padding(.horizontal, 14)
+                    } else {
+                        ForEach(Array(visibleManifestItems.enumerated()), id: \.element.id) { index, item in
+                            manifestRow(item)
+                            if index < visibleManifestItems.count - 1 {
+                                EditorialRule()
+                                    .padding(.leading, 56)
+                            }
+                        }
+                    }
+                }
+                .background(
+                    Color(uiColor: .secondarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var legacyManifest: some View {
+        if let product = tryOn.product {
+            manifestRow(
+                title: product.title,
+                category: TryOnCategory.infer(category: product.category, title: product.title),
+                region: .infer(
+                    category: TryOnCategory.infer(category: product.category, title: product.title),
+                    title: product.category ?? product.title
+                ),
+                product: product
+            )
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+        } else {
+            Label(
+                "Item details were not stored for this earlier preview.",
+                systemImage: "archivebox"
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .leading)
+            .padding(.horizontal, 14)
+            .background(
+                Color(uiColor: .secondarySystemBackground),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+        }
+    }
+
+    private func manifestRow(_ item: SavedTryOnItemSnapshot) -> some View {
+        manifestRow(
+            title: item.title,
+            category: item.category,
+            region: item.garmentRegion,
+            product: item.sourceProduct
+        )
+    }
+
+    private func manifestRow(
+        title: String,
+        category: TryOnCategory,
+        region: TryOnGarmentRegion,
+        product: ProductResultDTO?
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: category.symbol)
+                .font(.body.weight(.medium))
+                .foregroundStyle(StylezamDesign.cobalt)
+                .frame(width: 34, height: 34)
+                .background(
+                    StylezamDesign.cobalt.opacity(0.09),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                Text(manifestSubtitle(category: category, region: region, product: product))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer(minLength: 8)
+
+            if let product {
+                Link(destination: product.productURL) {
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Label("Buy", systemImage: "arrow.up.right")
+                            .font(.caption.weight(.semibold))
+                        if let price = product.price {
+                            Text(price.formatted)
+                                .font(.caption2)
+                        }
+                    }
+                    .foregroundStyle(StylezamDesign.cobalt)
+                }
+                .accessibilityLabel("Buy \(title) at \(product.merchant)")
+            }
+        }
+        .padding(14)
+    }
+
+    private func manifestSubtitle(
+        category: TryOnCategory,
+        region: TryOnGarmentRegion,
+        product: ProductResultDTO?
+    ) -> String {
+        [category.title, region.title, product?.merchant]
+            .compactMap { $0 }
+            .joined(separator: " · ")
     }
 }
 

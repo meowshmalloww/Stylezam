@@ -2,11 +2,19 @@
 
 ## Current boundary
 
-Stylezam implements local fashion capture, garment instance detection, crop creation, inspection, persistence, explicitly triggered product retrieval, and optional photo-based virtual try-on backed by YouCam.
+Stylezam implements local fashion capture, garment instance detection, crop creation, inspection, persistent wardrobe and try-on state, explicitly triggered product retrieval, and optional photo-based virtual try-on backed by YouCam.
 
 ## Photo try-on
 
-The Try On workspace accepts a person photo from Stylezam's front/rear camera or Photos and a selectable rail of product or Library-piece images. Selected items are applied sequentially through YouCam's category-specific asynchronous APIs, so each completed result becomes the source for the next item. Finished images can be saved locally in Library. Clothing uses the clothes v3 endpoint with automatic garment-category detection; bags, scarves, shoes, and hats use their dedicated endpoints; jewelry uses the dedicated 2D VTO endpoints. Outfit, Hand/Wrist, and Face/Neck are separate photo contexts because one full-body photo cannot reliably satisfy every endpoint. The workspace verifies the credential through YouCam's feature-cost endpoint, exposes the actual upload/task/polling phase, and translates provider errors into retake or product-image guidance. After each result is downloaded, Stylezam requests deletion of that finished remote task and its associated media.
+After an accepted scan is persisted, each accepted garment crop is added to the local wardrobe and persistent Try On rail with selection on. A lower-body item keeps two durable local media roles: the tight crop shown in wardrobe/rail UI and a separate full originating frame retained as a best-effort candidate for YouCam's worn-garment reference. Detection identifies the garment region but cannot validate locally that a photo or web frame visibly shows the garment worn by one clear person. The rail therefore exposes ready/missing state, blocks Create when a selected lower-body reference is missing, and lets the user add or replace the worn photo. Identical reference bytes use one content-addressed file shared by wardrobe metadata records. This capture-side promotion performs no product search, thumbnail load, or YouCam call. If the user later starts a product search and it succeeds, Stylezam best-effort matches the source scan and garment identifiers and updates that same rail record with the merchant product and purchase link. Both detected media roles are preserved, so exact-source enrichment does not depend on downloading a merchant thumbnail. Search success is independent from this optional enrichment.
+
+The Try On workspace keeps a reusable person-photo history from Stylezam's front/rear camera or Photos. The stage pages through prior photos and an add-photo page. Its expandable rail has **Pieces** and **Shop** views: users can select or deselect several pieces, remove rail entries without deleting the underlying wardrobe item, add items from the wardrobe, and open available merchant links. Outfit, Hand/Wrist, and Face/Neck remain separate photo contexts because one full-body photo cannot reliably satisfy every endpoint. Selected pieces that do not match the active photo context stay parked on the rail instead of being submitted to a likely failing paid task.
+
+After the user explicitly enables upload consent, one Create action sorts the compatible selected rail items into a stable render order and passes them to `YouCamTryOnService.render`. The action discloses the exact number of YouCam try-on tasks it will start. The service does not claim or emulate a one-call multi-garment request: it runs one category-specific asynchronous task per item and uses each downloaded result as the source photo for the next task. Clothing uses the clothes v3 endpoint with an explicit upper-body, lower-body, or full-body category when Stylezam can infer one and falls back to automatic detection otherwise; bags, scarves, shoes, and hats use their dedicated endpoints; jewelry uses the dedicated 2D VTO endpoints. After each result is downloaded, Stylezam requests deletion of that finished remote task and associated media, including when the local operation has been cancelled.
+
+**View as video** uploads the completed still to YouCam image-to-video v2 and requests the provider-supported 5-second output at 480p. The current YouCam price for that configuration is 5 units and is presented as provider pricing that can change. The app plays three seconds, pauses, and returns to the still; the downloaded video is temporary rather than a saved Library artifact. Saving a still creates a Past Try-On record containing the rendered image, person-photo/context metadata, and a snapshot of every rail item at that moment. The snapshot records the pieces actually applied to that photo plus the toggled-off or context-incompatible rail items, and retains embedded merchant details and purchase URLs even if the live rail later changes.
+
+The workspace verifies basic credential connectivity through YouCam's feature-cost endpoint, exposes the actual upload/task/polling phase, and translates provider errors into retake or product-image guidance. That check does not prove that the account is entitled to every category or image-to-video operation. Clothes v3 also requires a lower-body reference to visibly show the garment being worn by one clear person rather than as a standalone product image. A detected item's separately persisted full source frame is only a candidate for that request and cannot be validated locally; the user-facing rail warns about the rule, allows replacement, and keeps the display crop separate. Identical reference frames remain content-deduplicated. A complete real entitled-key, physical-device smoke test remains outstanding.
 
 The prototype bearer credential is stored in the device Keychain or imported from an ignored `.env` file for a Debug launch. Production distribution requires a server-side credential proxy rather than embedding a shared bearer token in the app.
 
@@ -41,7 +49,7 @@ The default private developer route is:
 3. select the provider result group that best matches the chosen local garment label;
 4. normalize, cap, display, and persist the real provider results.
 
-Each detected piece in Library Recent exposes both routes directly. **Find products & prices** hands the existing scan and garment identifiers to Search and starts one provider request only when no saved search exists. **Try on crop** adds the already-saved local crop to the YouCam rail without performing a product search. Developer Debug can pin an eligible visual provider; if that provider needs configuration the current capture cannot satisfy, Search names and uses an eligible fallback.
+Every accepted detected piece already enters the persistent Try On rail locally, selected by default. Each piece in Library Recent also exposes both explicit routes directly. **Find products & prices** hands the existing scan and garment identifiers to Search and starts one provider request only when no saved search exists. A successful search best-effort enriches the exact source rail item with the first shoppable result; enrichment failure remains nonfatal and does not consume another search. **Try on crop** can re-add the already-saved local crop without performing a product search. Developer Debug can pin an eligible visual provider; if that provider needs configuration the current capture cannot satisfy, Search names and uses an eligible fallback.
 
 Stylezam AI is separate: each garment has a bounded, locally persisted conversation. A turn sends the selected crop, recent conversation context, and new prompt to Fireworks Qwen 3.7 Plus. Qwen runs in non-thinking mode for predictable structured answers and returns both the response and relevant follow-up questions. Only when the user explicitly taps **Find similar** or **Find cheaper** does Stylezam ask Qwen for grounded shopping keywords and send one generated text query—not the photo—to Serper Shopping. Cheaper-result presentation orders comparable priced results from lower to higher and leaves products without a parsed price afterward.
 
@@ -98,23 +106,22 @@ detail-aware discovery pass; a found region is confirmed with one focused
 tensor. Two agreeing label/box/appearance observations promote the original
 device-resolution frame to the accepted still pipeline. The continuous Live
 Activity changes symbol and text for scanning, recognition, crop generation,
-and save completion. An opt-in developer diagnostic retains one authorized
-frame in memory and renders the model's actual boxes and crops inside Stylezam;
-the app never attempts to draw an overlay over another app.
+and save completion. Developer Debug retains only the latest authorized analyzed
+frame in memory while the stream runs and renders the model's actual boxes and
+crops inside Stylezam; the app never attempts to draw an overlay over another app.
 
 ## Local persistence
 
 The Library stores source images, readable garment box-crop JPEGs,
-class/confidence/box records, capture source, per-garment chat history, and time under the app container.
+durable full-frame try-on reference candidates for detected lower-body pieces, class/confidence/box records, capture source, per-garment chat history, persistent wardrobe items, current rail membership and selection, reusable person photos, and Past Try-On images and manifests under the app container. Reference blobs are content-addressed, so identical full frames are written once and deleted only after the last wardrobe record stops referring to them. A try-on manifest snapshots the items actually applied plus the parked and toggled-off rail items, records separate display/reference media digests, and embeds available product metadata and purchase links so later rail edits do not rewrite the saved look.
 The current raw mask is diagnostic-only because its iOS regions are not reliable
 enough for a product-facing cutout. A bounded snapshot keeps the most recent
 media. Deleting a scan removes its source and crop files; clearing Library
 removes all local media and saved legacy records.
 
-Live screen preview frames remain in a short in-memory rolling buffer. Stopping
-capture clears that buffer. When the developer box-retention toggle is enabled,
-one latest analyzed frame may remain visible in Live Screen Inspector until the
-next stream starts or the toggle is disabled.
+Live screen preview frames remain in a short in-memory rolling buffer, and the
+latest authorized analyzed frame remains available to Live Screen Inspector
+while that stream runs. Stopping capture clears both in-memory surfaces.
 
 ## Item coverage
 
@@ -134,4 +141,6 @@ ScreenCaptureKit code is compiled only when the installed SDK exposes it. Apple�
 - Missing provider key/zone: no request is reserved or dispatched; Search names the missing configuration.
 - Per-piece or monthly local limit reached: the request stops before networking.
 - Dispatched provider failure: the attempt remains visible in Search Diagnostics and is not silently retried.
+- Post-search rail enrichment failure: the real search remains saved and usable; the local crop stays on the rail.
+- YouCam connection check succeeds but a category or video task is not entitled: the real provider error is shown; connectivity is not presented as an entitlement guarantee.
 - iOS 18–26: screen capture reports unavailable; camera, Photos, clipboard, and Share paths continue.
