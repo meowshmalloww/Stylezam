@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import OSLog
 import UIKit
 import WidgetKit
 
@@ -32,6 +33,10 @@ final class AppModel {
     @ObservationIgnored private let duplicateGuard = GarmentDuplicateGuard()
     @ObservationIgnored private let notifications = NotificationService()
     @ObservationIgnored private let productSearchService = ProductSearchService()
+    @ObservationIgnored private let liveScreenLogger = Logger(
+        subsystem: "com.stylezam.app",
+        category: "LiveScreenAutoCapture"
+    )
     @ObservationIgnored private var lastCaptureRequest: Double = 0
     @ObservationIgnored private var lastLiveScreenRequest: Double = 0
     @ObservationIgnored private var liveScreenPickerTask: Task<Void, Never>?
@@ -39,6 +44,11 @@ final class AppModel {
     @ObservationIgnored private var isStartupComplete = false
     @ObservationIgnored private var pendingDeepLink: URL?
     @ObservationIgnored private var pendingControlDestination: StylezamControlDestination?
+    @ObservationIgnored private var liveScreenAutomaticTask: Task<Void, Never>?
+    @ObservationIgnored private var liveScreenAutoCapture = LiveScreenAutoCaptureCoordinator()
+    @ObservationIgnored private var liveScreenPreviewFocus: BoundingBoxDTO?
+    @ObservationIgnored private var liveScreenEmptyPreviewCount = 0
+    @ObservationIgnored private var liveScreenNextFocusIndex = 0
 
     init(
         settings: SettingsStore = SettingsStore(),
@@ -74,6 +84,9 @@ final class AppModel {
         await modelPack.refresh()
         if let modelURL = modelPack.activeModelURL {
             try? await visionEngine.prepare(modelURL: modelURL)
+        }
+        liveScreen.setFrameHandler { [weak self] frame in
+            self?.handleAutomaticLiveScreenFrame(frame)
         }
 #if DEBUG
         await runDeviceVisionSmokeTestIfRequested()
@@ -188,11 +201,11 @@ final class AppModel {
                 modelURL: modelURL,
                 manifest: manifest,
                 maxItems: settings.maxDetectedItems,
-                // Live camera accepts a full-quality still after preview
-                // consensus, so it benefits from the same bounded refinement
-                // as Photo mode. Screen capture remains single-pass to protect
-                // sustained latency and thermals.
-                enableAdaptiveDetail: mode != .screen
+                // Camera preview frames remain a single lightweight pass. Every accepted
+                // still—including a stable Live Screen frame—uses bounded detail
+                // tiles, with Low Power Mode, the thermal state, and the 9-second
+                // processing budget deciding how many passes are safe.
+                enableAdaptiveDetail: true
             )
             let detection: GarmentDetectionBatch
             if mode == .live || mode == .screen {
@@ -264,7 +277,10 @@ final class AppModel {
         }
     }
 
-    func previewGarments(in imageData: Data) async -> LiveGarmentPreview? {
+    func previewGarments(
+        in imageData: Data,
+        focusFrame: BoundingBoxDTO? = nil
+    ) async -> LiveGarmentPreview? {
         guard let modelURL = modelPack.activeModelURL,
               let manifest = modelPack.manifest,
               !isAnalyzingCapture
@@ -274,13 +290,208 @@ final class AppModel {
                 imageData: imageData,
                 modelURL: modelURL,
                 manifest: manifest,
-                maxItems: settings.maxDetectedItems
+                maxItems: settings.maxDetectedItems,
+                focusFrame: focusFrame
             )
             latestPreviewCandidates = preview.candidates
             return preview
         } catch {
             return nil
         }
+    }
+
+    private func previewLiveScreenGarments(
+        in imageData: Data
+    ) async -> LiveGarmentPreview? {
+        guard let modelURL = modelPack.activeModelURL,
+              let manifest = modelPack.manifest,
+              !isAnalyzingCapture
+        else { return nil }
+        do {
+            let preview = try await visionEngine.adaptiveScreenPreview(
+                imageData: imageData,
+                modelURL: modelURL,
+                manifest: manifest,
+                maxItems: settings.maxDetectedItems
+            )
+            latestPreviewCandidates = preview.candidates
+            return preview
+        } catch {
+            liveScreenLogger.error(
+                "Live-screen preview failed: \(error.localizedDescription, privacy: .public)"
+            )
+            return nil
+        }
+    }
+
+    /// Runs a crop-free, detail-aware detector on throttled authorized display frames. A stable
+    /// garment is promoted to `processCapture`, which creates the high-resolution crops, persists
+    /// the scan, and posts the same completion notification as Live camera.
+    private func handleAutomaticLiveScreenFrame(_ frame: LiveScreenFrame) {
+        guard liveScreen.isCapturing else {
+            liveScreenAutoCapture.reset()
+            return
+        }
+        guard settings.liveScreenAutoCaptureEnabled else {
+            liveScreenAutoCapture.reset()
+            liveScreen.setAutomaticAnalysisStatus(
+                "Streaming is active. Automatic Live Screen saving is turned off."
+            )
+            return
+        }
+        guard modelPack.isInstalled else {
+            liveScreen.setAutomaticAnalysisStatus(
+                "The on-device garment model is not installed."
+            )
+            return
+        }
+        guard liveScreenAutomaticTask == nil, !isAnalyzingCapture else { return }
+
+        liveScreenAutomaticTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.liveScreenAutomaticTask = nil }
+
+            self.liveScreen.setAutomaticAnalysisStatus(
+                "Scanning the authorized screen on this iPhone."
+            )
+            guard let preview = await self.previewLiveScreenGarments(
+                in: frame.data
+            ),
+                  !Task.isCancelled,
+                  self.liveScreen.isCapturing
+            else { return }
+
+            guard let anchor = preview.candidates.max(by: { left, right in
+                Self.liveScreenAnchorScore(left) < Self.liveScreenAnchorScore(right)
+            }) else {
+                self.liveScreenAutoCapture.reset()
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    "Watching for a stable fashion item."
+                )
+                return
+            }
+
+            let fingerprint = await Task.detached(priority: .utility) {
+                LiveScreenPerceptualHash.differenceHash(
+                    imageData: frame.data,
+                    region: anchor.box
+                )
+            }.value
+            guard let fingerprint, !Task.isCancelled else {
+                self.liveScreenAutoCapture.reset()
+                return
+            }
+
+            let candidate = LiveScreenAutoCaptureCoordinator.Candidate(
+                label: anchor.localLabel,
+                confidence: anchor.confidence,
+                box: anchor.box,
+                fingerprint: fingerprint
+            )
+            guard self.liveScreenAutoCapture.shouldCapture(
+                candidate,
+                qualityScore: preview.qualityScore,
+                now: frame.capturedAt
+            ) else {
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    "Confirming \(anchor.localLabel) across stable frames."
+                )
+                return
+            }
+
+            self.liveScreen.setAutomaticAnalysisStatus(
+                "Stable \(anchor.localLabel) found. Creating full-resolution crops."
+            )
+            self.liveScreenLogger.notice(
+                "Stable live-screen garment accepted at \(frame.pixelWidth)x\(frame.pixelHeight)"
+            )
+            let scan = await self.processCapture(
+                imageData: frame.data,
+                origin: .screenCapture,
+                mode: .screen
+            )
+            let duplicateWasSuppressed = self.captureStatus == "Already in Library"
+            self.liveScreenAutoCapture.recordCaptureResult(
+                fingerprint: fingerprint,
+                shouldSuppressRepeat: scan != nil || duplicateWasSuppressed
+            )
+
+            if let scan {
+                self.resetLiveScreenPreviewFocus()
+                self.liveScreen.recordAutomaticallySavedPieces(scan.items.count)
+                self.liveScreenLogger.notice(
+                    "Automatically saved \(scan.items.count) live-screen pieces"
+                )
+            } else if duplicateWasSuppressed {
+                self.resetLiveScreenPreviewFocus()
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    "This piece is already in Library. Watching for another item."
+                )
+            } else {
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    "The final frame was not clear enough. Watching for a better view."
+                )
+            }
+        }
+    }
+
+    private nonisolated static func liveScreenAnchorScore(
+        _ candidate: GarmentCandidate
+    ) -> Double {
+        let area = max(0, candidate.box.width * candidate.box.height)
+        return candidate.confidence * Foundation.sqrt(area)
+    }
+
+    private func resetLiveScreenPreviewFocus() {
+        liveScreenPreviewFocus = nil
+        liveScreenEmptyPreviewCount = 0
+        liveScreenNextFocusIndex = 0
+    }
+
+    /// When a garment is too small for a full portrait-screen tensor, scan one overlapping
+    /// near-square region per sampled frame. This keeps inference at one pass per frame while
+    /// avoiding the severe loss of detail that a tall display can cause for small accessories.
+    private func advanceLiveScreenPreviewFocus(
+        pixelWidth: Int,
+        pixelHeight: Int
+    ) {
+        liveScreenEmptyPreviewCount += 1
+        guard liveScreenEmptyPreviewCount >= 2 else { return }
+        let frames = Self.liveScreenDetailFocusFrames(
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight
+        )
+        guard !frames.isEmpty else {
+            resetLiveScreenPreviewFocus()
+            return
+        }
+        liveScreenPreviewFocus = frames[liveScreenNextFocusIndex % frames.count]
+        liveScreenNextFocusIndex = (liveScreenNextFocusIndex + 1) % frames.count
+        liveScreenEmptyPreviewCount = 0
+    }
+
+    private nonisolated static func liveScreenDetailFocusFrames(
+        pixelWidth: Int,
+        pixelHeight: Int
+    ) -> [BoundingBoxDTO] {
+        let width = Double(max(1, pixelWidth))
+        let height = Double(max(1, pixelHeight))
+        let aspect = width / height
+        if aspect < 0.82 {
+            let frameHeight = min(0.68, max(0.48, aspect * 1.16))
+            let travel = 1 - frameHeight
+            return [0, travel / 2, travel].map {
+                BoundingBoxDTO(x: 0, y: $0, width: 1, height: frameHeight)
+            }
+        }
+        if aspect > 1.22 {
+            let frameWidth = min(0.68, max(0.48, (1 / aspect) * 1.16))
+            let travel = 1 - frameWidth
+            return [0, travel / 2, travel].map {
+                BoundingBoxDTO(x: $0, y: 0, width: frameWidth, height: 1)
+            }
+        }
+        return [BoundingBoxDTO(x: 0.08, y: 0.08, width: 0.84, height: 0.84)]
     }
 
     /// Runs the same detector and segmented-crop path used by a saved capture,
@@ -746,6 +957,10 @@ final class AppModel {
             liveScreenNotice = liveScreen.errorMessage ?? ScreenCaptureAvailability.summary
             return
         }
+        liveScreenAutomaticTask?.cancel()
+        liveScreenAutomaticTask = nil
+        liveScreenAutoCapture.reset()
+        resetLiveScreenPreviewFocus()
         liveScreenNotice = nil
         isLiveScreenPickerPending = true
         activatePendingLiveScreenPicker()

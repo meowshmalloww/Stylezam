@@ -1,12 +1,21 @@
 import Foundation
 import Observation
+import OSLog
 
 #if canImport(ScreenCaptureKit)
 import CoreImage
 import CoreMedia
+import ImageIO
 import UIKit
 @preconcurrency import ScreenCaptureKit
 #endif
+
+struct LiveScreenFrame: Sendable {
+    let capturedAt: Date
+    let data: Data
+    let pixelWidth: Int
+    let pixelHeight: Int
+}
 
 /// Owns the recent frames from a full-display stream the user authorizes with Apple’s picker.
 ///
@@ -16,20 +25,20 @@ import UIKit
 @MainActor
 @Observable
 final class LiveScreenCaptureManager: NSObject {
-    private struct BufferedFrame {
-        let capturedAt: Date
-        let data: Data
-    }
-
     private(set) var isCapturing = false
     private(set) var latestFrameData: Data?
     private(set) var latestFrameAt: Date?
+    private(set) var latestFramePixelWidth = 0
+    private(set) var latestFramePixelHeight = 0
+    private(set) var automaticAnalysisStatus: String?
+    private(set) var automaticallySavedPieceCount = 0
     private(set) var errorMessage: String?
-    private var frameBuffer: [BufferedFrame] = []
+    private var frameBuffer: [LiveScreenFrame] = []
 
     @ObservationIgnored private let screenActivityManager = CaptureActivityManager()
     // Type-erased because the concrete adapter is unavailable before an iOS 27 runtime.
     @ObservationIgnored private var platformAdapter: AnyObject?
+    @ObservationIgnored private var frameHandler: (@MainActor @Sendable (LiveScreenFrame) -> Void)?
 
     nonisolated static var isSupportedBySDK: Bool {
         #if canImport(ScreenCaptureKit)
@@ -55,12 +64,35 @@ final class LiveScreenCaptureManager: NSObject {
             return Self.unsupportedSummary
         }
         if isCapturing {
+            let resolution = latestFramePixelWidth > 0 && latestFramePixelHeight > 0
+                ? " · \(latestFramePixelWidth) × \(latestFramePixelHeight)"
+                : ""
+            if let automaticAnalysisStatus {
+                return "Live screen is active\(resolution). \(automaticAnalysisStatus)"
+            }
             if let latestFrameAt {
-                return "Live screen is active. Latest authorized frame: \(latestFrameAt.formatted(date: .omitted, time: .shortened))."
+                return "Live screen is active\(resolution). Latest authorized frame: \(latestFrameAt.formatted(date: .omitted, time: .shortened))."
             }
             return "Live screen is active and waiting for the first frame."
         }
         return "Available through Apple’s system content-sharing picker."
+    }
+
+    func setFrameHandler(
+        _ handler: (@MainActor @Sendable (LiveScreenFrame) -> Void)?
+    ) {
+        frameHandler = handler
+    }
+
+    func setAutomaticAnalysisStatus(_ status: String?) {
+        automaticAnalysisStatus = status
+    }
+
+    func recordAutomaticallySavedPieces(_ count: Int) {
+        automaticallySavedPieceCount += max(0, count)
+        automaticAnalysisStatus = count == 1
+            ? "Saved 1 detected piece automatically."
+            : "Saved \(count) detected pieces automatically."
     }
 
     func consumeLatestFrame() -> Data? {
@@ -109,6 +141,10 @@ final class LiveScreenCaptureManager: NSObject {
         frameBuffer.removeAll(keepingCapacity: true)
         latestFrameData = nil
         latestFrameAt = nil
+        latestFramePixelWidth = 0
+        latestFramePixelHeight = 0
+        automaticAnalysisStatus = "Waiting for a stable fashion item."
+        automaticallySavedPieceCount = 0
         errorMessage = nil
     }
 
@@ -118,6 +154,7 @@ final class LiveScreenCaptureManager: NSObject {
 
     fileprivate func captureDidStart() async {
         isCapturing = true
+        automaticAnalysisStatus = "Watching for a stable fashion item."
         errorMessage = nil
         await screenActivityManager.start(
             id: UUID().uuidString,
@@ -131,6 +168,9 @@ final class LiveScreenCaptureManager: NSObject {
         frameBuffer.removeAll(keepingCapacity: false)
         latestFrameData = nil
         latestFrameAt = nil
+        latestFramePixelWidth = 0
+        latestFramePixelHeight = 0
+        automaticAnalysisStatus = nil
         errorMessage = nil
         await screenActivityManager.end(phase: "Live screen stopped")
     }
@@ -140,6 +180,9 @@ final class LiveScreenCaptureManager: NSObject {
         frameBuffer.removeAll(keepingCapacity: false)
         latestFrameData = nil
         latestFrameAt = nil
+        latestFramePixelWidth = 0
+        latestFramePixelHeight = 0
+        automaticAnalysisStatus = nil
         errorMessage = error.localizedDescription
         await screenActivityManager.end(
             phase: "Live screen interrupted",
@@ -147,17 +190,30 @@ final class LiveScreenCaptureManager: NSObject {
         )
     }
 
-    fileprivate func acceptFrame(_ data: Data) {
+    fileprivate func acceptFrame(
+        _ data: Data,
+        pixelWidth: Int,
+        pixelHeight: Int
+    ) {
         guard isCapturing else { return }
         let capturedAt = Date.now
+        let frame = LiveScreenFrame(
+            capturedAt: capturedAt,
+            data: data,
+            pixelWidth: pixelWidth,
+            pixelHeight: pixelHeight
+        )
         latestFrameData = data
         latestFrameAt = capturedAt
-        frameBuffer.append(BufferedFrame(capturedAt: capturedAt, data: data))
+        latestFramePixelWidth = pixelWidth
+        latestFramePixelHeight = pixelHeight
+        frameBuffer.append(frame)
         let retentionCutoff = capturedAt.addingTimeInterval(-4)
         frameBuffer.removeAll { $0.capturedAt < retentionCutoff }
         if frameBuffer.count > 6 {
             frameBuffer.removeFirst(frameBuffer.count - 6)
         }
+        frameHandler?(frame)
     }
 }
 
@@ -168,7 +224,19 @@ private final class LiveScreenFrameGate: @unchecked Sendable {
 
     func shouldEncodeFrame(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
         lock.withLock {
-            guard now - lastFrameTime >= 0.8 else { return false }
+            let processInfo = ProcessInfo.processInfo
+            let interval: TimeInterval
+            switch processInfo.thermalState {
+            case .nominal:
+                interval = processInfo.isLowPowerModeEnabled ? 2.1 : 1.35
+            case .fair:
+                interval = 1.9
+            case .serious, .critical:
+                return false
+            @unknown default:
+                interval = 1.4
+            }
+            guard now - lastFrameTime >= interval else { return false }
             lastFrameTime = now
             return true
         }
@@ -182,6 +250,10 @@ private final class LiveScreenCaptureAdapter: NSObject,
     SCContentSharingPickerObserver,
     @unchecked Sendable
 {
+    private static let logger = Logger(
+        subsystem: "com.stylezam.app",
+        category: "LiveScreen"
+    )
     private weak var manager: LiveScreenCaptureManager?
     private let picker = SCContentSharingPicker.shared
     private var stream: SCStream?
@@ -221,6 +293,7 @@ private final class LiveScreenCaptureAdapter: NSObject,
         await tearDownStream()
         manager?.prepareForStreamStart()
         let configuration = SCStreamConfiguration()
+        configuration.capturesAudio = false
         do {
             let newStream = SCStream(
                 filter: filter,
@@ -234,8 +307,12 @@ private final class LiveScreenCaptureAdapter: NSObject,
             )
             try await newStream.startCapture()
             stream = newStream
+            Self.logger.notice("Authorized full-display stream started")
             await manager?.captureDidStart()
         } catch {
+            Self.logger.error(
+                "Unable to start authorized stream: \(error.localizedDescription, privacy: .public)"
+            )
             await manager?.captureDidFail(error)
         }
     }
@@ -263,22 +340,36 @@ private final class LiveScreenCaptureAdapter: NSObject,
         guard type == .screen,
               frameGate.shouldEncodeFrame(),
               CMSampleBufferIsValid(sampleBuffer),
+              Self.isUsableFrame(sampleBuffer),
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
-        let image = CIImage(cvPixelBuffer: pixelBuffer)
+        let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(
+            Self.videoOrientation(for: sampleBuffer)
+        )
         guard let cgImage = imageContext.createCGImage(image, from: image.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.78)
+              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.92)
         else { return }
 
+        let width = cgImage.width
+        let height = cgImage.height
+        Self.logger.debug("Accepted authorized frame \(width)x\(height)")
+
         Task { @MainActor [weak manager] in
-            manager?.acceptFrame(data)
+            manager?.acceptFrame(
+                data,
+                pixelWidth: width,
+                pixelHeight: height
+            )
         }
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
         Task { @MainActor [weak self, weak manager] in
             self?.stream = nil
+            Self.logger.error(
+                "Authorized stream stopped: \(error.localizedDescription, privacy: .public)"
+            )
             await manager?.captureDidFail(error)
         }
     }
@@ -302,6 +393,42 @@ private final class LiveScreenCaptureAdapter: NSObject,
         Task { @MainActor [weak manager] in
             manager?.setPickerError(error.localizedDescription)
         }
+    }
+
+    private nonisolated static func attachments(
+        for sampleBuffer: CMSampleBuffer
+    ) -> [SCStreamFrameInfo: Any]? {
+        guard let attachments = CMSampleBufferGetSampleAttachmentsArray(
+            sampleBuffer,
+            createIfNecessary: false
+        ) as? [[SCStreamFrameInfo: Any]]
+        else { return nil }
+        return attachments.first
+    }
+
+    private nonisolated static func isUsableFrame(
+        _ sampleBuffer: CMSampleBuffer
+    ) -> Bool {
+        guard let attachments = attachments(for: sampleBuffer),
+              let rawStatus = attachments[.status] as? NSNumber,
+              let status = SCFrameStatus(rawValue: rawStatus.intValue)
+        else {
+            // Some early beta builds omit status metadata on otherwise valid frames.
+            return true
+        }
+        return status == .complete || status == .started
+    }
+
+    private nonisolated static func videoOrientation(
+        for sampleBuffer: CMSampleBuffer
+    ) -> CGImagePropertyOrientation {
+        guard let attachments = attachments(for: sampleBuffer),
+              let rawOrientation = attachments[.videoOrientation] as? NSNumber,
+              let orientation = CGImagePropertyOrientation(
+                  rawValue: rawOrientation.uint32Value
+              )
+        else { return .up }
+        return orientation
     }
 }
 #endif

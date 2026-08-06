@@ -242,7 +242,9 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
                 throw CameraSessionError.cannotAddOutput
             }
             session.addOutput(photoOutput)
-            photoOutput.maxPhotoQualityPrioritization = .balanced
+            // Live preview remains throttled, but the automatic shutter always asks
+            // AVFoundation for its full quality-oriented still before segmentation.
+            photoOutput.maxPhotoQualityPrioritization = .quality
             videoOutput.alwaysDiscardsLateVideoFrames = true
             videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String:
@@ -339,10 +341,13 @@ extension CameraSessionDriver: AVCaptureVideoDataOutputSampleBufferDelegate {
         let height = CVPixelBufferGetHeight(pixelBuffer)
         let image = CIImage(cvPixelBuffer: pixelBuffer)
         let longestSide = CGFloat(max(width, height))
-        let scale = min(1, 960 / max(1, longestSide))
+        // A 1280 px preview preserves small accessories and garment edges better
+        // than the previous 960 px sample while the model still receives one
+        // bounded 384 px tensor and the frame cadence remains thermally throttled.
+        let scale = min(1, 1_280 / max(1, longestSide))
         let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
         guard let cgImage = imageContext.createCGImage(preview, from: preview.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.68)
+              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.78)
         else { return }
         previewFrameHandler?(data, CGFloat(width) / CGFloat(max(1, height)))
     }

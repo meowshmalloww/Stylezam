@@ -137,7 +137,7 @@ private struct ControlSetupView: View {
     var body: some View {
         List {
             Section {
-                Text("Add both Stylezam controls from Control Center’s edit gallery. Capture a Look opens the camera. Live Screen opens Stylezam and immediately asks Apple to show its screen picker.")
+                Text("Add both Stylezam controls from Control Center’s edit gallery. Capture a Look opens the camera. Live Screen opens Apple’s required picker; after you choose Share Entire Screen, return to the fashion content and Stylezam scans it automatically.")
                     .foregroundStyle(.secondary)
                 setupStep("1", "Open Control Center and tap +")
                 setupStep("2", "Choose Add a Control")
@@ -160,7 +160,7 @@ private struct ControlSetupView: View {
             }
 
             Section {
-                Text("Capture a Look opens Stylezam’s front/back camera. Live Screen is a separate control because iOS requires explicit system consent before Stylezam can view another app’s screen.")
+                Text("Capture a Look opens Stylezam’s front/back camera. Live Screen is separate because iOS requires explicit system consent. Stylezam cannot dismiss itself back to the previous app, but the authorized stream and automatic detector continue while Stylezam is in the background.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             } header: {
@@ -182,6 +182,12 @@ private struct ControlSetupView: View {
 
                 LabeledContent("Device", value: ScreenCaptureAvailability.deviceSummary)
                 LabeledContent("Installed build", value: ScreenCaptureAvailability.buildSummary)
+                if model.liveScreen.automaticallySavedPieceCount > 0 {
+                    LabeledContent(
+                        "Auto-saved this run",
+                        value: "\(model.liveScreen.automaticallySavedPieceCount) pieces"
+                    )
+                }
 
                 if let recovery = ScreenCaptureAvailability.recoverySummary {
                     Text(recovery)
@@ -424,12 +430,21 @@ private struct DeveloperSettingsView: View {
                     .tint(StylezamDesign.cobalt)
                 }
 
-                Toggle("Automatic capture in Live mode", isOn: $settings.liveAutoCaptureEnabled)
+                Toggle(
+                    "Automatic capture in Live camera",
+                    isOn: $settings.liveAutoCaptureEnabled
+                )
+                    .tint(StylezamDesign.cobalt)
+
+                Toggle(
+                    "Automatic capture in Live Screen",
+                    isOn: $settings.liveScreenAutoCaptureEnabled
+                )
                     .tint(StylezamDesign.cobalt)
             } header: {
                 Text("Capture behavior")
             } footer: {
-                Text("Five is the safe default. Increasing the limit uses more memory and can make local segmentation and crop generation slower.")
+                Text("Five is the safe default. The two automatic modes are independent. Each requires three agreeing observations, then saves one high-resolution still. Increasing the item limit uses more memory and can make local crop generation slower.")
             }
 
             Section {

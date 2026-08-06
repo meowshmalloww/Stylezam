@@ -72,8 +72,8 @@ The model accepts a `1 × 3 × 384 × 384` normalized tensor and produces query 
 The model object is cached by `GarmentVisionEngine` and configured with
 `MLComputeUnits.cpuOnly`. Device verification found that this model export
 returns all-zero class logits through the iOS GPU/Neural Engine path; CPU-only
-execution returns the expected boxes and classes. Live preview and continuous
-screen capture stay single-pass and skip mask-array materialization and crop
+execution returns the expected boxes and classes. Continuous camera preview
+stays single-pass and skips mask-array materialization and crop
 creation. Live preview uses a stricter 0.55 confidence threshold, rejects
 near-identical competing boxes, and requires the same region and label to agree
 across consecutive sampled frames. Once Live consensus is reached, AVFoundation
@@ -109,7 +109,7 @@ Part/detail classes such as sleeves, collars, pockets, zippers, and sequins are 
 
 ## iOS 27 screen path
 
-ScreenCaptureKit code is compiled only when the installed SDK exposes it. Apple’s system content-sharing picker supplies authorization; Stylezam cannot silently begin a display stream. Frames are throttled and buffered in memory. iOS owns the system privacy indicator, and Stylezam does not draw an imitation recording border over other apps.
+ScreenCaptureKit code is compiled only when the installed SDK exposes it. Apple’s system content-sharing picker supplies authorization; Stylezam cannot silently begin a display stream or return to the previous app. Complete frames are orientation-corrected, thermally throttled, and buffered in memory. A crop-free global-plus-detail pass prevents tall pages from hiding small or edge-positioned garments; three agreeing garment observations are required before the accepted device-resolution frame enters the normal crop, duplicate, Library, Live Activity, and notification pipeline. A perceptual hash prevents a stationary screen from repeatedly invoking final inference. Low Power Mode disables preview detail tiles, elevated thermal pressure slows sampling, and serious/critical pressure pauses it. iOS owns the system privacy indicator, and Stylezam does not draw an imitation recording border over other apps.
 
 ## Failure behavior
 

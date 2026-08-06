@@ -122,6 +122,21 @@ targets:
     dependencies:
       - target: Stylezam
 
+  StylezamTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/StylezamTests
+      - path: Artifacts/VisionQA/adaptive-5k/jacket.jpg
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.stylezam.app.tests
+        PRODUCT_NAME: StylezamTests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: Stylezam
+
 schemes:
   Stylezam:
     build:
@@ -134,6 +149,7 @@ schemes:
     test:
       config: Debug
       targets:
+        - StylezamTests
         - StylezamControlUITests
     archive:
       config: Release

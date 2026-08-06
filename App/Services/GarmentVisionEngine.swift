@@ -242,22 +242,42 @@ actor GarmentVisionEngine {
         imageData: Data,
         modelURL: URL,
         manifest: ModelPackManifestDTO,
-        maxItems: Int
+        maxItems: Int,
+        focusFrame: BoundingBoxDTO? = nil
     ) async throws -> LiveGarmentPreview {
-        guard let image = Self.normalizedImage(
+        guard let sourceImage = Self.normalizedImage(
             from: imageData,
             maximumPixelSize: 1_600
         ) else {
             throw GarmentVisionError.invalidImage
         }
-        let detections = try coreMLDetections(
-            image: image,
+        let acceptedFocus: BoundingBoxDTO?
+        let inferenceImage: CGImage
+        if let focusFrame,
+           let focusedImage = Self.crop(image: sourceImage, to: focusFrame)
+        {
+            acceptedFocus = focusFrame
+            inferenceImage = focusedImage
+        } else {
+            acceptedFocus = nil
+            inferenceImage = sourceImage
+        }
+        let rawDetections = try coreMLDetections(
+            image: inferenceImage,
             modelURL: modelURL,
             manifest: manifest,
             maxItems: min(12, max(1, maxItems)),
             includeMasks: false,
             minimumConfidence: 0.42
         ).detections
+        let detections: [RawDetection]
+        if let acceptedFocus {
+            detections = rawDetections.compactMap {
+                Self.remapTileDetection($0, from: acceptedFocus)
+            }
+        } else {
+            detections = rawDetections
+        }
         let detection = GarmentDetectionBatch(
             method: .coreML,
             candidates: detections.map {
@@ -272,15 +292,24 @@ actor GarmentVisionEngine {
             },
             metrics: nil
         )
-        let metrics = Self.frameMetrics(image)
-        let largestArea = detection.candidates
-            .map { $0.box.width * $0.box.height }
+        let metrics = Self.frameMetrics(inferenceImage)
+        let qualityBoxes = detections.map { detection -> BoundingBoxDTO in
+            guard let acceptedFocus else { return detection.box }
+            return BoundingBoxDTO(
+                x: (detection.box.x - acceptedFocus.x) / acceptedFocus.width,
+                y: (detection.box.y - acceptedFocus.y) / acceptedFocus.height,
+                width: detection.box.width / acceptedFocus.width,
+                height: detection.box.height / acceptedFocus.height
+            )
+        }
+        let largestArea = qualityBoxes
+            .map { $0.width * $0.height }
             .max() ?? 0
-        let clipped = detection.candidates.contains { candidate in
-            candidate.box.x < 0.018
-                || candidate.box.y < 0.018
-                || candidate.box.x + candidate.box.width > 0.982
-                || candidate.box.y + candidate.box.height > 0.982
+        let clipped = qualityBoxes.contains { box in
+            box.x < 0.018
+                || box.y < 0.018
+                || box.x + box.width > 0.982
+                || box.y + box.height > 0.982
         }
         let meanConfidence = detection.candidates.isEmpty
             ? 0
@@ -295,7 +324,7 @@ actor GarmentVisionEngine {
         let guidance: LiveCaptureGuidance
         if detection.candidates.isEmpty {
             guidance = .aimAtFashion
-        } else if largestArea < 0.075 {
+        } else if largestArea < 0.04 {
             guidance = .moveCloser
         } else if clipped {
             guidance = .centerItem
@@ -309,6 +338,52 @@ actor GarmentVisionEngine {
         return LiveGarmentPreview(
             candidates: detection.candidates,
             qualityScore: min(1, max(0, quality)),
+            guidance: guidance
+        )
+    }
+
+    /// A screen-specific preview that keeps the accepted-still detector's overlapping detail
+    /// tiles but skips crop and mask encoding. Tall phone screenshots can reduce a product near
+    /// the top or bottom of a page to too few pixels in a single 384-point full-frame tensor.
+    /// This path is still bounded by the same Low Power Mode, thermal, and nine-second safeguards
+    /// as final analysis, while remaining much cheaper because it returns boxes only.
+    func adaptiveScreenPreview(
+        imageData: Data,
+        modelURL: URL,
+        manifest: ModelPackManifestDTO,
+        maxItems: Int
+    ) async throws -> LiveGarmentPreview {
+        let detection = try await analyze(
+            imageData: imageData,
+            modelURL: modelURL,
+            manifest: manifest,
+            maxItems: maxItems,
+            includeCrops: false,
+            includeDiagnosticMasks: false,
+            enableAdaptiveDetail: true
+        )
+        let candidates = detection.candidates
+        let largestArea = candidates
+            .map { max(0, $0.box.width * $0.box.height) }
+            .max() ?? 0
+        let meanConfidence = candidates.isEmpty
+            ? 0
+            : candidates.map(\.confidence).reduce(0, +) / Double(candidates.count)
+        // Stability across three frames is the primary false-positive guard. Keep this quality
+        // score permissive enough for watches, ties, and other physically small accessories.
+        let areaScore = min(1, largestArea / 0.10)
+        let quality = min(1, max(0, 0.68 * meanConfidence + 0.32 * areaScore))
+        let guidance: LiveCaptureGuidance
+        if candidates.isEmpty {
+            guidance = .aimAtFashion
+        } else if largestArea < 0.004 {
+            guidance = .moveCloser
+        } else {
+            guidance = .ready
+        }
+        return LiveGarmentPreview(
+            candidates: candidates,
+            qualityScore: quality,
             guidance: guidance
         )
     }

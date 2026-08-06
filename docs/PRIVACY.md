@@ -33,11 +33,11 @@ The capture and garment-detection pipeline has no remote inference call. The sep
 - Clipboard is read only after the user taps Paste image.
 - The Share extension runs only after the user chooses Stylezam.
 - iOS 27 screen capture begins only after Apple’s system picker grants a filter.
-- A screen frame becomes a saved scan only after an in-app or system capture action.
+- While that authorized iOS 27 stream is active, three stable on-device garment observations can automatically save one source frame and its local crops. Repeated frames are perceptually suppressed.
 - Protected content can appear blank; Stylezam does not bypass platform protection.
 - iOS owns screen-capture indicators and privacy UI.
 
-The app does not analyze every camera frame continuously. Live preview is throttled; only a stable automatic capture or manual shutter result is persisted with its crops.
+The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure; only a stable automatic capture or manual shutter result is persisted with its crops.
 
 ## Network boundary
 

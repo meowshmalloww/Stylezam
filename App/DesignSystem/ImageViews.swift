@@ -196,7 +196,7 @@ enum ImageEncoding {
     }
 
     static func normalizedJPEG(from image: UIImage) -> Data? {
-        let maxDimension: CGFloat = 4096
+        let maxDimension: CGFloat = 5_120
         let size = image.size
         let scale = min(1, maxDimension / max(size.width, size.height))
         let target = CGSize(width: size.width * scale, height: size.height * scale)
@@ -209,6 +209,6 @@ enum ImageEncoding {
             context.fill(CGRect(origin: .zero, size: target))
             image.draw(in: CGRect(origin: .zero, size: target))
         }
-        return rendered.jpegData(compressionQuality: 0.9)
+        return rendered.jpegData(compressionQuality: 0.92)
     }
 }

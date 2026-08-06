@@ -32,7 +32,7 @@
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Choose a fashion image so Stylezam can detect and separate its visible pieces on this iPhone.</string>
     <key>NSScreenCaptureUsageDescription</key>
-    <string>Choose screen content so Stylezam can scan a fashion frame only when you start or trigger capture.</string>
+    <string>Stylezam scans the screen you authorize on this iPhone and automatically saves a garment only after it remains stable.</string>
     <key>NSSupportsLiveActivities</key><true/>
     <key>UIApplicationSupportsIndirectInputEvents</key><true/>
     <key>UIBackgroundModes</key>

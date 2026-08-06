@@ -135,9 +135,11 @@ Each tile is independently reduced to 384×384, then its boxes are projected int
 the accepted source coordinate system and merged across scales. This raises the
 effective long-edge detector detail to about 686 px at 1080p and 1029 px at
 4K–5K. Library crops are encoded from the retained source pixels as 94%-quality
-JPEGs. Live preview and screen capture remain single-pass. After Live preview
-reaches temporal consensus, the accepted full-quality still uses the same
-bounded, thermal-aware detail plan as Photo mode.
+JPEGs. Live camera preview remains single-pass. Live Screen uses a slower,
+crop-free global-plus-detail preview because phone pages are much taller than
+the model tensor. After either live path reaches temporal consensus, the
+accepted full-quality camera still or device-resolution screen frame uses the
+same bounded, thermal-aware detail plan as Photo mode.
 
 The same Fashionpedia photo was resolution-scaled to exercise the complete
 source/crop path on the iPhone 15 Pro Max. Scaling a 1K photo does not invent

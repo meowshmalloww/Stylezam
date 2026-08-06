@@ -172,7 +172,7 @@ To finish verification:
 4. regenerate and open Stylezam with that Xcode;
 5. compile the conditional ScreenCaptureKit adapter;
 6. add both **Capture a Look** and **Live Screen** from the Control Center gallery; their typed `OpenIntent` handoff does not require an App Group entitlement;
-7. use Live Screen and confirm Apple’s picker appears before a recent real frame becomes a Library scan;
+7. use Live Screen, choose **Share Entire Screen**, return to stable fashion content, and confirm the automatic detector creates a high-resolution Library scan without another shutter tap;
 8. test stop, denial, interruption, protected content, memory pressure, and app termination.
 
 See [iOS 27 live screen](IOS27_SCREEN_CAPTURE.md). Keep Apple’s sample as reference code rather than copying its entire project into Stylezam.

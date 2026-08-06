@@ -25,6 +25,15 @@ final class SettingsStore {
         }
     }
 
+    var liveScreenAutoCaptureEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(
+                liveScreenAutoCaptureEnabled,
+                forKey: Keys.liveScreenAutoCaptureEnabled
+            )
+        }
+    }
+
     var productSearchPipeline: ProductSearchPipeline {
         didSet { UserDefaults.standard.set(productSearchPipeline.rawValue, forKey: Keys.productSearchPipeline) }
     }
@@ -116,6 +125,13 @@ final class SettingsStore {
                 forKey: Keys.liveAutoCaptureEnabled
             )
         }
+        if UserDefaults.standard.object(forKey: Keys.liveScreenAutoCaptureEnabled) == nil {
+            liveScreenAutoCaptureEnabled = true
+        } else {
+            liveScreenAutoCaptureEnabled = UserDefaults.standard.bool(
+                forKey: Keys.liveScreenAutoCaptureEnabled
+            )
+        }
         // Exact product search is visual by default. Fireworks + Serper is
         // reserved for user-initiated AI/refinement searches.
         productSearchPipeline = .directImage
@@ -176,6 +192,7 @@ final class SettingsStore {
         static let notificationsEnabled = "stylezam.notifications-enabled"
         static let maxDetectedItems = "stylezam.max-detected-items"
         static let liveAutoCaptureEnabled = "stylezam.live-auto-capture-enabled"
+        static let liveScreenAutoCaptureEnabled = "stylezam.live-screen-auto-capture-enabled"
         static let productSearchPipeline = "stylezam.search.pipeline"
         static let imageSearchProvider = "stylezam.search.image-provider"
         static let productSearchesPerPiece = "stylezam.search.per-piece-limit"

@@ -72,6 +72,17 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
+               BlueprintIdentifier = "14118C8323EF72A755EC22CC"
+               BuildableName = "StylezamTests.xctest"
+               BlueprintName = "StylezamTests"
+               ReferencedContainer = "container:Stylezam.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
                BlueprintIdentifier = "C2514C66A52AFA79FBC4EF4E"
                BuildableName = "StylezamControlUITests.xctest"
                BlueprintName = "StylezamControlUITests"
