@@ -6,7 +6,6 @@ import OSLog
 import CoreImage
 import CoreMedia
 import ImageIO
-import UIKit
 @preconcurrency import ScreenCaptureKit
 #endif
 
@@ -93,6 +92,18 @@ final class LiveScreenCaptureManager: NSObject {
         automaticAnalysisStatus = count == 1
             ? "Saved 1 detected piece automatically."
             : "Saved \(count) detected pieces automatically."
+    }
+
+    /// Slows full-resolution frame materialization after a stable page has already been handled.
+    /// The stream remains authorized and periodically samples for a visual change.
+    func setAutomaticAnalysisIdle(_ idle: Bool) {
+        #if canImport(ScreenCaptureKit)
+        if #available(iOS 27.0, *),
+           let adapter = platformAdapter as? LiveScreenCaptureAdapter
+        {
+            adapter.setAnalysisIdle(idle)
+        }
+        #endif
     }
 
     func consumeLatestFrame() -> Data? {
@@ -221,6 +232,16 @@ final class LiveScreenCaptureManager: NSObject {
 private final class LiveScreenFrameGate: @unchecked Sendable {
     private let lock = NSLock()
     private var lastFrameTime: TimeInterval = 0
+    private var analysisIdle = false
+
+    func setAnalysisIdle(_ idle: Bool) {
+        lock.withLock {
+            guard analysisIdle != idle else { return }
+            analysisIdle = idle
+            // Let a newly active detector accept the next available frame immediately.
+            if !idle { lastFrameTime = 0 }
+        }
+    }
 
     func shouldEncodeFrame(now: TimeInterval = ProcessInfo.processInfo.systemUptime) -> Bool {
         lock.withLock {
@@ -228,9 +249,13 @@ private final class LiveScreenFrameGate: @unchecked Sendable {
             let interval: TimeInterval
             switch processInfo.thermalState {
             case .nominal:
-                interval = processInfo.isLowPowerModeEnabled ? 2.1 : 1.35
+                if analysisIdle {
+                    interval = processInfo.isLowPowerModeEnabled ? 7.0 : 4.0
+                } else {
+                    interval = processInfo.isLowPowerModeEnabled ? 2.4 : 1.45
+                }
             case .fair:
-                interval = 1.9
+                interval = analysisIdle ? 6.0 : 2.2
             case .serious, .critical:
                 return false
             @unknown default:
@@ -291,6 +316,7 @@ private final class LiveScreenCaptureAdapter: NSObject,
     @MainActor
     func startCapture(with filter: SCContentFilter) async {
         await tearDownStream()
+        frameGate.setAnalysisIdle(false)
         manager?.prepareForStreamStart()
         let configuration = SCStreamConfiguration()
         configuration.capturesAudio = false
@@ -325,6 +351,10 @@ private final class LiveScreenCaptureAdapter: NSObject,
         await manager?.captureDidStop()
     }
 
+    nonisolated func setAnalysisIdle(_ idle: Bool) {
+        frameGate.setAnalysisIdle(idle)
+    }
+
     @MainActor
     private func tearDownStream() async {
         guard let stream else { return }
@@ -347,12 +377,19 @@ private final class LiveScreenCaptureAdapter: NSObject,
         let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(
             Self.videoOrientation(for: sampleBuffer)
         )
-        guard let cgImage = imageContext.createCGImage(image, from: image.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.92)
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let data = imageContext.jpegRepresentation(
+                  of: image,
+                  colorSpace: colorSpace,
+                  options: [
+                      kCGImageDestinationLossyCompressionQuality
+                          as CIImageRepresentationOption: 0.92,
+                  ]
+              )
         else { return }
 
-        let width = cgImage.width
-        let height = cgImage.height
+        let width = Int(image.extent.width.rounded())
+        let height = Int(image.extent.height.rounded())
         Self.logger.debug("Accepted authorized frame \(width)x\(height)")
 
         Task { @MainActor [weak manager] in

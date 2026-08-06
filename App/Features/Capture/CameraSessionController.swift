@@ -346,8 +346,15 @@ extension CameraSessionDriver: AVCaptureVideoDataOutputSampleBufferDelegate {
         // bounded 384 px tensor and the frame cadence remains thermally throttled.
         let scale = min(1, 1_280 / max(1, longestSide))
         let preview = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        guard let cgImage = imageContext.createCGImage(preview, from: preview.extent),
-              let data = UIImage(cgImage: cgImage).jpegData(compressionQuality: 0.78)
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let data = imageContext.jpegRepresentation(
+                  of: preview,
+                  colorSpace: colorSpace,
+                  options: [
+                      kCGImageDestinationLossyCompressionQuality
+                          as CIImageRepresentationOption: 0.78,
+                  ]
+              )
         else { return }
         previewFrameHandler?(data, CGFloat(width) / CGFloat(max(1, height)))
     }

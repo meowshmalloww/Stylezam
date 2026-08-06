@@ -216,3 +216,155 @@ enum LiveScreenPerceptualHash {
         return fingerprint
     }
 }
+
+/// A low-resolution signature of the whole authorized display. It is intentionally much cheaper
+/// than Core ML and lets the app wait for scrolling/video motion to settle, then stop repeating ML
+/// work while the same captured or known-empty page remains visible.
+struct LiveScreenContentFingerprint: Sendable, Equatable {
+    private let values: [UInt64]
+
+    static func make(imageData: Data) -> LiveScreenContentFingerprint? {
+        guard let source = CGImageSourceCreateWithData(imageData as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(
+                  source,
+                  0,
+                  [
+                      kCGImageSourceCreateThumbnailFromImageAlways: true,
+                      kCGImageSourceCreateThumbnailWithTransform: true,
+                      kCGImageSourceThumbnailMaxPixelSize: 480,
+                      kCGImageSourceShouldCacheImmediately: true,
+                  ] as CFDictionary
+              )
+        else { return nil }
+
+        let width = Double(image.width)
+        let height = Double(image.height)
+        // System status indicators and app/browser toolbars can animate while the actual product
+        // view is motionless. Exclude only those outer chrome bands so they cannot keep resetting
+        // the settle gate; the central 80%+ of the authorized screen remains represented.
+        let content: CGRect
+        if height >= width {
+            content = CGRect(
+                x: width * 0.02,
+                y: height * 0.065,
+                width: width * 0.96,
+                height: height * 0.82
+            )
+        } else {
+            content = CGRect(
+                x: width * 0.06,
+                y: height * 0.04,
+                width: width * 0.88,
+                height: height * 0.90
+            )
+        }
+        var regions = [content]
+        if height >= width {
+            regions.append(contentsOf: (0..<3).map { index in
+                CGRect(
+                    x: content.minX,
+                    y: content.minY + content.height * Double(index) / 3,
+                    width: content.width,
+                    height: content.height / 3
+                )
+            })
+        } else {
+            regions.append(contentsOf: (0..<3).map { index in
+                CGRect(
+                    x: content.minX + content.width * Double(index) / 3,
+                    y: content.minY,
+                    width: content.width / 3,
+                    height: content.height
+                )
+            })
+        }
+        let values = regions.compactMap { region -> UInt64? in
+            guard let cropped = image.cropping(to: region.integral) else { return nil }
+            return differenceHash(image: cropped)
+        }
+        guard values.count == regions.count else { return nil }
+        return LiveScreenContentFingerprint(values: values)
+    }
+
+    func isVisuallySimilar(to other: LiveScreenContentFingerprint) -> Bool {
+        guard !values.isEmpty, values.count == other.values.count else { return false }
+        let fullDistance = (values[0] ^ other.values[0]).nonzeroBitCount
+        let distances = zip(values.dropFirst(), other.values.dropFirst()).map {
+            ($0 ^ $1).nonzeroBitCount
+        }
+        return fullDistance <= 7
+            && distances.allSatisfy { $0 <= 11 }
+            && distances.reduce(0, +) <= 24
+    }
+
+    private static func differenceHash(image: CGImage) -> UInt64? {
+        let width = 9
+        let height = 8
+        var pixels = [UInt8](repeating: 255, count: width * height)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        var fingerprint: UInt64 = 0
+        var bit = 0
+        for y in 0..<height {
+            for x in 0..<(width - 1) {
+                if pixels[y * width + x] > pixels[y * width + x + 1] {
+                    fingerprint |= UInt64(1) << UInt64(bit)
+                }
+                bit += 1
+            }
+        }
+        return fingerprint
+    }
+}
+
+/// Backs off repeated Live-camera inference only after the same view has produced two empty
+/// results. A visual change or any garment candidate returns to the normal fast cadence.
+struct LiveContentInferenceGate: Sendable {
+    private var lastFingerprint: LiveScreenContentFingerprint?
+    private var consecutiveEmptyResults = 0
+    private var lastEmptyAnalysisAt = Date.distantPast
+    private let emptyRetryInterval: TimeInterval = 2.4
+
+    mutating func shouldAnalyze(
+        fingerprint: LiveScreenContentFingerprint,
+        now: Date = .now
+    ) -> Bool {
+        let contentChanged = lastFingerprint.map {
+            !fingerprint.isVisuallySimilar(to: $0)
+        } ?? true
+        lastFingerprint = fingerprint
+        if contentChanged {
+            consecutiveEmptyResults = 0
+            return true
+        }
+        return consecutiveEmptyResults < 2
+            || now.timeIntervalSince(lastEmptyAnalysisAt) >= emptyRetryInterval
+    }
+
+    mutating func recordResult(hasCandidates: Bool, now: Date = .now) {
+        if hasCandidates {
+            consecutiveEmptyResults = 0
+        } else {
+            consecutiveEmptyResults += 1
+            lastEmptyAnalysisAt = now
+        }
+    }
+
+    mutating func reset() {
+        lastFingerprint = nil
+        consecutiveEmptyResults = 0
+        lastEmptyAnalysisAt = .distantPast
+    }
+}

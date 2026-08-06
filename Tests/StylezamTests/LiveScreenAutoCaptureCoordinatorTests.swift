@@ -94,6 +94,124 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         XCTAssertEqual(first, second)
     }
 
+    func testContentFingerprintSkipsAnUnchangedScreen() throws {
+        let imageData = try XCTUnwrap(splitImageData(leftIsDark: true))
+        let first = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(imageData: imageData)
+        )
+        let second = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(imageData: imageData)
+        )
+
+        XCTAssertTrue(first.isVisuallySimilar(to: second))
+    }
+
+    func testContentFingerprintResumesForAChangedScreen() throws {
+        let first = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: true))
+            )
+        )
+        let changed = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: false))
+            )
+        )
+
+        XCTAssertFalse(first.isVisuallySimilar(to: changed))
+    }
+
+    func testContentFingerprintIgnoresAnimatedOuterScreenChrome() throws {
+        let first = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(
+                    portraitScreenData(contentIsDark: true, chromeIsDark: false)
+                )
+            )
+        )
+        let changedChrome = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(
+                    portraitScreenData(contentIsDark: true, chromeIsDark: true)
+                )
+            )
+        )
+        let changedContent = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(
+                    portraitScreenData(contentIsDark: false, chromeIsDark: true)
+                )
+            )
+        )
+
+        XCTAssertTrue(first.isVisuallySimilar(to: changedChrome))
+        XCTAssertFalse(first.isVisuallySimilar(to: changedContent))
+    }
+
+    func testEmptyLiveViewBacksOffAndRetriesPeriodically() throws {
+        var gate = LiveContentInferenceGate()
+        let fingerprint = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: true))
+            )
+        )
+        let start = Date(timeIntervalSince1970: 8_000)
+
+        XCTAssertTrue(gate.shouldAnalyze(fingerprint: fingerprint, now: start))
+        gate.recordResult(hasCandidates: false, now: start)
+        XCTAssertTrue(
+            gate.shouldAnalyze(fingerprint: fingerprint, now: start.addingTimeInterval(0.82))
+        )
+        gate.recordResult(hasCandidates: false, now: start.addingTimeInterval(0.82))
+        XCTAssertFalse(
+            gate.shouldAnalyze(fingerprint: fingerprint, now: start.addingTimeInterval(1.64))
+        )
+        XCTAssertTrue(
+            gate.shouldAnalyze(fingerprint: fingerprint, now: start.addingTimeInterval(3.3))
+        )
+    }
+
+    func testChangedLiveViewImmediatelyWakesAnEmptyBackoff() throws {
+        var gate = LiveContentInferenceGate()
+        let first = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: true))
+            )
+        )
+        let changed = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: false))
+            )
+        )
+        let start = Date(timeIntervalSince1970: 9_000)
+
+        XCTAssertTrue(gate.shouldAnalyze(fingerprint: first, now: start))
+        gate.recordResult(hasCandidates: false, now: start)
+        XCTAssertTrue(gate.shouldAnalyze(fingerprint: first, now: start.addingTimeInterval(0.82)))
+        gate.recordResult(hasCandidates: false, now: start.addingTimeInterval(0.82))
+        XCTAssertTrue(gate.shouldAnalyze(fingerprint: changed, now: start.addingTimeInterval(1)))
+    }
+
+    func testLiveGarmentConfirmationKeepsTheFastCadence() throws {
+        var gate = LiveContentInferenceGate()
+        let fingerprint = try XCTUnwrap(
+            LiveScreenContentFingerprint.make(
+                imageData: try XCTUnwrap(splitImageData(leftIsDark: true))
+            )
+        )
+        let start = Date(timeIntervalSince1970: 10_000)
+
+        XCTAssertTrue(gate.shouldAnalyze(fingerprint: fingerprint, now: start))
+        gate.recordResult(hasCandidates: true, now: start)
+        XCTAssertTrue(
+            gate.shouldAnalyze(fingerprint: fingerprint, now: start.addingTimeInterval(0.82))
+        )
+        gate.recordResult(hasCandidates: true, now: start.addingTimeInterval(0.82))
+        XCTAssertTrue(
+            gate.shouldAnalyze(fingerprint: fingerprint, now: start.addingTimeInterval(1.64))
+        )
+    }
+
     @MainActor
     func testTallScreenFrameProducesAHighResolutionGarmentCrop() async throws {
         let fixtureURL = try XCTUnwrap(
@@ -207,6 +325,25 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
                     height: size.height
                 )
             )
+        }
+        return image.jpegData(compressionQuality: 0.9)
+    }
+
+    private func portraitScreenData(
+        contentIsDark: Bool,
+        chromeIsDark: Bool
+    ) -> Data? {
+        let size = CGSize(width: 240, height: 520)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            (chromeIsDark ? UIColor.black : UIColor.white).setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            (contentIsDark ? UIColor.black : UIColor.white).setFill()
+            context.fill(CGRect(x: 4, y: 33, width: 232, height: 428))
+            (contentIsDark ? UIColor.white : UIColor.black).setFill()
+            context.fill(CGRect(x: 70, y: 135, width: 100, height: 235))
         }
         return image.jpegData(compressionQuality: 0.9)
     }

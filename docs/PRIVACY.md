@@ -37,7 +37,7 @@ The capture and garment-detection pipeline has no remote inference call. The sep
 - Protected content can appear blank; Stylezam does not bypass platform protection.
 - iOS owns screen-capture indicators and privacy UI.
 
-The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure; only a stable automatic capture or manual shutter result is persisted with its crops.
+The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure. Camera inference backs off on an unchanged empty view and stops repeating after an unchanged view is saved; it resumes immediately when the view changes. Live Screen uses low-resolution hashes while content is moving and while a captured or known-empty page remains unchanged; those hashes stay on device and are never persisted. Only a stable automatic capture or manual shutter result is persisted with its crops.
 
 ## Network boundary
 

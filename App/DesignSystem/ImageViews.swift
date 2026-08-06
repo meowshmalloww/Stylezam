@@ -1,6 +1,7 @@
 import ImageIO
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 private actor StylezamImagePipeline {
     static let shared = StylezamImagePipeline()
@@ -185,8 +186,33 @@ private var imagePlaceholder: some View {
 
 enum ImageEncoding {
     static func normalizedJPEG(from data: Data) -> Data? {
-        guard let image = UIImage(data: data) else { return nil }
-        return normalizedJPEG(from: image)
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+                  as? [CFString: Any]
+        else { return nil }
+        let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue ?? 0
+        let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue ?? 0
+        let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+        if CGImageSourceGetType(source) as String? == UTType.jpeg.identifier,
+           max(width, height) <= 5_120,
+           orientation == 1
+        {
+            // AVCapturePhoto commonly already returns an upright, high-quality JPEG. Avoiding a
+            // full decode/render/re-encode saves latency, memory bandwidth, and heat while also
+            // preserving the camera's original detail.
+            return data
+        }
+        guard let image = CGImageSourceCreateThumbnailAtIndex(
+            source,
+            0,
+            [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceCreateThumbnailWithTransform: true,
+                kCGImageSourceThumbnailMaxPixelSize: 5_120,
+                kCGImageSourceShouldCacheImmediately: true,
+            ] as CFDictionary
+        ) else { return nil }
+        return encodeJPEG(image)
     }
 
     static func normalizedJPEGAsync(from data: Data) async -> Data? {
@@ -210,5 +236,25 @@ enum ImageEncoding {
             image.draw(in: CGRect(origin: .zero, size: target))
         }
         return rendered.jpegData(compressionQuality: 0.92)
+    }
+
+    private static func encodeJPEG(_ image: CGImage) -> Data? {
+        let output = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            output,
+            UTType.jpeg.identifier as CFString,
+            1,
+            nil
+        ) else { return nil }
+        CGImageDestinationAddImage(
+            destination,
+            image,
+            [
+                kCGImageDestinationLossyCompressionQuality: 0.92,
+                kCGImagePropertyOrientation: 1,
+            ] as CFDictionary
+        )
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return output as Data
     }
 }

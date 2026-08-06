@@ -20,6 +20,9 @@ struct CaptureSheet: View {
     @State private var lastAutomaticCapture = Date.distantPast
     @State private var confirmationText: String?
     @State private var captureTask: Task<Void, Never>?
+    @State private var currentLiveContentFingerprint: LiveScreenContentFingerprint?
+    @State private var suppressedLiveContentFingerprint: LiveScreenContentFingerprint?
+    @State private var liveInferenceGate = LiveContentInferenceGate()
 
     var body: some View {
         ZStack {
@@ -73,6 +76,9 @@ struct CaptureSheet: View {
             stableFrameCount = 0
             bestFrameData = nil
             bestFrameScore = 0
+            currentLiveContentFingerprint = nil
+            suppressedLiveContentFingerprint = nil
+            liveInferenceGate.reset()
             livePreviewStabilizer.reset()
             updateLiveFrames()
         }
@@ -425,6 +431,7 @@ struct CaptureSheet: View {
             )
             guard let scan else {
                 if model.captureStatus == "Already in Library" {
+                    suppressedLiveContentFingerprint = currentLiveContentFingerprint
                     withAnimation(StylezamMotion.quickSpring) {
                         confirmationText = "Already in Library"
                     }
@@ -436,6 +443,7 @@ struct CaptureSheet: View {
                 return
             }
             let count = scan.items.count
+            suppressedLiveContentFingerprint = currentLiveContentFingerprint
             withAnimation(StylezamMotion.quickSpring) {
                 let prefix = automatic ? "Auto-saved" : "Saved"
                 confirmationText = count == 1
@@ -468,9 +476,37 @@ struct CaptureSheet: View {
         frameAspectRatio = aspectRatio
         previewTask = Task {
             defer { isAnalyzingPreview = false }
+            let contentFingerprint = await Task.detached(priority: .utility) {
+                LiveScreenContentFingerprint.make(imageData: data)
+            }.value
+            guard !Task.isCancelled else { return }
+            currentLiveContentFingerprint = contentFingerprint
+            if let contentFingerprint,
+               let suppressed = suppressedLiveContentFingerprint,
+               contentFingerprint.isVisuallySimilar(to: suppressed)
+            {
+                // The accepted still is already saved. Keep the camera fluid without repeatedly
+                // running Core ML or another full duplicate capture on an unchanged view.
+                return
+            }
+            if suppressedLiveContentFingerprint != nil {
+                suppressedLiveContentFingerprint = nil
+                stableFrameCount = 0
+                stableSignature = ""
+                bestFrameData = nil
+                bestFrameScore = 0
+                livePreviewStabilizer.reset()
+                liveInferenceGate.reset()
+            }
+            if let contentFingerprint,
+               !liveInferenceGate.shouldAnalyze(fingerprint: contentFingerprint)
+            {
+                return
+            }
             let preview = await model.previewGarments(in: data)
             guard !Task.isCancelled else { return }
             guard let preview else { return }
+            liveInferenceGate.recordResult(hasCandidates: !preview.candidates.isEmpty)
             provisionalCandidates = preview.candidates
             let stabilizedCandidates = livePreviewStabilizer.update(
                 with: preview.candidates

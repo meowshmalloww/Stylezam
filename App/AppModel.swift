@@ -47,8 +47,11 @@ final class AppModel {
     @ObservationIgnored private var liveScreenAutomaticTask: Task<Void, Never>?
     @ObservationIgnored private var liveScreenAutoCapture = LiveScreenAutoCaptureCoordinator()
     @ObservationIgnored private var liveScreenPreviewFocus: BoundingBoxDTO?
-    @ObservationIgnored private var liveScreenEmptyPreviewCount = 0
-    @ObservationIgnored private var liveScreenNextFocusIndex = 0
+    @ObservationIgnored private var liveScreenLastContentFingerprint: LiveScreenContentFingerprint?
+    @ObservationIgnored private var liveScreenSuppressedContentFingerprint: LiveScreenContentFingerprint?
+    @ObservationIgnored private var liveScreenSuppressionStatus: String?
+    @ObservationIgnored private var liveScreenStableContentFrames = 0
+    @ObservationIgnored private var liveScreenEmptyAdaptiveAttempts = 0
 
     init(
         settings: SettingsStore = SettingsStore(),
@@ -330,16 +333,22 @@ final class AppModel {
     private func handleAutomaticLiveScreenFrame(_ frame: LiveScreenFrame) {
         guard liveScreen.isCapturing else {
             liveScreenAutoCapture.reset()
+            resetLiveScreenAnalysisState()
             return
         }
         guard settings.liveScreenAutoCaptureEnabled else {
             liveScreenAutoCapture.reset()
+            clearLiveScreenAnalysisState()
+            liveScreen.setAutomaticAnalysisIdle(true)
             liveScreen.setAutomaticAnalysisStatus(
                 "Streaming is active. Automatic Live Screen saving is turned off."
             )
             return
         }
         guard modelPack.isInstalled else {
+            liveScreenAutoCapture.reset()
+            clearLiveScreenAnalysisState()
+            liveScreen.setAutomaticAnalysisIdle(true)
             liveScreen.setAutomaticAnalysisStatus(
                 "The on-device garment model is not installed."
             )
@@ -351,12 +360,59 @@ final class AppModel {
             guard let self else { return }
             defer { self.liveScreenAutomaticTask = nil }
 
+            let contentFingerprint = await Task.detached(priority: .utility) {
+                LiveScreenContentFingerprint.make(imageData: frame.data)
+            }.value
+            guard let contentFingerprint, !Task.isCancelled else { return }
+
+            if let suppressed = self.liveScreenSuppressedContentFingerprint,
+               contentFingerprint.isVisuallySimilar(to: suppressed)
+            {
+                self.liveScreen.setAutomaticAnalysisIdle(true)
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    self.liveScreenSuppressionStatus
+                        ?? "This screen is already handled. Watching for a change."
+                )
+                return
+            }
+
+            let contentIsStable = self.liveScreenLastContentFingerprint.map {
+                contentFingerprint.isVisuallySimilar(to: $0)
+            } ?? false
+            self.liveScreenLastContentFingerprint = contentFingerprint
+            if contentIsStable {
+                self.liveScreenStableContentFrames += 1
+            } else {
+                self.liveScreenStableContentFrames = 1
+                self.liveScreenEmptyAdaptiveAttempts = 0
+                self.liveScreenPreviewFocus = nil
+                self.liveScreenAutoCapture.reset()
+                self.liveScreenSuppressedContentFingerprint = nil
+                self.liveScreenSuppressionStatus = nil
+                self.liveScreen.setAutomaticAnalysisIdle(false)
+            }
+
+            // Hashing a 480 px thumbnail is far cheaper than Core ML. Do not spend inference
+            // cycles while the user is scrolling or a video frame is still changing.
+            guard self.liveScreenStableContentFrames >= 2 else {
+                self.liveScreen.setAutomaticAnalysisStatus(
+                    "Waiting for the fashion view to pause."
+                )
+                return
+            }
+
             self.liveScreen.setAutomaticAnalysisStatus(
                 "Scanning the authorized screen on this iPhone."
             )
-            guard let preview = await self.previewLiveScreenGarments(
-                in: frame.data
-            ),
+            let preview: LiveGarmentPreview?
+            if let focus = self.liveScreenPreviewFocus {
+                // Once discovery identifies a likely piece, confirmation needs only one focused
+                // tensor per sampled frame instead of repeating every screen detail tile.
+                preview = await self.previewGarments(in: frame.data, focusFrame: focus)
+            } else {
+                preview = await self.previewLiveScreenGarments(in: frame.data)
+            }
+            guard let preview,
                   !Task.isCancelled,
                   self.liveScreen.isCapturing
             else { return }
@@ -365,10 +421,39 @@ final class AppModel {
                 Self.liveScreenAnchorScore(left) < Self.liveScreenAnchorScore(right)
             }) else {
                 self.liveScreenAutoCapture.reset()
-                self.liveScreen.setAutomaticAnalysisStatus(
-                    "Watching for a stable fashion item."
-                )
+                if self.liveScreenPreviewFocus != nil {
+                    // A focused confirmation can lose the item after a small layout shift. One
+                    // subsequent adaptive discovery is more reliable than retrying a stale ROI.
+                    self.liveScreenPreviewFocus = nil
+                    self.liveScreenEmptyAdaptiveAttempts = 0
+                    self.liveScreen.setAutomaticAnalysisStatus(
+                        "The item moved. Rechecking the full screen."
+                    )
+                } else {
+                    self.liveScreenEmptyAdaptiveAttempts += 1
+                    if self.liveScreenEmptyAdaptiveAttempts >= 2 {
+                        self.liveScreenSuppressedContentFingerprint = contentFingerprint
+                        self.liveScreenSuppressionStatus =
+                            "No fashion item found on this unchanged screen. Watching for a change."
+                        self.liveScreen.setAutomaticAnalysisIdle(true)
+                        self.liveScreen.setAutomaticAnalysisStatus(
+                            self.liveScreenSuppressionStatus
+                        )
+                    } else {
+                        self.liveScreen.setAutomaticAnalysisStatus(
+                            "Checking the stable screen once more."
+                        )
+                    }
+                }
                 return
+            }
+            self.liveScreenEmptyAdaptiveAttempts = 0
+            if self.liveScreenPreviewFocus == nil {
+                self.liveScreenPreviewFocus = Self.liveScreenConfirmationFocus(
+                    around: anchor.box,
+                    pixelWidth: frame.pixelWidth,
+                    pixelHeight: frame.pixelHeight
+                )
             }
 
             let fingerprint = await Task.detached(priority: .utility) {
@@ -417,17 +502,24 @@ final class AppModel {
             )
 
             if let scan {
-                self.resetLiveScreenPreviewFocus()
+                self.liveScreenSuppressedContentFingerprint = contentFingerprint
+                self.liveScreenSuppressionStatus =
+                    "This screen is saved. Watching for a visual change."
+                self.liveScreen.setAutomaticAnalysisIdle(true)
                 self.liveScreen.recordAutomaticallySavedPieces(scan.items.count)
                 self.liveScreenLogger.notice(
                     "Automatically saved \(scan.items.count) live-screen pieces"
                 )
             } else if duplicateWasSuppressed {
-                self.resetLiveScreenPreviewFocus()
+                self.liveScreenSuppressedContentFingerprint = contentFingerprint
+                self.liveScreenSuppressionStatus =
+                    "This piece is already in Library. Watching for a visual change."
+                self.liveScreen.setAutomaticAnalysisIdle(true)
                 self.liveScreen.setAutomaticAnalysisStatus(
-                    "This piece is already in Library. Watching for another item."
+                    self.liveScreenSuppressionStatus
                 )
             } else {
+                self.liveScreenPreviewFocus = nil
                 self.liveScreen.setAutomaticAnalysisStatus(
                     "The final frame was not clear enough. Watching for a better view."
                 )
@@ -442,56 +534,44 @@ final class AppModel {
         return candidate.confidence * Foundation.sqrt(area)
     }
 
-    private func resetLiveScreenPreviewFocus() {
+    private func clearLiveScreenAnalysisState() {
         liveScreenPreviewFocus = nil
-        liveScreenEmptyPreviewCount = 0
-        liveScreenNextFocusIndex = 0
+        liveScreenLastContentFingerprint = nil
+        liveScreenSuppressedContentFingerprint = nil
+        liveScreenSuppressionStatus = nil
+        liveScreenStableContentFrames = 0
+        liveScreenEmptyAdaptiveAttempts = 0
     }
 
-    /// When a garment is too small for a full portrait-screen tensor, scan one overlapping
-    /// near-square region per sampled frame. This keeps inference at one pass per frame while
-    /// avoiding the severe loss of detail that a tall display can cause for small accessories.
-    private func advanceLiveScreenPreviewFocus(
+    private func resetLiveScreenAnalysisState() {
+        clearLiveScreenAnalysisState()
+        liveScreen.setAutomaticAnalysisIdle(false)
+    }
+
+    private nonisolated static func liveScreenConfirmationFocus(
+        around box: BoundingBoxDTO,
         pixelWidth: Int,
         pixelHeight: Int
-    ) {
-        liveScreenEmptyPreviewCount += 1
-        guard liveScreenEmptyPreviewCount >= 2 else { return }
-        let frames = Self.liveScreenDetailFocusFrames(
-            pixelWidth: pixelWidth,
-            pixelHeight: pixelHeight
+    ) -> BoundingBoxDTO {
+        let imageWidth = Double(max(1, pixelWidth))
+        let imageHeight = Double(max(1, pixelHeight))
+        let boxWidth = box.width * imageWidth
+        let boxHeight = box.height * imageHeight
+        let shortestSide = min(imageWidth, imageHeight)
+        let side = min(
+            shortestSide,
+            max(shortestSide * 0.46, max(boxWidth, boxHeight) * 1.34)
         )
-        guard !frames.isEmpty else {
-            resetLiveScreenPreviewFocus()
-            return
-        }
-        liveScreenPreviewFocus = frames[liveScreenNextFocusIndex % frames.count]
-        liveScreenNextFocusIndex = (liveScreenNextFocusIndex + 1) % frames.count
-        liveScreenEmptyPreviewCount = 0
-    }
-
-    private nonisolated static func liveScreenDetailFocusFrames(
-        pixelWidth: Int,
-        pixelHeight: Int
-    ) -> [BoundingBoxDTO] {
-        let width = Double(max(1, pixelWidth))
-        let height = Double(max(1, pixelHeight))
-        let aspect = width / height
-        if aspect < 0.82 {
-            let frameHeight = min(0.68, max(0.48, aspect * 1.16))
-            let travel = 1 - frameHeight
-            return [0, travel / 2, travel].map {
-                BoundingBoxDTO(x: 0, y: $0, width: 1, height: frameHeight)
-            }
-        }
-        if aspect > 1.22 {
-            let frameWidth = min(0.68, max(0.48, (1 / aspect) * 1.16))
-            let travel = 1 - frameWidth
-            return [0, travel / 2, travel].map {
-                BoundingBoxDTO(x: $0, y: 0, width: frameWidth, height: 1)
-            }
-        }
-        return [BoundingBoxDTO(x: 0.08, y: 0.08, width: 0.84, height: 0.84)]
+        let frameWidth = min(1, side / imageWidth)
+        let frameHeight = min(1, side / imageHeight)
+        let centerX = box.x + box.width / 2
+        let centerY = box.y + box.height / 2
+        return BoundingBoxDTO(
+            x: min(1 - frameWidth, max(0, centerX - frameWidth / 2)),
+            y: min(1 - frameHeight, max(0, centerY - frameHeight / 2)),
+            width: frameWidth,
+            height: frameHeight
+        )
     }
 
     /// Runs the same detector and segmented-crop path used by a saved capture,
@@ -960,7 +1040,7 @@ final class AppModel {
         liveScreenAutomaticTask?.cancel()
         liveScreenAutomaticTask = nil
         liveScreenAutoCapture.reset()
-        resetLiveScreenPreviewFocus()
+        resetLiveScreenAnalysisState()
         liveScreenNotice = nil
         isLiveScreenPickerPending = true
         activatePendingLiveScreenPicker()

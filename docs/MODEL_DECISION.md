@@ -50,7 +50,7 @@ Fashionpedia supplies useful clothing, footwear, bag, watch, and accessory item 
 - Processing scheduler: 9-second internal still-photo budget with crop reserve.
 - Power and heat protection: no detail tiles in Low Power Mode; reduced tiling
   at fair thermal pressure; no tiling at serious or critical pressure.
-- Live camera preview stays single-pass. Live Screen is sampled more slowly and uses crop-free detail tiles so tall pages do not erase small products; Low Power Mode disables those tiles, fair thermal state slows cadence, and serious/critical pressure pauses automatic inference.
+- Live camera preview stays single-pass, backs an unchanged empty scene off to a 2.4-second retry cadence, and suppresses repeated inference after an unchanged view is saved. Motion or a detected candidate restores fast confirmation immediately. Live Screen uses a low-resolution motion/content gate, one crop-free global-plus-detail discovery after the page settles, and single-pass focused confirmations. Captured and known-empty pages fall to a four-second nominal watch cadence with no Core ML until their content changes. Low Power Mode disables detail tiles, fair thermal state slows cadence, and serious/critical pressure pauses automatic inference.
 - Class confidence threshold: 0.35.
 - Same-class duplicate suppression: IoU above 0.74.
 - Preview mode: boxes/classes only; no crop or mask-byte materialization.

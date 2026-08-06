@@ -19,12 +19,14 @@ The repository already contains a conditional `LiveScreenCaptureManager`:
 1. `SCContentSharingPicker.shared` presents Apple’s picker.
 2. The picker observer supplies an `SCContentFilter` after consent.
 3. An `SCStream` receives screen output on a serial queue.
-4. Complete frames are rotation-corrected, encoded at device resolution, thermally throttled, and held in a short rolling in-memory buffer.
-5. A crop-free, global-plus-detail detector evaluates throttled frames so items near the top, middle, or bottom of a tall page remain visible; three matching garment observations are required before automatic capture.
-6. Perceptual deduplication prevents a stationary product page from repeatedly running the final detector or creating Library duplicates.
-7. `AppModel` sends the accepted full-resolution frame through the same bounded detail-tile, crop, Library, Live Activity, and notification pipeline as a camera still.
-8. The Capture a Look `OpenIntent` remains an immediate manual shutter for the authorized stream.
-9. Stopping or losing the stream clears frame state and surfaces an honest status.
+4. Complete frames are rotation-corrected, encoded directly from their Core Image buffers at device resolution, thermally throttled, and held in a short rolling in-memory buffer.
+5. A cheap four-region, 480 px fingerprint waits for scrolling or video motion to settle before Core ML runs.
+6. One crop-free global-plus-detail discovery keeps items near the top, middle, or bottom of a tall page visible. Later confirmation frames run one focused model tensor around the strongest item; three matching garment observations are required before automatic capture.
+7. Captured, duplicate, and twice-verified empty screens enter a four-second nominal watch cadence and run no further Core ML until the screen fingerprint changes.
+8. Garment-region perceptual deduplication remains a second guard against Library duplicates.
+9. `AppModel` sends the accepted full-resolution frame through the same bounded detail-tile, crop, Library, Live Activity, and notification pipeline as a camera still.
+10. The Capture a Look `OpenIntent` remains an immediate manual shutter for the authorized stream.
+11. Stopping or losing the stream clears frame state and surfaces an honest status.
 
 Live camera and Live Screen have separate automatic-capture preferences. Both default on; disabling the camera auto-shutter does not disable background screen detection.
 
@@ -53,7 +55,7 @@ Do not copy the entire sample project into Stylezam. Compare the sample’s curr
 - Xcode 27 beta 4 and its iOS 27 device SDK compile the ScreenCaptureKit adapter.
 - The signed app and widget extension build and install on the connected iOS 27 iPhone.
 - The installed physical-device build presents Apple's real Screen Sharing picker with Stylezam selected and the **Share Entire Screen** consent action.
-- Automatic capture coordination is covered by deterministic tests for three-frame stabilization, low-quality interruption, stationary duplicate suppression, new-garment acceptance, and perceptual hash stability.
+- Automatic capture coordination is covered by deterministic tests for three-frame stabilization, low-quality interruption, stationary duplicate suppression, new-garment acceptance, garment-hash stability, unchanged-screen suppression, and changed-screen resumption.
 - A tall-screen integration test places a product near the top of a 1290×2796 frame and verifies detail-aware preview detection plus a crop larger than the model's 384×384 tensor.
 - An automated iOS 27 simulator test opens the real Control Center, installs the Stylezam Live Screen control, taps it, and verifies that Stylezam reaches the foreground.
 - The same simulator cannot verify Apple's sharing picker because its SDK omits ScreenCaptureKit. The physical-device UI-test runner requires its own provisioning profile; without that profile, stream authorization remains a manual device step because Apple requires explicit user consent.

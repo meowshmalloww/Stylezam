@@ -126,6 +126,15 @@ so alpha statistics alone are not a mask-quality test. The second photo also
 demonstrates a real limitation: a low-confidence 0.3720 duplicate belt survives
 the current same-class suppression rule.
 
+A second physical-device session profiled the staged Live Screen watcher. Once
+an unchanged screen had been handled, a 21.14-second Time Profiler trace recorded
+only two 1 ms running samples for Stylezam and the device remained at the
+`Nominal` thermal state. Changing the visible fashion content woke the detector:
+a separate 19.13-second trace contained the expected `modelInput`,
+`coreMLDetections`, and `analyze` stacks, saved real garment crops, and also
+remained thermally `Nominal`. This validates both sides of the scheduler: idle
+screens stop repeating Core ML work, while meaningful content changes resume it.
+
 ## Accepted-image resolution and adaptive latency
 
 The RF-DETR model itself has a fixed 384×384 tensor. Stylezam does not pretend
@@ -135,9 +144,14 @@ Each tile is independently reduced to 384×384, then its boxes are projected int
 the accepted source coordinate system and merged across scales. This raises the
 effective long-edge detector detail to about 686 px at 1080p and 1029 px at
 4K–5K. Library crops are encoded from the retained source pixels as 94%-quality
-JPEGs. Live camera preview remains single-pass. Live Screen uses a slower,
-crop-free global-plus-detail preview because phone pages are much taller than
-the model tensor. After either live path reaches temporal consensus, the
+JPEGs. Live camera preview remains single-pass, backs off after two unchanged
+empty results, and stops repeating inference for an unchanged view after a
+successful save. Motion or a candidate restores the fast cadence. Live Screen first waits for a
+480 px content signature to stabilize, runs one crop-free global-plus-detail
+discovery because phone pages are much taller than the model tensor, then uses
+one focused tensor for each confirmation. Captured and verified-empty screens
+run no additional Core ML until their content signature changes. After either
+live path reaches temporal consensus, the
 accepted full-quality camera still or device-resolution screen frame uses the
 same bounded, thermal-aware detail plan as Photo mode.
 
