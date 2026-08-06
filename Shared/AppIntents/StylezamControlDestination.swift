@@ -27,6 +27,12 @@ struct OpenStylezamIntent: OpenIntent, TargetContentProvidingIntent {
     @Parameter(title: "Destination")
     var target: StylezamControlDestination
 
+    /// Give iOS 26+ scene routing a stable value instead of asking the
+    /// framework to synthesize one while the Control Center extension renders.
+    var contentIdentifier: String {
+        "stylezam.control.\(target.rawValue)"
+    }
+
     init() {
         target = .capture
     }

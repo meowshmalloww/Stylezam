@@ -6,28 +6,34 @@ import Observation
 final class SettingsStore {
     static let googleVisionHardMonthlyLimit = 1_000
 
+    private let defaults: UserDefaults
+
     var notificationsEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(notificationsEnabled, forKey: Keys.notificationsEnabled)
+            defaults.set(notificationsEnabled, forKey: Keys.notificationsEnabled)
         }
     }
 
     var maxDetectedItems: Int {
         didSet {
-            maxDetectedItems = min(12, max(1, maxDetectedItems))
-            UserDefaults.standard.set(maxDetectedItems, forKey: Keys.maxDetectedItems)
+            let clamped = min(12, max(1, maxDetectedItems))
+            if maxDetectedItems != clamped {
+                maxDetectedItems = clamped
+                return
+            }
+            defaults.set(maxDetectedItems, forKey: Keys.maxDetectedItems)
         }
     }
 
     var liveAutoCaptureEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(liveAutoCaptureEnabled, forKey: Keys.liveAutoCaptureEnabled)
+            defaults.set(liveAutoCaptureEnabled, forKey: Keys.liveAutoCaptureEnabled)
         }
     }
 
     var liveScreenAutoCaptureEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(
+            defaults.set(
                 liveScreenAutoCaptureEnabled,
                 forKey: Keys.liveScreenAutoCaptureEnabled
             )
@@ -35,18 +41,18 @@ final class SettingsStore {
     }
 
     var productSearchPipeline: ProductSearchPipeline {
-        didSet { UserDefaults.standard.set(productSearchPipeline.rawValue, forKey: Keys.productSearchPipeline) }
+        didSet { defaults.set(productSearchPipeline.rawValue, forKey: Keys.productSearchPipeline) }
     }
 
     var imageSearchProvider: ImageSearchProvider {
-        didSet { UserDefaults.standard.set(imageSearchProvider.rawValue, forKey: Keys.imageSearchProvider) }
+        didSet { defaults.set(imageSearchProvider.rawValue, forKey: Keys.imageSearchProvider) }
     }
 
     var productSearchesPerPiece: Int {
         didSet {
             let clamped = min(5, max(1, productSearchesPerPiece))
             if productSearchesPerPiece != clamped { productSearchesPerPiece = clamped; return }
-            UserDefaults.standard.set(productSearchesPerPiece, forKey: Keys.productSearchesPerPiece)
+            defaults.set(productSearchesPerPiece, forKey: Keys.productSearchesPerPiece)
         }
     }
 
@@ -54,7 +60,7 @@ final class SettingsStore {
         didSet {
             let clamped = min(20, max(1, productResultLimit))
             if productResultLimit != clamped { productResultLimit = clamped; return }
-            UserDefaults.standard.set(productResultLimit, forKey: Keys.productResultLimit)
+            defaults.set(productResultLimit, forKey: Keys.productResultLimit)
         }
     }
 
@@ -78,7 +84,7 @@ final class SettingsStore {
         didSet {
             let clamped = min(Self.googleVisionHardMonthlyLimit, max(1, googleVisionMonthlyLimit))
             if googleVisionMonthlyLimit != clamped { googleVisionMonthlyLimit = clamped; return }
-            UserDefaults.standard.set(googleVisionMonthlyLimit, forKey: Keys.googleVisionMonthlyLimit)
+            defaults.set(googleVisionMonthlyLimit, forKey: Keys.googleVisionMonthlyLimit)
         }
     }
 
@@ -90,73 +96,75 @@ final class SettingsStore {
         didSet {
             let clamped = min(500, max(1, fireworksMonthlyBudgetUSD))
             if fireworksMonthlyBudgetUSD != clamped { fireworksMonthlyBudgetUSD = clamped; return }
-            UserDefaults.standard.set(fireworksMonthlyBudgetUSD, forKey: Keys.fireworksMonthlyBudgetUSD)
+            defaults.set(fireworksMonthlyBudgetUSD, forKey: Keys.fireworksMonthlyBudgetUSD)
         }
     }
 
     var fireworksModelID: String {
-        didSet { UserDefaults.standard.set(fireworksModelID, forKey: Keys.fireworksModelID) }
+        didSet { defaults.set(fireworksModelID, forKey: Keys.fireworksModelID) }
     }
 
     var brightDataZone: String {
-        didSet { UserDefaults.standard.set(brightDataZone, forKey: Keys.brightDataZone) }
+        didSet { defaults.set(brightDataZone, forKey: Keys.brightDataZone) }
     }
 
     var publicImageURL: String {
-        didSet { UserDefaults.standard.set(publicImageURL, forKey: Keys.publicImageURL) }
+        didSet { defaults.set(publicImageURL, forKey: Keys.publicImageURL) }
     }
 
     var searchCountry: String {
-        didSet { UserDefaults.standard.set(searchCountry, forKey: Keys.searchCountry) }
+        didSet { defaults.set(searchCountry, forKey: Keys.searchCountry) }
     }
 
     var searchLanguage: String {
-        didSet { UserDefaults.standard.set(searchLanguage, forKey: Keys.searchLanguage) }
+        didSet { defaults.set(searchLanguage, forKey: Keys.searchLanguage) }
     }
 
-    init() {
-        notificationsEnabled = UserDefaults.standard.bool(forKey: Keys.notificationsEnabled)
-        let storedMax = UserDefaults.standard.integer(forKey: Keys.maxDetectedItems)
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        notificationsEnabled = defaults.bool(forKey: Keys.notificationsEnabled)
+        let storedMax = defaults.integer(forKey: Keys.maxDetectedItems)
         maxDetectedItems = storedMax == 0 ? 5 : min(12, max(1, storedMax))
-        if UserDefaults.standard.object(forKey: Keys.liveAutoCaptureEnabled) == nil {
+        if defaults.object(forKey: Keys.liveAutoCaptureEnabled) == nil {
             liveAutoCaptureEnabled = true
         } else {
-            liveAutoCaptureEnabled = UserDefaults.standard.bool(
+            liveAutoCaptureEnabled = defaults.bool(
                 forKey: Keys.liveAutoCaptureEnabled
             )
         }
-        if UserDefaults.standard.object(forKey: Keys.liveScreenAutoCaptureEnabled) == nil {
+        if defaults.object(forKey: Keys.liveScreenAutoCaptureEnabled) == nil {
             liveScreenAutoCaptureEnabled = true
         } else {
-            liveScreenAutoCaptureEnabled = UserDefaults.standard.bool(
+            liveScreenAutoCaptureEnabled = defaults.bool(
                 forKey: Keys.liveScreenAutoCaptureEnabled
             )
         }
         // Exact product search is visual by default. Fireworks + Serper is
         // reserved for user-initiated AI/refinement searches.
         productSearchPipeline = .directImage
-        imageSearchProvider = UserDefaults.standard.string(forKey: Keys.imageSearchProvider)
+        imageSearchProvider = defaults.string(forKey: Keys.imageSearchProvider)
             .flatMap(ImageSearchProvider.init(rawValue:)) ?? .lykdat
-        productSearchesPerPiece = Self.storedInt(Keys.productSearchesPerPiece, default: 1, range: 1...5)
-        productResultLimit = Self.storedInt(Keys.productResultLimit, default: 6, range: 1...20)
-        searchAPIMonthlyLimit = Self.storedInt(Keys.searchAPIMonthlyLimit, default: 100, range: 1...100_000)
-        serpAPIMonthlyLimit = Self.storedInt(Keys.serpAPIMonthlyLimit, default: 250, range: 1...100_000)
-        brightDataMonthlyLimit = Self.storedInt(Keys.brightDataMonthlyLimit, default: 5_000, range: 1...100_000)
-        lykdatMonthlyLimit = Self.storedInt(Keys.lykdatMonthlyLimit, default: 500, range: 1...100_000)
+        productSearchesPerPiece = Self.storedInt(defaults, key: Keys.productSearchesPerPiece, default: 1, range: 1...5)
+        productResultLimit = Self.storedInt(defaults, key: Keys.productResultLimit, default: 6, range: 1...20)
+        searchAPIMonthlyLimit = Self.storedInt(defaults, key: Keys.searchAPIMonthlyLimit, default: 100, range: 1...100_000)
+        serpAPIMonthlyLimit = Self.storedInt(defaults, key: Keys.serpAPIMonthlyLimit, default: 250, range: 1...100_000)
+        brightDataMonthlyLimit = Self.storedInt(defaults, key: Keys.brightDataMonthlyLimit, default: 5_000, range: 1...100_000)
+        lykdatMonthlyLimit = Self.storedInt(defaults, key: Keys.lykdatMonthlyLimit, default: 500, range: 1...100_000)
         googleVisionMonthlyLimit = Self.storedInt(
-            Keys.googleVisionMonthlyLimit,
+            defaults,
+            key: Keys.googleVisionMonthlyLimit,
             default: Self.googleVisionHardMonthlyLimit,
             range: 1...Self.googleVisionHardMonthlyLimit
         )
-        serperMonthlyLimit = Self.storedInt(Keys.serperMonthlyLimit, default: 2_500, range: 1...100_000)
-        let storedBudget = UserDefaults.standard.double(forKey: Keys.fireworksMonthlyBudgetUSD)
+        serperMonthlyLimit = Self.storedInt(defaults, key: Keys.serperMonthlyLimit, default: 2_500, range: 1...100_000)
+        let storedBudget = defaults.double(forKey: Keys.fireworksMonthlyBudgetUSD)
         fireworksMonthlyBudgetUSD = storedBudget == 0 ? 50 : min(500, max(1, storedBudget))
-        fireworksModelID = UserDefaults.standard.string(forKey: Keys.fireworksModelID)
+        fireworksModelID = defaults.string(forKey: Keys.fireworksModelID)
             ?? "accounts/fireworks/models/qwen3p7-plus"
-        brightDataZone = UserDefaults.standard.string(forKey: Keys.brightDataZone) ?? ""
-        publicImageURL = UserDefaults.standard.string(forKey: Keys.publicImageURL) ?? ""
-        searchCountry = UserDefaults.standard.string(forKey: Keys.searchCountry) ?? "us"
-        searchLanguage = UserDefaults.standard.string(forKey: Keys.searchLanguage) ?? "en"
+        brightDataZone = defaults.string(forKey: Keys.brightDataZone) ?? ""
+        publicImageURL = defaults.string(forKey: Keys.publicImageURL) ?? ""
+        searchCountry = defaults.string(forKey: Keys.searchCountry) ?? "us"
+        searchLanguage = defaults.string(forKey: Keys.searchLanguage) ?? "en"
     }
 
     func monthlyRequestLimits(for pipeline: ProductSearchPipeline) -> [String: Int] {
@@ -180,11 +188,16 @@ final class SettingsStore {
             value = clamped
             return
         }
-        UserDefaults.standard.set(value, forKey: key)
+        defaults.set(value, forKey: key)
     }
 
-    private static func storedInt(_ key: String, default defaultValue: Int, range: ClosedRange<Int>) -> Int {
-        let value = UserDefaults.standard.integer(forKey: key)
+    private static func storedInt(
+        _ defaults: UserDefaults,
+        key: String,
+        default defaultValue: Int,
+        range: ClosedRange<Int>
+    ) -> Int {
+        let value = defaults.integer(forKey: key)
         return min(range.upperBound, max(range.lowerBound, value == 0 ? defaultValue : value))
     }
 

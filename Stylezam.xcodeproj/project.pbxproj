@@ -70,6 +70,8 @@
 		CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */; };
 		CE689F73168B7873FC653C97 /* TryOnWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */; };
 		CFCB3240B946F18BA5BF2AE0 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEE3FA2E562C606ACEABDAB /* ProductSearchService.swift */; };
+		D03988F7D15C1DC5E6DC76DA /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */; };
+		D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */; };
 		D8D2B25724BAD0AD071BE888 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
 		E1CEFAA15C79553A29F31DCE /* FirstRunExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EADD108A8B6C096FF911EF /* FirstRunExperienceView.swift */; };
 		E38666AB4433101A34885641 /* VisionAndProductModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A3492CF917004962F6DACD /* VisionAndProductModels.swift */; };
@@ -180,6 +182,8 @@
 		90A3492CF917004962F6DACD /* VisionAndProductModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionAndProductModels.swift; sourceTree = "<group>"; };
 		9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamApp.swift; sourceTree = "<group>"; };
 		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
+		A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
 		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
 		B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViews.swift; sourceTree = "<group>"; };
@@ -364,6 +368,7 @@
 			children = (
 				66C9076C1CD55CAED48ECEF2 /* Models */,
 				0323FB49E9A47D9209839A59 /* Assets.xcassets */,
+				A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */,
 				A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
@@ -374,6 +379,7 @@
 			children = (
 				1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */,
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
+				A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */,
 				D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */,
 			);
 			path = StylezamTests;
@@ -696,6 +702,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */,
+				D03988F7D15C1DC5E6DC76DA /* GoogleService-Info.plist in Resources */,
 				40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */,
 				40EF33336865700EB2439199 /* StylezamGarmentSegmentation.mlpackage in Resources */,
 				0BB798823EBEA25C4274BB81 /* garment-segmentation.json in Resources */,
@@ -735,6 +742,7 @@
 			files = (
 				396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */,
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
+				D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */,
 				CE689F73168B7873FC653C97 /* TryOnWorkflowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

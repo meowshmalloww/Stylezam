@@ -16,6 +16,7 @@ struct LaunchExperienceView: View {
     @State private var wordmarkReveal = 0.0
     @State private var taglineOpacity = 0.0
     @State private var poweredOpacity = 0.0
+    @State private var exposureOpacity = 0.0
     @State private var exitScale = 1.0
     @State private var exitOpacity = 1.0
 
@@ -37,19 +38,8 @@ struct LaunchExperienceView: View {
                 .frame(width: 232, height: 232)
 
                 VStack(spacing: 8) {
-                    Text("Stylezam")
-                        .font(.system(size: 39, weight: .semibold, design: .default))
-                        .tracking(-1.35)
-                        .foregroundStyle(.white)
+                    CascadingWordmark(reveal: wordmarkReveal)
                         .frame(width: 182, height: 47)
-                        .mask(alignment: .leading) {
-                            GeometryReader { proxy in
-                                Rectangle()
-                                    .frame(width: proxy.size.width * wordmarkReveal)
-                                    .blur(radius: wordmarkReveal < 1 ? 2.5 : 0)
-                            }
-                        }
-                        .offset(y: 5 * (1 - wordmarkReveal))
 
                     Text("FIND THE LOOK")
                         .font(.system(size: 10, weight: .semibold))
@@ -70,10 +60,17 @@ struct LaunchExperienceView: View {
                     .foregroundStyle(.white.opacity(0.74))
                     .tracking(0.2)
                     .opacity(poweredOpacity)
+                    .offset(y: 8 * (1 - poweredOpacity))
                     .padding(.bottom, 28)
             }
             .scaleEffect(exitScale)
             .opacity(exitOpacity)
+
+            Color.white
+                .ignoresSafeArea()
+                .opacity(exposureOpacity)
+                .blendMode(.screen)
+                .allowsHitTesting(false)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Stylezam. Find the look. Powered by YouCam.")
@@ -172,8 +169,17 @@ struct LaunchExperienceView: View {
             apertureClosure = 0
             captureImpulse = 1
         }
+        withAnimation(.easeIn(duration: 0.055)) {
+            exposureOpacity = 0.78
+        }
 
-        try? await Task.sleep(for: .milliseconds(290))
+        try? await Task.sleep(for: .milliseconds(70))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.32)) {
+            exposureOpacity = 0
+        }
+
+        try? await Task.sleep(for: .milliseconds(220))
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.2)) {
             resolvedOpacity = 1
@@ -199,6 +205,38 @@ struct LaunchExperienceView: View {
         try? await Task.sleep(for: .milliseconds(240))
         guard !Task.isCancelled else { return }
         onFinished()
+    }
+}
+
+private struct CascadingWordmark: View {
+    let reveal: Double
+
+    private let letters = Array("Stylezam")
+
+    var body: some View {
+        HStack(spacing: -1.4) {
+            ForEach(Array(letters.enumerated()), id: \.offset) { index, letter in
+                let progress = letterProgress(index)
+                Text(String(letter))
+                    .font(.system(size: 39, weight: .semibold, design: .default))
+                    .foregroundStyle(.white)
+                    .opacity(progress)
+                    .blur(radius: 4 * (1 - progress))
+                    .offset(y: 9 * (1 - progress))
+                    .rotation3DEffect(
+                        .degrees(-28 * (1 - progress)),
+                        axis: (x: 1, y: 0, z: 0),
+                        perspective: 0.7
+                    )
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .accessibilityHidden(true)
+    }
+
+    private func letterProgress(_ index: Int) -> Double {
+        let start = Double(index) * 0.065
+        return min(1, max(0, (reveal - start) / 0.55))
     }
 }
 

@@ -11,7 +11,7 @@ final class StylezamControlUITests: XCTestCase {
         app.launchArguments.append(contentsOf: [
             "-stylezam-ui-test-live-screen",
             "-stylezam.onboarding.version",
-            "2",
+            "3",
         ])
         app.launch()
         XCTAssertTrue(

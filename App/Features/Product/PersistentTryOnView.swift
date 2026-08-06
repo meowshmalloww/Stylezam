@@ -1029,9 +1029,7 @@ struct TryOnView: View {
     }
 
     private func startRender() {
-        guard let activePhoto,
-              let personImage = try? Data(contentsOf: model.library.imageURL(for: activePhoto))
-        else { return }
+        guard let activePhoto else { return }
 
         let selected = compatibleSelectedItems
         guard selectedItemsMissingYouCamReference.isEmpty else {
@@ -1046,10 +1044,16 @@ struct TryOnView: View {
         isRendering = true
 
         let renderingPhotoID = activePhoto.id
+        let personImageURL = model.library.imageURL(for: activePhoto)
         let renderID = UUID()
         activeRenderID = renderID
         renderTask = Task {
             do {
+                status = "Preparing your photo"
+                let personImage = try await Task.detached(priority: .userInitiated) {
+                    try Data(contentsOf: personImageURL, options: .mappedIfSafe)
+                }.value
+                try Task.checkCancellation()
                 let output = try await service.render(
                     personImage: personImage,
                     items: selected,
@@ -1147,7 +1151,9 @@ struct TryOnView: View {
 
                 let destination = FileManager.default.temporaryDirectory
                     .appending(path: "stylezam-motion-\(UUID().uuidString).mp4")
-                try output.videoData.write(to: destination, options: .atomic)
+                try await Task.detached(priority: .utility) {
+                    try output.videoData.write(to: destination, options: .atomic)
+                }.value
 
                 guard !Task.isCancelled,
                       activeVideoGenerationID == generationID,

@@ -3,7 +3,7 @@ import SwiftUI
 
 @main
 struct StylezamApp: App {
-    private static let currentOnboardingVersion = 2
+    private static let currentOnboardingVersion = 3
 
     @UIApplicationDelegateAdaptor(StylezamAppDelegate.self) private var appDelegate
     @State private var model = AppModel()

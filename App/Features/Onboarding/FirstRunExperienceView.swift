@@ -147,24 +147,24 @@ private struct FirstRunPageView: View {
 
     private var welcome: some View {
         VStack(alignment: .leading, spacing: 18) {
+            OnboardingEditorialHero(
+                height: min(360, max(280, availableHeight * 0.43))
+            )
+            .motionReveal(distance: 12)
+
             VStack(alignment: .leading, spacing: 8) {
                 EditorialKicker(text: "A VISUAL FASHION COMPANION")
                 Text("Find what caught\nyour eye.")
                     .onboardingTitle()
-                Text("Capture a look from the camera, Photos, or another app. Stylezam keeps the original and lets you choose what happens next.")
+                Text("Begin with a look from the camera, Photos, or another app. Stylezam separates the pieces and keeps every next step under your control.")
                     .onboardingBody()
             }
-            .motionReveal()
-
-            OnboardingEditorialHero(
-                height: min(340, max(250, availableHeight * 0.39))
-            )
             .motionReveal(delay: 0.08, distance: 12)
 
             HStack(spacing: 16) {
                 OnboardingFact(number: "01", text: "Capture the whole look")
                 EditorialRule().frame(maxWidth: 34)
-                OnboardingFact(number: "02", text: "Choose each piece")
+                OnboardingFact(number: "02", text: "Keep only what matters")
             }
             .motionReveal(delay: 0.15, distance: 10)
         }
@@ -379,19 +379,35 @@ private struct OnboardingEditorialHero: View {
                     .clipped()
 
                 LinearGradient(
-                    colors: [.clear, .black.opacity(0.08), .black.opacity(0.72)],
-                    startPoint: .center,
+                    colors: [.black.opacity(0.08), .clear, .black.opacity(0.78)],
+                    startPoint: .top,
                     endPoint: .bottom
                 )
+
+                VStack {
+                    HStack {
+                        Text("CAPTURE · SEPARATE · DISCOVER")
+                            .font(.system(size: 9, weight: .bold))
+                            .tracking(1.35)
+                            .foregroundStyle(.white.opacity(0.76))
+                        Spacer()
+                        Image(systemName: "lock.fill")
+                            .font(.caption2)
+                            .foregroundStyle(.white.opacity(0.78))
+                            .accessibilityLabel("Private by default")
+                    }
+                    Spacer()
+                }
+                .padding(20)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text("STYLEZAM / 001")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(1.4)
                         .foregroundStyle(.white.opacity(0.66))
-                    Text("One photograph.\nA whole wardrobe of possibilities.")
-                        .font(.system(size: 25, weight: .semibold))
-                        .tracking(-0.55)
+                    Text("Start with\nwhat you see.")
+                        .font(.system(size: 29, weight: .semibold))
+                        .tracking(-0.75)
                         .foregroundStyle(.white)
                         .fixedSize(horizontal: false, vertical: true)
                 }

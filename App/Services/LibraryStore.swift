@@ -10,6 +10,29 @@ private enum LibraryStoreError: LocalizedError {
     }
 }
 
+private final class CachedTryOnMedia {
+    let imageFilename: String
+    let referenceFilename: String?
+    let imageData: Data
+    let referenceData: Data?
+
+    init(
+        imageFilename: String,
+        referenceFilename: String?,
+        imageData: Data,
+        referenceData: Data?
+    ) {
+        self.imageFilename = imageFilename
+        self.referenceFilename = referenceFilename
+        self.imageData = imageData
+        self.referenceData = referenceData
+    }
+
+    var memoryCost: Int {
+        imageData.count + (referenceData?.count ?? 0)
+    }
+}
+
 @MainActor
 @Observable
 final class LibraryStore {
@@ -24,6 +47,12 @@ final class LibraryStore {
     private let tryOnPeopleURL: URL
     private let snapshotURL: URL
     private var acceptsWrites = true
+    private let tryOnMediaCache: NSCache<NSUUID, CachedTryOnMedia> = {
+        let cache = NSCache<NSUUID, CachedTryOnMedia>()
+        cache.countLimit = 12
+        cache.totalCostLimit = 48 * 1_024 * 1_024
+        return cache
+    }()
 
     init(rootURL overrideRootURL: URL? = nil) {
         let fallback = FileManager.default.urls(
@@ -348,23 +377,21 @@ final class LibraryStore {
     func tryOnTrayItems() -> [TryOnTrayItem] {
         snapshot.tryOnRail.compactMap { entry in
             guard let item = wardrobeItem(for: entry.wardrobeItemID),
-                  let data = try? Data(contentsOf: imageURL(for: item))
+                  let media = cachedTryOnMedia(for: item)
             else { return nil }
-            let referenceData = tryOnReferenceURL(for: item)
-                .flatMap { try? Data(contentsOf: $0) }
             return TryOnTrayItem(
                 id: item.id,
                 title: item.title,
                 category: item.category,
                 region: item.garmentRegion,
-                imageData: data,
-                referenceImageData: referenceData,
+                imageData: media.imageData,
+                referenceImageData: media.referenceData,
                 isSelected: entry.isSelected,
                 sourceProduct: item.sourceProduct,
                 sourceWardrobeID: item.id,
-                contentDigest: item.contentDigest ?? Self.digest(for: data),
+                contentDigest: item.contentDigest ?? Self.digest(for: media.imageData),
                 referenceContentDigest: item.tryOnReferenceDigest
-                    ?? referenceData.map { Self.digest(for: $0) }
+                    ?? media.referenceData.map { Self.digest(for: $0) }
             )
         }
     }
@@ -790,6 +817,7 @@ final class LibraryStore {
             upsertRailEntry(for: updated.id, selected: true)
             do {
                 try persist()
+                tryOnMediaCache.removeObject(forKey: existing.id as NSUUID)
                 return updated
             } catch {
                 snapshot = previous
@@ -1021,6 +1049,7 @@ final class LibraryStore {
             for photo in previousSnapshot.tryOnPersonPhotos {
                 try? FileManager.default.removeItem(at: imageURL(for: photo))
             }
+            tryOnMediaCache.removeAllObjects()
         } catch {
             snapshot = previousSnapshot
             throw error
@@ -1037,6 +1066,7 @@ final class LibraryStore {
     }
 
     private func removeWardrobeFiles(for item: SavedWardrobeItem) {
+        tryOnMediaCache.removeObject(forKey: item.id as NSUUID)
         try? FileManager.default.removeItem(at: imageURL(for: item))
         if let referenceFilename = item.tryOnReferenceFilename {
             removeTryOnReferenceIfUnreferenced(filename: referenceFilename)
@@ -1135,6 +1165,7 @@ final class LibraryStore {
         snapshot.wardrobeItems[index] = updated
         do {
             try persist()
+            tryOnMediaCache.removeObject(forKey: existing.id as NSUUID)
             if let previousReferenceFilename,
                previousReferenceFilename != reference.filename
             {
@@ -1158,6 +1189,34 @@ final class LibraryStore {
         }
         guard remainingReferenceCount == 0 else { return }
         try? FileManager.default.removeItem(at: wardrobeURL.appending(path: filename))
+    }
+
+    private func cachedTryOnMedia(for item: SavedWardrobeItem) -> CachedTryOnMedia? {
+        let key = item.id as NSUUID
+        if let cached = tryOnMediaCache.object(forKey: key),
+           cached.imageFilename == item.imageFilename,
+           cached.referenceFilename == item.tryOnReferenceFilename
+        {
+            return cached
+        }
+
+        guard let imageData = try? Data(
+            contentsOf: imageURL(for: item),
+            options: .mappedIfSafe
+        ) else {
+            return nil
+        }
+        let referenceData = tryOnReferenceURL(for: item).flatMap {
+            try? Data(contentsOf: $0, options: .mappedIfSafe)
+        }
+        let cached = CachedTryOnMedia(
+            imageFilename: item.imageFilename,
+            referenceFilename: item.tryOnReferenceFilename,
+            imageData: imageData,
+            referenceData: referenceData
+        )
+        tryOnMediaCache.setObject(cached, forKey: key, cost: cached.memoryCost)
+        return cached
     }
 
     private static func fileExtension(for data: Data) -> String {
