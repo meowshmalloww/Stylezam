@@ -6,12 +6,13 @@ struct LaunchExperienceView: View {
     let onFinished: () -> Void
 
     @State private var backgroundBloom = 0.0
-    @State private var assemblyProgress = 0.0
+    @State private var topEntry = 0.0
+    @State private var leftEntry = 0.0
+    @State private var rightEntry = 0.0
+    @State private var flashEntry = 0.0
+    @State private var apertureClosure = 0.0
+    @State private var captureImpulse = 0.0
     @State private var resolvedOpacity = 0.0
-    @State private var orbitRotation = -80.0
-    @State private var focusProgress = 0.0
-    @State private var flashProgress = 0.0
-    @State private var glintPosition = -1.0
     @State private var wordmarkReveal = 0.0
     @State private var taglineOpacity = 0.0
     @State private var poweredOpacity = 0.0
@@ -22,24 +23,18 @@ struct LaunchExperienceView: View {
         ZStack {
             launchBackground
 
-            VStack(spacing: 25) {
-                ZStack {
-                    LaunchOrbitView(
-                        rotation: orbitRotation,
-                        opacity: 1 - resolvedOpacity
-                    )
-                    .frame(width: 214, height: 214)
-
-                    ShutterAssemblyMark(
-                        progress: assemblyProgress,
-                        resolvedOpacity: resolvedOpacity,
-                        focusProgress: focusProgress,
-                        flashProgress: flashProgress,
-                        glintPosition: glintPosition
-                    )
-                    .frame(width: 168, height: 168)
-                }
-                .frame(width: 226, height: 226)
+            VStack(spacing: 22) {
+                ShutterAssemblyMark(
+                    topEntry: topEntry,
+                    leftEntry: leftEntry,
+                    rightEntry: rightEntry,
+                    flashEntry: flashEntry,
+                    apertureClosure: apertureClosure,
+                    captureImpulse: captureImpulse,
+                    resolvedOpacity: resolvedOpacity
+                )
+                .frame(width: 188, height: 188)
+                .frame(width: 232, height: 232)
 
                 VStack(spacing: 8) {
                     Text("Stylezam")
@@ -106,7 +101,7 @@ struct LaunchExperienceView: View {
                 startRadius: 12,
                 endRadius: 360
             )
-            .scaleEffect(0.65 + (0.5 * backgroundBloom))
+            .scaleEffect(0.68 + (0.48 * backgroundBloom))
             .opacity(backgroundBloom)
 
             LinearGradient(
@@ -122,9 +117,11 @@ struct LaunchExperienceView: View {
     private func play() async {
         if reduceMotion {
             backgroundBloom = 1
-            assemblyProgress = 1
+            topEntry = 1
+            leftEntry = 1
+            rightEntry = 1
+            flashEntry = 1
             resolvedOpacity = 1
-            focusProgress = 1
             withAnimation(.easeOut(duration: 0.22)) {
                 wordmarkReveal = 1
                 taglineOpacity = 1
@@ -140,30 +137,53 @@ struct LaunchExperienceView: View {
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.9)) {
             backgroundBloom = 1
-            orbitRotation = 310
         }
-        withAnimation(.spring(response: 0.82, dampingFraction: 0.72)) {
-            assemblyProgress = 1
-            focusProgress = 1
+        withAnimation(.spring(response: 0.68, dampingFraction: 0.70)) {
+            topEntry = 1
         }
 
-        try? await Task.sleep(for: .milliseconds(610))
+        try? await Task.sleep(for: .milliseconds(120))
         guard !Task.isCancelled else { return }
-        withAnimation(.easeOut(duration: 0.22)) {
+        withAnimation(.spring(response: 0.72, dampingFraction: 0.68)) {
+            leftEntry = 1
+        }
+
+        try? await Task.sleep(for: .milliseconds(120))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.74, dampingFraction: 0.70)) {
+            rightEntry = 1
+        }
+
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.48, dampingFraction: 0.58)) {
+            flashEntry = 1
+        }
+
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        withAnimation(.timingCurve(0.65, 0, 0.8, 0.2, duration: 0.26)) {
+            apertureClosure = 1
+        }
+
+        try? await Task.sleep(for: .milliseconds(275))
+        guard !Task.isCancelled else { return }
+        withAnimation(.spring(response: 0.44, dampingFraction: 0.62)) {
+            apertureClosure = 0
+            captureImpulse = 1
+        }
+
+        try? await Task.sleep(for: .milliseconds(290))
+        guard !Task.isCancelled else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
             resolvedOpacity = 1
+            captureImpulse = 0
         }
-        withAnimation(.easeOut(duration: 0.62)) {
-            flashProgress = 1
-            glintPosition = 1.25
-        }
-
-        try? await Task.sleep(for: .milliseconds(250))
-        guard !Task.isCancelled else { return }
-        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.5)) {
+        withAnimation(.timingCurve(0.22, 1, 0.36, 1, duration: 0.48)) {
             wordmarkReveal = 1
         }
 
-        try? await Task.sleep(for: .milliseconds(320))
+        try? await Task.sleep(for: .milliseconds(310))
         guard !Task.isCancelled else { return }
         withAnimation(.easeOut(duration: 0.3)) {
             taglineOpacity = 1
@@ -183,70 +203,98 @@ struct LaunchExperienceView: View {
 }
 
 private struct ShutterAssemblyMark: View {
-    let progress: Double
+    let topEntry: Double
+    let leftEntry: Double
+    let rightEntry: Double
+    let flashEntry: Double
+    let apertureClosure: Double
+    let captureImpulse: Double
     let resolvedOpacity: Double
-    let focusProgress: Double
-    let flashProgress: Double
-    let glintPosition: Double
 
     var body: some View {
         GeometryReader { proxy in
             let size = min(proxy.size.width, proxy.size.height)
 
             ZStack {
-                shutterPiece(.top, size: size)
-                shutterPiece(.left, size: size)
-                shutterPiece(.right, size: size)
+                shutterPiece(.top, progress: topEntry, size: size)
+                shutterPiece(.left, progress: leftEntry, size: size)
+                shutterPiece(.right, progress: rightEntry, size: size)
+                flashPiece(progress: flashEntry, size: size)
 
                 LaunchLogoGlyph()
                     .opacity(resolvedOpacity)
-                    .scaleEffect(0.985 + (0.015 * resolvedOpacity))
-
-                Circle()
-                    .stroke(.white.opacity(0.84 * (1 - resolvedOpacity)), lineWidth: 1.5)
-                    .frame(width: size * 0.29, height: size * 0.29)
-                    .scaleEffect(1.85 - (0.85 * focusProgress))
-                    .blur(radius: 2.5 * (1 - focusProgress))
-
-                LaunchFlashBurst(progress: flashProgress)
-                    .frame(width: size * 0.43, height: size * 0.43)
-                    .position(x: size * 0.79, y: size * 0.24)
-
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            colors: [.clear, .white.opacity(0.9), .clear],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: size * 0.18, height: size * 1.25)
-                    .rotationEffect(.degrees(16))
-                    .offset(x: glintPosition * size * 1.3)
-                    .blendMode(.plusLighter)
-                    .mask { LaunchLogoGlyph() }
+                    .scaleEffect(0.992 + (0.008 * resolvedOpacity))
             }
             .frame(width: size, height: size)
             .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            .scaleEffect(1 + (0.018 * captureImpulse))
+            .shadow(
+                color: .white.opacity(0.5 * captureImpulse),
+                radius: 30 * captureImpulse
+            )
             .shadow(color: .black.opacity(0.13), radius: 26, y: 16)
         }
     }
 
     @ViewBuilder
-    private func shutterPiece(_ piece: ShutterPiece, size: CGFloat) -> some View {
-        let remaining = 1 - progress
-        let movement = CGSize(
-            width: piece.movement.width * remaining,
-            height: piece.movement.height * remaining
+    private func shutterPiece(
+        _ piece: ShutterPiece,
+        progress: Double,
+        size: CGFloat
+    ) -> some View {
+        let remaining = CGFloat(1 - progress)
+        let closure = CGFloat(apertureClosure)
+        let entryMovement = CGSize(
+            width: piece.entryMovement.width * remaining,
+            height: piece.entryMovement.height * remaining
+        )
+        let closureMovement = CGSize(
+            width: piece.closureMovement.width * closure,
+            height: piece.closureMovement.height * closure
         )
 
         LaunchLogoGlyph()
             .mask { ShutterPieceMask(piece: piece) }
-            .scaleEffect(0.82 + (0.18 * progress))
-            .rotationEffect(.degrees(piece.rotation * remaining))
-            .offset(x: movement.width * size, y: movement.height * size)
+            .scaleEffect(
+                (0.58 + (0.42 * CGFloat(progress))) * (1 - (0.045 * closure))
+            )
+            .rotationEffect(
+                .degrees(
+                    (piece.entryRotation * Double(remaining))
+                        + (piece.closureRotation * apertureClosure)
+                )
+            )
+            .rotation3DEffect(
+                .degrees(piece.entryTilt * Double(remaining)),
+                axis: piece.entryAxis,
+                perspective: 0.68
+            )
+            .offset(
+                x: (entryMovement.width + closureMovement.width) * size,
+                y: (entryMovement.height + closureMovement.height) * size
+            )
             .blur(radius: 5 * remaining)
-            .opacity(1 - resolvedOpacity)
+            .opacity(progress * (1 - resolvedOpacity))
+    }
+
+    @ViewBuilder
+    private func flashPiece(progress: Double, size: CGFloat) -> some View {
+        let remaining = CGFloat(1 - progress)
+
+        LaunchLogoGlyph()
+            .mask { ShutterPieceMask(piece: .flash) }
+            .scaleEffect(
+                0.2 + (0.8 * CGFloat(progress)) + (0.16 * CGFloat(captureImpulse)),
+                anchor: UnitPoint(x: 0.79, y: 0.25)
+            )
+            .rotation3DEffect(
+                .degrees(75 * Double(remaining)),
+                axis: (x: 1, y: 0.25, z: 0),
+                perspective: 0.72
+            )
+            .offset(y: size * 0.06 * remaining)
+            .blur(radius: 3 * remaining)
+            .opacity(progress * (1 - resolvedOpacity))
     }
 }
 
@@ -270,20 +318,57 @@ private enum ShutterPiece {
     case top
     case left
     case right
+    case flash
 
-    var movement: CGSize {
+    var entryMovement: CGSize {
         switch self {
-        case .top: CGSize(width: -0.08, height: -0.31)
-        case .left: CGSize(width: -0.30, height: 0.19)
-        case .right: CGSize(width: 0.31, height: 0.18)
+        case .top: CGSize(width: -0.20, height: -0.28)
+        case .left: CGSize(width: -0.30, height: 0.22)
+        case .right: CGSize(width: 0.31, height: 0.20)
+        case .flash: .zero
         }
     }
 
-    var rotation: Double {
+    var closureMovement: CGSize {
         switch self {
-        case .top: -17
-        case .left: -14
-        case .right: 18
+        case .top: CGSize(width: 0, height: 0.065)
+        case .left: CGSize(width: 0.057, height: -0.034)
+        case .right: CGSize(width: -0.057, height: -0.034)
+        case .flash: .zero
+        }
+    }
+
+    var entryRotation: Double {
+        switch self {
+        case .top: -28
+        case .left: -24
+        case .right: 27
+        case .flash: 0
+        }
+    }
+
+    var closureRotation: Double {
+        switch self {
+        case .top, .left, .right: 11
+        case .flash: 0
+        }
+    }
+
+    var entryTilt: Double {
+        switch self {
+        case .top: 68
+        case .left: -62
+        case .right: 64
+        case .flash: 0
+        }
+    }
+
+    var entryAxis: (x: CGFloat, y: CGFloat, z: CGFloat) {
+        switch self {
+        case .top: (x: 1, y: 0.2, z: 0)
+        case .left: (x: 0.15, y: 1, z: 0)
+        case .right: (x: -0.15, y: 1, z: 0)
+        case .flash: (x: 1, y: 0, z: 0)
         }
     }
 }
@@ -311,12 +396,22 @@ private struct ShutterPieceMask: Shape {
             path.addLine(to: point(0, 1, in: rect))
             path.closeSubpath()
         case .right:
-            path.move(to: point(0.48, 0.33, in: rect))
-            path.addLine(to: point(1, 0.24, in: rect))
+            path.move(to: point(0.48, 0.31, in: rect))
+            path.addLine(to: point(1, 0.29, in: rect))
             path.addLine(to: point(1, 1, in: rect))
             path.addLine(to: point(0.40, 1, in: rect))
             path.addLine(to: point(0.52, 0.65, in: rect))
             path.closeSubpath()
+        case .flash:
+            path.addRoundedRect(
+                in: CGRect(
+                    x: rect.minX + (rect.width * 0.70),
+                    y: rect.minY + (rect.height * 0.17),
+                    width: rect.width * 0.18,
+                    height: rect.height * 0.16
+                ),
+                cornerSize: CGSize(width: rect.width * 0.05, height: rect.height * 0.05)
+            )
         }
 
         return path
@@ -324,70 +419,5 @@ private struct ShutterPieceMask: Shape {
 
     private func point(_ x: CGFloat, _ y: CGFloat, in rect: CGRect) -> CGPoint {
         CGPoint(x: rect.minX + (rect.width * x), y: rect.minY + (rect.height * y))
-    }
-}
-
-private struct LaunchOrbitView: View {
-    let rotation: Double
-    let opacity: Double
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .trim(from: 0.05, to: 0.30)
-                .stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.08), .white.opacity(0.58)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 1.4, lineCap: .round)
-                )
-
-            Circle()
-                .trim(from: 0.53, to: 0.80)
-                .stroke(
-                    LinearGradient(
-                        colors: [.white.opacity(0.52), .white.opacity(0.05)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 1.4, lineCap: .round)
-                )
-
-            Circle()
-                .fill(.white.opacity(0.7))
-                .frame(width: 4, height: 4)
-                .offset(y: -107)
-        }
-        .rotationEffect(.degrees(rotation))
-        .opacity(opacity)
-    }
-}
-
-private struct LaunchFlashBurst: View {
-    let progress: Double
-
-    private var visibility: Double {
-        guard progress > 0 else { return 0 }
-        return max(0, 1 - progress)
-    }
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(.white.opacity(0.75), lineWidth: 1.5)
-                .scaleEffect(0.3 + (0.8 * progress))
-
-            ForEach(0..<6, id: \.self) { index in
-                Capsule()
-                    .fill(.white)
-                    .frame(width: 2, height: 12)
-                    .offset(y: -30 - (8 * progress))
-                    .rotationEffect(.degrees(Double(index) * 60))
-            }
-        }
-        .opacity(visibility)
-        .blur(radius: progress * 0.8)
     }
 }
