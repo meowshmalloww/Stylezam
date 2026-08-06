@@ -2,6 +2,28 @@ import CoreGraphics
 import Foundation
 import ImageIO
 
+enum LiveScreenAnalysisStrategy: Equatable, Sendable {
+    case global
+    case adaptive
+    case focused
+}
+
+enum LiveScreenAnalysisPlanner {
+    static func strategy(
+        contentIsStable: Bool,
+        stableFrameCount: Int,
+        hasFocus: Bool
+    ) -> LiveScreenAnalysisStrategy {
+        if contentIsStable, hasFocus {
+            return .focused
+        }
+        if contentIsStable, stableFrameCount >= 2 {
+            return .adaptive
+        }
+        return .global
+    }
+}
+
 /// Temporal and perceptual gating for automatic Live Screen captures.
 ///
 /// ScreenCaptureKit can deliver a large number of visually identical frames while a product
@@ -30,7 +52,10 @@ struct LiveScreenAutoCaptureCoordinator: Sendable {
     private var capturedFingerprints: [CapturedFingerprint] = []
     private var lastAttemptAt = Date.distantPast
 
-    private let requiredHits = 3
+    // Two independent detections are enough after the model, confidence, area, quality, label,
+    // box-IoU, and garment-region perceptual checks all agree. At the active 0.85-second screen
+    // cadence this makes a two-second pause useful instead of requiring five or more seconds.
+    private let requiredHits = 2
     private let minimumConfidence = 0.44
     private let minimumArea = 0.004
     private let minimumQuality = 0.34
@@ -45,7 +70,7 @@ struct LiveScreenAutoCaptureCoordinator: Sendable {
         }
     }
 
-    /// Returns `true` only after a good garment remains stable for three analyzed frames.
+    /// Returns `true` only after a good garment remains stable for two analyzed frames.
     mutating func shouldCapture(
         _ candidate: Candidate,
         qualityScore: Double,
@@ -218,8 +243,8 @@ enum LiveScreenPerceptualHash {
 }
 
 /// A low-resolution signature of the whole authorized display. It is intentionally much cheaper
-/// than Core ML and lets the app wait for scrolling/video motion to settle, then stop repeating ML
-/// work while the same captured or known-empty page remains visible.
+/// than Core ML and lets the app decide when a paused page deserves detail discovery, then stop
+/// repeating ML work while the same captured or known-empty page remains visible.
 struct LiveScreenContentFingerprint: Sendable, Equatable {
     private let values: [UInt64]
 
@@ -241,7 +266,7 @@ struct LiveScreenContentFingerprint: Sendable, Equatable {
         let height = Double(image.height)
         // System status indicators and app/browser toolbars can animate while the actual product
         // view is motionless. Exclude only those outer chrome bands so they cannot keep resetting
-        // the settle gate; the central 80%+ of the authorized screen remains represented.
+        // content comparison; the central 80%+ of the authorized screen remains represented.
         let content: CGRect
         if height >= width {
             content = CGRect(

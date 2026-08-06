@@ -146,10 +146,11 @@ effective long-edge detector detail to about 686 px at 1080p and 1029 px at
 4K–5K. Library crops are encoded from the retained source pixels as 94%-quality
 JPEGs. Live camera preview remains single-pass, backs off after two unchanged
 empty results, and stops repeating inference for an unchanged view after a
-successful save. Motion or a candidate restores the fast cadence. Live Screen first waits for a
-480 px content signature to stabilize, runs one crop-free global-plus-detail
-discovery because phone pages are much taller than the model tensor, then uses
-one focused tensor for each confirmation. Captured and verified-empty screens
+successful save. Motion or a candidate restores the fast cadence. Live Screen
+runs a global tensor immediately on newly sampled content. If it is empty and
+the next 480 px content signature agrees, the app runs one crop-free
+global-plus-detail discovery because phone pages are much taller than the model
+tensor, then uses one focused tensor for confirmation. Captured and verified-empty screens
 run no additional Core ML until their content signature changes. After either
 live path reaches temporal consensus, the
 accepted full-quality camera still or device-resolution screen frame uses the

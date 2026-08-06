@@ -33,11 +33,11 @@ The capture and garment-detection pipeline has no remote inference call. The sep
 - Clipboard is read only after the user taps Paste image.
 - The Share extension runs only after the user chooses Stylezam.
 - iOS 27 screen capture begins only after Apple’s system picker grants a filter.
-- While that authorized iOS 27 stream is active, three stable on-device garment observations can automatically save one source frame and its local crops. Repeated frames are perceptually suppressed.
+- While that authorized iOS 27 stream is active, two agreeing on-device garment observations can automatically save one source frame and its local crops. Repeated frames are perceptually suppressed.
 - Protected content can appear blank; Stylezam does not bypass platform protection.
 - iOS owns screen-capture indicators and privacy UI.
 
-The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure. Camera inference backs off on an unchanged empty view and stops repeating after an unchanged view is saved; it resumes immediately when the view changes. Live Screen uses low-resolution hashes while content is moving and while a captured or known-empty page remains unchanged; those hashes stay on device and are never persisted. Only a stable automatic capture or manual shutter result is persisted with its crops.
+The app does not analyze every camera or screen frame. Both live paths have independent default-on automatic-capture controls, are throttled, and pause automatic ML work under serious thermal pressure. Camera inference backs off on an unchanged empty view and stops repeating after an unchanged view is saved; it resumes immediately when the view changes. Live Screen runs a bounded global detector on newly sampled content, uses low-resolution hashes to decide when a deeper paused-page scan is useful, and stops ML work while a captured or known-empty page remains unchanged. Those hashes stay on device and are never persisted. Developer Debug can optionally retain only the latest authorized frame and detections in memory until the stream restarts or the toggle is disabled. Only an automatic capture or manual shutter result is persisted with its crops.
 
 ## Network boundary
 

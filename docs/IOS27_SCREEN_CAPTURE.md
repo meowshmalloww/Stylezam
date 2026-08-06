@@ -2,7 +2,7 @@
 
 ## Product decision
 
-Live screen is a consent-based capture source, not an app tab. The user starts it from Capture & Controls using Apple’s system content-sharing picker. After the user chooses **Share Entire Screen**, the authorized stream continues while Stylezam is in the background. Stylezam samples it on device and automatically saves a garment only after label, position, perceptual appearance, and quality agree across three analyzed frames. The Capture a Look control remains a manual shutter. iOS owns the privacy indicator; Stylezam does not draw a custom blue border over other apps. Stylezam also starts a local “Live screen active” Live Activity for supported Dynamic Island and Lock Screen surfaces, then ends it when the stream stops or is interrupted.
+Live screen is a consent-based capture source, not an app tab. The user starts it from Capture & Controls using Apple’s system content-sharing picker. After the user chooses **Share Entire Screen**, the authorized stream continues while Stylezam is in the background. Stylezam samples it on device and automatically saves a garment only after label, position, perceptual appearance, and quality agree across two analyzed frames. The Capture a Look control remains a manual shutter. iOS owns the privacy indicator; Stylezam does not draw a custom blue border over other apps. Stylezam also starts a local Live Activity for supported Dynamic Island and Lock Screen surfaces, which animates through scanning, recognized, cropping, and saved states before ending when the stream stops or is interrupted.
 
 The controls use an `OpenIntent` with a typed capture destination. The app handles
 that intent with SwiftUI's `onAppIntentExecution` and opens either the camera or
@@ -20,8 +20,8 @@ The repository already contains a conditional `LiveScreenCaptureManager`:
 2. The picker observer supplies an `SCContentFilter` after consent.
 3. An `SCStream` receives screen output on a serial queue.
 4. Complete frames are rotation-corrected, encoded directly from their Core Image buffers at device resolution, thermally throttled, and held in a short rolling in-memory buffer.
-5. A cheap four-region, 480 px fingerprint waits for scrolling or video motion to settle before Core ML runs.
-6. One crop-free global-plus-detail discovery keeps items near the top, middle, or bottom of a tall page visible. Later confirmation frames run one focused model tensor around the strongest item; three matching garment observations are required before automatic capture.
+5. Newly sampled content receives one immediate, crop-free global prediction; recognition no longer waits for a Reel or page to become perfectly still.
+6. If that quick pass is empty and a 480 px four-region signature agrees on the next frame, one global-plus-detail discovery keeps small items near the top, middle, or bottom of a tall page visible. A later confirmation runs one focused model tensor around the strongest item; two matching garment observations are required before automatic capture.
 7. Captured, duplicate, and twice-verified empty screens enter a four-second nominal watch cadence and run no further Core ML until the screen fingerprint changes.
 8. Garment-region perceptual deduplication remains a second guard against Library duplicates.
 9. `AppModel` sends the accepted full-resolution frame through the same bounded detail-tile, crop, Library, Live Activity, and notification pipeline as a camera still.
@@ -55,7 +55,7 @@ Do not copy the entire sample project into Stylezam. Compare the sample’s curr
 - Xcode 27 beta 4 and its iOS 27 device SDK compile the ScreenCaptureKit adapter.
 - The signed app and widget extension build and install on the connected iOS 27 iPhone.
 - The installed physical-device build presents Apple's real Screen Sharing picker with Stylezam selected and the **Share Entire Screen** consent action.
-- Automatic capture coordination is covered by deterministic tests for three-frame stabilization, low-quality interruption, stationary duplicate suppression, new-garment acceptance, garment-hash stability, unchanged-screen suppression, and changed-screen resumption.
+- Automatic capture coordination is covered by deterministic tests for immediate global discovery, paused-page detail discovery, focused confirmation, two-observation stabilization, low-quality interruption, stationary duplicate suppression, new-garment acceptance, garment-hash stability, unchanged-screen suppression, and changed-screen resumption.
 - A tall-screen integration test places a product near the top of a 1290×2796 frame and verifies detail-aware preview detection plus a crop larger than the model's 384×384 tensor.
 - An automated iOS 27 simulator test opens the real Control Center, installs the Stylezam Live Screen control, taps it, and verifies that Stylezam reaches the foreground.
 - The same simulator cannot verify Apple's sharing picker because its SDK omits ScreenCaptureKit. The physical-device UI-test runner requires its own provisioning profile; without that profile, stream authorization remains a manual device step because Apple requires explicit user consent.

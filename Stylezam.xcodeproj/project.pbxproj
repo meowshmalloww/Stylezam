@@ -47,6 +47,7 @@
 		8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */; };
 		8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */; };
 		8C30A42D80D392E9389CA986 /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F790B57A92BDB9737A707E7 /* LibraryStore.swift */; };
+		8D9AC9D137D5E38F72F5D128 /* LiveScreenDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CA4917D63CFC878EA00D5B8 /* LiveScreenDebugView.swift */; };
 		925BF1631C02981C235F1F76 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 46DF6990FEB82C1A74BEC515 /* FirebaseCore */; };
 		9805CE7058ECC70DF2B197AC /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8776C97BF5AD46E746581301 /* CredentialStore.swift */; };
 		9ADF933F81CD94616488F96E /* jacket.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E6F89F6DCF7700FA3D3E4477 /* jacket.jpg */; };
@@ -163,6 +164,7 @@
 		5CD56358BDF26FC853C97071 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		5D6149F74411CB2250C2927B /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		6CA4917D63CFC878EA00D5B8 /* LiveScreenDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenDebugView.swift; sourceTree = "<group>"; };
 		7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureAvailability.swift; sourceTree = "<group>"; };
 		7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailView.swift; sourceTree = "<group>"; };
 		7D750C5C73D66F384DEB282B /* StylezamGarmentSegmentation.mlpackage */ = {isa = PBXFileReference; path = StylezamGarmentSegmentation.mlpackage; sourceTree = "<group>"; };
@@ -391,6 +393,7 @@
 		8A4469897690815ECBBB14F4 /* Settings */ = {
 			isa = PBXGroup;
 			children = (
+				6CA4917D63CFC878EA00D5B8 /* LiveScreenDebugView.swift */,
 				5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */,
 				C70AC81BE3A88E7297739342 /* VisionDebugView.swift */,
 			);
@@ -779,6 +782,7 @@
 				FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */,
 				BE433491522CE13D20518260 /* LiveScreenAutoCaptureCoordinator.swift in Sources */,
 				8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */,
+				8D9AC9D137D5E38F72F5D128 /* LiveScreenDebugView.swift in Sources */,
 				A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */,
 				FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */,
 				CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */,

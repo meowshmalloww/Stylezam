@@ -376,6 +376,22 @@ private struct DeveloperSettingsView: View {
                     }
                 }
 
+                NavigationLink {
+                    LiveScreenDebugView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Live Screen Inspector")
+                            Text("See the latest authorized frame, boxes, crops, and pipeline state")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "rectangle.dashed.badge.record")
+                            .foregroundStyle(StylezamDesign.cobalt)
+                    }
+                }
+
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
                         Text("Garment model")
@@ -441,10 +457,19 @@ private struct DeveloperSettingsView: View {
                     isOn: $settings.liveScreenAutoCaptureEnabled
                 )
                     .tint(StylezamDesign.cobalt)
+
+                Toggle(
+                    "Retain Live Screen detection boxes",
+                    isOn: Binding(
+                        get: { settings.liveScreenBoundingBoxDebugEnabled },
+                        set: { model.setLiveScreenDebugArtifactsEnabled($0) }
+                    )
+                )
+                    .tint(StylezamDesign.cobalt)
             } header: {
                 Text("Capture behavior")
             } footer: {
-                Text("Five is the safe default. The two automatic modes are independent. Each requires three agreeing observations, then saves one high-resolution still. Increasing the item limit uses more memory and can make local crop generation slower.")
+                Text("Five is the safe default. Live Screen saves after two agreeing observations. The debug toggle retains only the latest authorized frame and its real model boxes in memory; it never draws over another app. Increasing the item limit uses more memory and can make local crop generation slower.")
             }
 
             Section {

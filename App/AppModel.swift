@@ -118,6 +118,23 @@ final class AppModel {
         isCapturePresented = true
     }
 
+    func setLiveScreenDebugArtifactsEnabled(_ enabled: Bool) {
+        settings.liveScreenBoundingBoxDebugEnabled = enabled
+        if enabled {
+            // Force one fresh analysis even if the current page was previously suppressed as
+            // empty or already handled, so Developer Debug never waits on stale hidden state.
+            liveScreenSuppressedContentFingerprint = nil
+            liveScreenSuppressionStatus = nil
+            liveScreenLastContentFingerprint = nil
+            liveScreenStableContentFrames = 0
+            liveScreenEmptyAdaptiveAttempts = 0
+            liveScreenPreviewFocus = nil
+            liveScreen.setAutomaticAnalysisIdle(false)
+        } else {
+            liveScreen.clearDebugSnapshot()
+        }
+    }
+
     func addToTryOn(_ product: ProductResultDTO) {
         if !pendingTryOnProducts.contains(where: { $0.id == product.id }) {
             pendingTryOnProducts.append(product)
@@ -180,11 +197,14 @@ final class AppModel {
         captureStatus = "Finding pieces on this iPhone"
         lastError = nil
         let activityID = UUID().uuidString
-        await captureActivityManager.start(
-            id: activityID,
-            source: mode.activityLabel,
-            phase: "Finding pieces on this iPhone"
-        )
+        let usesStandaloneActivity = mode != .screen
+        if usesStandaloneActivity {
+            await captureActivityManager.start(
+                id: activityID,
+                source: mode.activityLabel,
+                phase: "Finding pieces on this iPhone"
+            )
+        }
         defer { isAnalyzingCapture = false }
 
         do {
@@ -223,11 +243,13 @@ final class AppModel {
                     captureStatus = rawDetection.candidates.isEmpty
                         ? "No distinct pieces found"
                         : "Already in Library"
-                    await captureActivityManager.finish(
-                        captureID: activityID,
-                        itemCount: 0,
-                        failed: false
-                    )
+                    if usesStandaloneActivity {
+                        await captureActivityManager.finish(
+                            captureID: activityID,
+                            itemCount: 0,
+                            failed: false
+                        )
+                    }
                     return nil
                 }
                 detection = GarmentDetectionBatch(
@@ -253,11 +275,13 @@ final class AppModel {
             captureStatus = count == 0
                 ? "Saved · no distinct pieces found"
                 : count == 1 ? "1 piece ready" : "\(count) pieces ready"
-            await captureActivityManager.finish(
-                captureID: activityID,
-                itemCount: count,
-                failed: false
-            )
+            if usesStandaloneActivity {
+                await captureActivityManager.finish(
+                    captureID: activityID,
+                    itemCount: count,
+                    failed: false
+                )
+            }
             if settings.notificationsEnabled,
                await notifications.requestAuthorization()
             {
@@ -271,11 +295,13 @@ final class AppModel {
         } catch {
             lastError = error.localizedDescription
             captureStatus = nil
-            await captureActivityManager.finish(
-                captureID: activityID,
-                itemCount: 0,
-                failed: true
-            )
+            if usesStandaloneActivity {
+                await captureActivityManager.finish(
+                    captureID: activityID,
+                    itemCount: 0,
+                    failed: true
+                )
+            }
             return nil
         }
     }
@@ -386,64 +412,91 @@ final class AppModel {
                 self.liveScreenStableContentFrames = 1
                 self.liveScreenEmptyAdaptiveAttempts = 0
                 self.liveScreenPreviewFocus = nil
-                self.liveScreenAutoCapture.reset()
                 self.liveScreenSuppressedContentFingerprint = nil
                 self.liveScreenSuppressionStatus = nil
                 self.liveScreen.setAutomaticAnalysisIdle(false)
             }
 
-            // Hashing a 480 px thumbnail is far cheaper than Core ML. Do not spend inference
-            // cycles while the user is scrolling or a video frame is still changing.
-            guard self.liveScreenStableContentFrames >= 2 else {
-                self.liveScreen.setAutomaticAnalysisStatus(
-                    "Waiting for the fashion view to pause."
-                )
-                return
-            }
+            let strategy = LiveScreenAnalysisPlanner.strategy(
+                contentIsStable: contentIsStable,
+                stableFrameCount: self.liveScreenStableContentFrames,
+                hasFocus: self.liveScreenPreviewFocus != nil
+            )
 
-            self.liveScreen.setAutomaticAnalysisStatus(
-                "Scanning the authorized screen on this iPhone."
+            self.liveScreen.setAutomaticAnalysisFeedback(
+                status: "Scanning the authorized screen on this iPhone.",
+                activityPhase: "Scanning screen",
+                visualState: .detecting
             )
             let preview: LiveGarmentPreview?
-            if let focus = self.liveScreenPreviewFocus {
+            switch strategy {
+            case .focused:
                 // Once discovery identifies a likely piece, confirmation needs only one focused
                 // tensor per sampled frame instead of repeating every screen detail tile.
-                preview = await self.previewGarments(in: frame.data, focusFrame: focus)
-            } else {
+                preview = await self.previewGarments(
+                    in: frame.data,
+                    focusFrame: self.liveScreenPreviewFocus
+                )
+            case .adaptive:
                 preview = await self.previewLiveScreenGarments(in: frame.data)
+            case .global:
+                preview = await self.previewGarments(in: frame.data)
             }
             guard let preview,
                   !Task.isCancelled,
                   self.liveScreen.isCapturing
             else { return }
 
+            self.liveScreen.recordAnalysis(
+                frame: frame,
+                candidates: preview.candidates,
+                stage: preview.candidates.isEmpty
+                    ? "Analyzed · no garment in this pass"
+                    : "Detected \(preview.candidates.count) garment region(s)",
+                retainDebugArtifacts: self.settings.liveScreenBoundingBoxDebugEnabled
+            )
+
             guard let anchor = preview.candidates.max(by: { left, right in
                 Self.liveScreenAnchorScore(left) < Self.liveScreenAnchorScore(right)
             }) else {
                 self.liveScreenAutoCapture.reset()
-                if self.liveScreenPreviewFocus != nil {
+                switch strategy {
+                case .focused:
                     // A focused confirmation can lose the item after a small layout shift. One
                     // subsequent adaptive discovery is more reliable than retrying a stale ROI.
                     self.liveScreenPreviewFocus = nil
                     self.liveScreenEmptyAdaptiveAttempts = 0
-                    self.liveScreen.setAutomaticAnalysisStatus(
-                        "The item moved. Rechecking the full screen."
+                    self.liveScreen.setAutomaticAnalysisFeedback(
+                        status: "The item moved. Rechecking the full screen.",
+                        activityPhase: "Rechecking screen",
+                        visualState: .watching
                     )
-                } else {
+                case .adaptive:
                     self.liveScreenEmptyAdaptiveAttempts += 1
                     if self.liveScreenEmptyAdaptiveAttempts >= 2 {
                         self.liveScreenSuppressedContentFingerprint = contentFingerprint
                         self.liveScreenSuppressionStatus =
                             "No fashion item found on this unchanged screen. Watching for a change."
                         self.liveScreen.setAutomaticAnalysisIdle(true)
-                        self.liveScreen.setAutomaticAnalysisStatus(
-                            self.liveScreenSuppressionStatus
+                        self.liveScreen.setAutomaticAnalysisFeedback(
+                            status: self.liveScreenSuppressionStatus
+                                ?? "No fashion item found. Watching for a change.",
+                            activityPhase: "Watching for fashion",
+                            visualState: .watching
                         )
                     } else {
-                        self.liveScreen.setAutomaticAnalysisStatus(
-                            "Checking the stable screen once more."
+                        self.liveScreen.setAutomaticAnalysisFeedback(
+                            status: "Checking the stable screen once more.",
+                            activityPhase: "Checking details",
+                            visualState: .detecting
                         )
                     }
+                case .global:
+                    self.liveScreen.setAutomaticAnalysisFeedback(
+                        status: "No piece in the quick pass. Pause briefly for a detailed scan.",
+                        activityPhase: "Pause for detail scan",
+                        visualState: .watching
+                    )
                 }
                 return
             }
@@ -478,14 +531,20 @@ final class AppModel {
                 qualityScore: preview.qualityScore,
                 now: frame.capturedAt
             ) else {
-                self.liveScreen.setAutomaticAnalysisStatus(
-                    "Confirming \(anchor.localLabel) across stable frames."
+                self.liveScreen.setAutomaticAnalysisFeedback(
+                    status: "Recognized \(anchor.localLabel). Hold it briefly for capture.",
+                    activityPhase: "Found \(anchor.localLabel)",
+                    visualState: .recognized,
+                    itemCount: preview.candidates.count
                 )
                 return
             }
 
-            self.liveScreen.setAutomaticAnalysisStatus(
-                "Stable \(anchor.localLabel) found. Creating full-resolution crops."
+            self.liveScreen.setAutomaticAnalysisFeedback(
+                status: "Stable \(anchor.localLabel) found. Creating full-resolution crops.",
+                activityPhase: "Cropping \(anchor.localLabel)",
+                visualState: .cropping,
+                itemCount: preview.candidates.count
             )
             self.liveScreenLogger.notice(
                 "Stable live-screen garment accepted at \(frame.pixelWidth)x\(frame.pixelHeight)"
@@ -502,6 +561,25 @@ final class AppModel {
             )
 
             if let scan {
+                let debugCandidates = scan.items.map { item in
+                    GarmentCandidate(
+                        id: item.id,
+                        localLabel: item.localLabel,
+                        confidence: item.localConfidence,
+                        box: item.box,
+                        boxCropData: nil,
+                        cropData: nil
+                    )
+                }
+                let debugCrops = scan.items.map { item in
+                    self.library.cropURL(for: item).flatMap { try? Data(contentsOf: $0) }
+                }
+                self.liveScreen.recordSavedDebugSnapshot(
+                    frame: frame,
+                    candidates: debugCandidates,
+                    cropData: debugCrops,
+                    retainDebugArtifacts: self.settings.liveScreenBoundingBoxDebugEnabled
+                )
                 self.liveScreenSuppressedContentFingerprint = contentFingerprint
                 self.liveScreenSuppressionStatus =
                     "This screen is saved. Watching for a visual change."
@@ -515,13 +593,18 @@ final class AppModel {
                 self.liveScreenSuppressionStatus =
                     "This piece is already in Library. Watching for a visual change."
                 self.liveScreen.setAutomaticAnalysisIdle(true)
-                self.liveScreen.setAutomaticAnalysisStatus(
-                    self.liveScreenSuppressionStatus
+                self.liveScreen.setAutomaticAnalysisFeedback(
+                    status: self.liveScreenSuppressionStatus
+                        ?? "This piece is already in Library.",
+                    activityPhase: "Already in Library",
+                    visualState: .saved
                 )
             } else {
                 self.liveScreenPreviewFocus = nil
-                self.liveScreen.setAutomaticAnalysisStatus(
-                    "The final frame was not clear enough. Watching for a better view."
+                self.liveScreen.setAutomaticAnalysisFeedback(
+                    status: "The final frame was not clear enough. Watching for a better view.",
+                    activityPhase: "Waiting for a clearer view",
+                    visualState: .watching
                 )
             }
         }

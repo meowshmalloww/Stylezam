@@ -3,24 +3,86 @@ import XCTest
 @testable import Stylezam
 
 final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
-    func testRequiresThreeStableFramesBeforeCapture() {
+    func testChangedContentRunsGlobalRecognitionImmediately() {
+        XCTAssertEqual(
+            LiveScreenAnalysisPlanner.strategy(
+                contentIsStable: false,
+                stableFrameCount: 1,
+                hasFocus: false
+            ),
+            .global
+        )
+    }
+
+    func testStableDetectedContentUsesFocusedConfirmation() {
+        XCTAssertEqual(
+            LiveScreenAnalysisPlanner.strategy(
+                contentIsStable: true,
+                stableFrameCount: 2,
+                hasFocus: true
+            ),
+            .focused
+        )
+    }
+
+    func testStableEmptyContentGetsAdaptiveDetailScan() {
+        XCTAssertEqual(
+            LiveScreenAnalysisPlanner.strategy(
+                contentIsStable: true,
+                stableFrameCount: 2,
+                hasFocus: false
+            ),
+            .adaptive
+        )
+    }
+
+    @MainActor
+    func testLiveScreenDebugSnapshotUsesRealFrameAndBoxes() throws {
+        let frameData = try XCTUnwrap(splitImageData(leftIsDark: true))
+        let candidate = GarmentCandidate(
+            id: "debug-jacket",
+            localLabel: "jacket",
+            confidence: 0.91,
+            box: BoundingBoxDTO(x: 0.2, y: 0.15, width: 0.5, height: 0.65),
+            boxCropData: nil,
+            cropData: nil
+        )
+        let frame = LiveScreenFrame(
+            capturedAt: Date(timeIntervalSince1970: 11_000),
+            data: frameData,
+            pixelWidth: 240,
+            pixelHeight: 180
+        )
+        let manager = LiveScreenCaptureManager()
+
+        manager.recordAnalysis(
+            frame: frame,
+            candidates: [candidate],
+            stage: "Detected 1 garment region",
+            retainDebugArtifacts: true
+        )
+
+        XCTAssertEqual(manager.analyzedFrameCount, 1)
+        XCTAssertNotNil(manager.lastDetectionAt)
+        XCTAssertEqual(manager.latestDebugSnapshot?.frameData, frameData)
+        XCTAssertEqual(manager.latestDebugSnapshot?.candidates, [candidate])
+        XCTAssertEqual(manager.latestDebugSnapshot?.stage, "Detected 1 garment region")
+
+        manager.clearDebugSnapshot()
+        XCTAssertNil(manager.latestDebugSnapshot)
+    }
+
+    func testRequiresTwoStableFramesBeforeCapture() {
         var coordinator = LiveScreenAutoCaptureCoordinator()
         let start = Date(timeIntervalSince1970: 1_000)
         let candidate = makeCandidate(fingerprint: 0x1111_1111_1111_1111)
 
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.72, now: start))
-        XCTAssertFalse(
+        XCTAssertTrue(
             coordinator.shouldCapture(
                 candidate,
                 qualityScore: 0.74,
                 now: start.addingTimeInterval(1)
-            )
-        )
-        XCTAssertTrue(
-            coordinator.shouldCapture(
-                candidate,
-                qualityScore: 0.76,
-                now: start.addingTimeInterval(2)
             )
         )
     }
@@ -32,12 +94,11 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         let candidate = makeCandidate(fingerprint: fingerprint)
 
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start))
-        XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(1)))
-        XCTAssertTrue(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(2)))
+        XCTAssertTrue(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(1)))
         coordinator.recordCaptureResult(
             fingerprint: fingerprint,
             shouldSuppressRepeat: true,
-            now: start.addingTimeInterval(2)
+            now: start.addingTimeInterval(1)
         )
 
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(12)))
@@ -51,18 +112,16 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         let first = makeCandidate(fingerprint: 0)
 
         _ = coordinator.shouldCapture(first, qualityScore: 0.8, now: start)
-        _ = coordinator.shouldCapture(first, qualityScore: 0.8, now: start.addingTimeInterval(1))
-        XCTAssertTrue(coordinator.shouldCapture(first, qualityScore: 0.8, now: start.addingTimeInterval(2)))
+        XCTAssertTrue(coordinator.shouldCapture(first, qualityScore: 0.8, now: start.addingTimeInterval(1)))
         coordinator.recordCaptureResult(
             fingerprint: first.fingerprint,
             shouldSuppressRepeat: true,
-            now: start.addingTimeInterval(2)
+            now: start.addingTimeInterval(1)
         )
 
         let next = makeCandidate(label: "coat", fingerprint: .max)
         XCTAssertFalse(coordinator.shouldCapture(next, qualityScore: 0.8, now: start.addingTimeInterval(10)))
-        XCTAssertFalse(coordinator.shouldCapture(next, qualityScore: 0.8, now: start.addingTimeInterval(11)))
-        XCTAssertTrue(coordinator.shouldCapture(next, qualityScore: 0.8, now: start.addingTimeInterval(12)))
+        XCTAssertTrue(coordinator.shouldCapture(next, qualityScore: 0.8, now: start.addingTimeInterval(11)))
     }
 
     func testLowQualityFrameBreaksTheStableRun() {
@@ -73,8 +132,7 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start))
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.2, now: start.addingTimeInterval(1)))
         XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(2)))
-        XCTAssertFalse(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(3)))
-        XCTAssertTrue(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(4)))
+        XCTAssertTrue(coordinator.shouldCapture(candidate, qualityScore: 0.8, now: start.addingTimeInterval(3)))
     }
 
     func testPerceptualHashIsStableForTheSameCrop() throws {

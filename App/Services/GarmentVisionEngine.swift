@@ -369,7 +369,7 @@ actor GarmentVisionEngine {
         let meanConfidence = candidates.isEmpty
             ? 0
             : candidates.map(\.confidence).reduce(0, +) / Double(candidates.count)
-        // Stability across three frames is the primary false-positive guard. Keep this quality
+        // Stability across two independently sampled frames is the primary false-positive guard. Keep this quality
         // score permissive enough for watches, ties, and other physically small accessories.
         let areaScore = min(1, largestArea / 0.10)
         let quality = min(1, max(0, 0.68 * meanConfidence + 0.32 * areaScore))

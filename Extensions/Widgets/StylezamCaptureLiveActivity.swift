@@ -4,13 +4,15 @@ import WidgetKit
 
 struct StylezamCaptureLiveActivity: Widget {
     private let cobalt = Color(red: 0.078, green: 0.361, blue: 1)
+    private let savedGreen = Color(red: 0.16, green: 0.76, blue: 0.38)
 
     var body: some WidgetConfiguration {
         ActivityConfiguration(for: StylezamCaptureActivityAttributes.self) { context in
             HStack(spacing: 14) {
-                Image(systemName: context.state.failed ? "exclamationmark" : "viewfinder")
+                Image(systemName: symbol(for: context.state.visualState))
                     .font(.title2.weight(.semibold))
-                    .foregroundStyle(context.state.failed ? .red : cobalt)
+                    .foregroundStyle(tint(for: context.state.visualState))
+                    .contentTransition(.symbolEffect(.replace))
                 VStack(alignment: .leading, spacing: 3) {
                     Text(context.state.phase)
                         .font(.headline)
@@ -34,9 +36,10 @@ struct StylezamCaptureLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Image(systemName: context.state.failed ? "exclamationmark" : "viewfinder")
+                    Image(systemName: symbol(for: context.state.visualState))
                         .font(.title2.weight(.semibold))
-                        .foregroundStyle(context.state.failed ? .red : cobalt)
+                        .foregroundStyle(tint(for: context.state.visualState))
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.phase)
@@ -57,8 +60,9 @@ struct StylezamCaptureLiveActivity: Widget {
                         .foregroundStyle(.secondary)
                 }
             } compactLeading: {
-                Image(systemName: context.state.isComplete ? "checkmark" : "viewfinder")
-                    .foregroundStyle(context.state.failed ? .red : cobalt)
+                Image(systemName: symbol(for: context.state.visualState))
+                    .foregroundStyle(tint(for: context.state.visualState))
+                    .contentTransition(.symbolEffect(.replace))
             } compactTrailing: {
                 if context.state.itemCount > 0 {
                     Text(context.state.itemCount, format: .number)
@@ -66,11 +70,31 @@ struct StylezamCaptureLiveActivity: Widget {
                         .foregroundStyle(cobalt)
                 }
             } minimal: {
-                Image(systemName: context.state.isComplete ? "checkmark" : "viewfinder")
-                    .foregroundStyle(context.state.failed ? .red : cobalt)
+                Image(systemName: symbol(for: context.state.visualState))
+                    .foregroundStyle(tint(for: context.state.visualState))
+                    .contentTransition(.symbolEffect(.replace))
             }
             .widgetURL(URL(string: "stylezam://library"))
             .keylineTint(cobalt)
+        }
+    }
+
+    private func symbol(for state: StylezamCaptureActivityVisualState) -> String {
+        switch state {
+        case .watching: "viewfinder"
+        case .detecting: "viewfinder.circle"
+        case .recognized: "viewfinder.circle.fill"
+        case .cropping: "crop"
+        case .saved: "checkmark.circle.fill"
+        case .failed: "exclamationmark.triangle.fill"
+        }
+    }
+
+    private func tint(for state: StylezamCaptureActivityVisualState) -> Color {
+        switch state {
+        case .saved: savedGreen
+        case .failed: .red
+        default: cobalt
         }
     }
 }

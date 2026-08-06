@@ -16,6 +16,19 @@ struct LiveScreenFrame: Sendable {
     let pixelHeight: Int
 }
 
+struct LiveScreenDebugSnapshot: Identifiable, Sendable {
+    let id: UUID
+    let capturedAt: Date
+    let frameData: Data
+    let pixelWidth: Int
+    let pixelHeight: Int
+    let candidates: [GarmentCandidate]
+    let stage: String
+    /// Index-aligned with `candidates`. A missing file stays `nil` instead of shifting the
+    /// following crops onto the wrong detection in Developer Debug.
+    let savedCropData: [Data?]
+}
+
 /// Owns the recent frames from a full-display stream the user authorizes with Apple’s picker.
 ///
 /// The ScreenCaptureKit implementation lives in an iOS 27-only adapter below. Keeping those
@@ -31,6 +44,11 @@ final class LiveScreenCaptureManager: NSObject {
     private(set) var latestFramePixelHeight = 0
     private(set) var automaticAnalysisStatus: String?
     private(set) var automaticallySavedPieceCount = 0
+    private(set) var receivedFrameCount = 0
+    private(set) var analyzedFrameCount = 0
+    private(set) var lastAnalysisAt: Date?
+    private(set) var lastDetectionAt: Date?
+    private(set) var latestDebugSnapshot: LiveScreenDebugSnapshot?
     private(set) var errorMessage: String?
     private var frameBuffer: [LiveScreenFrame] = []
 
@@ -38,6 +56,7 @@ final class LiveScreenCaptureManager: NSObject {
     // Type-erased because the concrete adapter is unavailable before an iOS 27 runtime.
     @ObservationIgnored private var platformAdapter: AnyObject?
     @ObservationIgnored private var frameHandler: (@MainActor @Sendable (LiveScreenFrame) -> Void)?
+    @ObservationIgnored private var lastActivityFeedbackSignature: String?
 
     nonisolated static var isSupportedBySDK: Bool {
         #if canImport(ScreenCaptureKit)
@@ -87,11 +106,80 @@ final class LiveScreenCaptureManager: NSObject {
         automaticAnalysisStatus = status
     }
 
+    func setAutomaticAnalysisFeedback(
+        status: String,
+        activityPhase: String,
+        visualState: StylezamCaptureActivityVisualState,
+        itemCount: Int = 0
+    ) {
+        automaticAnalysisStatus = status
+        publishActivityFeedback(
+            phase: activityPhase,
+            itemCount: itemCount,
+            visualState: visualState
+        )
+    }
+
+    func recordAnalysis(
+        frame: LiveScreenFrame,
+        candidates: [GarmentCandidate],
+        stage: String,
+        retainDebugArtifacts: Bool
+    ) {
+        analyzedFrameCount += 1
+        lastAnalysisAt = .now
+        if !candidates.isEmpty {
+            lastDetectionAt = .now
+        }
+        guard retainDebugArtifacts else {
+            latestDebugSnapshot = nil
+            return
+        }
+        latestDebugSnapshot = LiveScreenDebugSnapshot(
+            id: UUID(),
+            capturedAt: frame.capturedAt,
+            frameData: frame.data,
+            pixelWidth: frame.pixelWidth,
+            pixelHeight: frame.pixelHeight,
+            candidates: candidates,
+            stage: stage,
+            savedCropData: []
+        )
+    }
+
+    func recordSavedDebugSnapshot(
+        frame: LiveScreenFrame,
+        candidates: [GarmentCandidate],
+        cropData: [Data?],
+        retainDebugArtifacts: Bool
+    ) {
+        guard retainDebugArtifacts else { return }
+        latestDebugSnapshot = LiveScreenDebugSnapshot(
+            id: UUID(),
+            capturedAt: frame.capturedAt,
+            frameData: frame.data,
+            pixelWidth: frame.pixelWidth,
+            pixelHeight: frame.pixelHeight,
+            candidates: candidates,
+            stage: "Saved full-resolution crops",
+            savedCropData: cropData
+        )
+    }
+
+    func clearDebugSnapshot() {
+        latestDebugSnapshot = nil
+    }
+
     func recordAutomaticallySavedPieces(_ count: Int) {
         automaticallySavedPieceCount += max(0, count)
         automaticAnalysisStatus = count == 1
             ? "Saved 1 detected piece automatically."
             : "Saved \(count) detected pieces automatically."
+        publishActivityFeedback(
+            phase: count == 1 ? "1 piece saved" : "\(count) pieces saved",
+            itemCount: count,
+            visualState: .saved
+        )
     }
 
     /// Slows full-resolution frame materialization after a stable page has already been handled.
@@ -156,6 +244,12 @@ final class LiveScreenCaptureManager: NSObject {
         latestFramePixelHeight = 0
         automaticAnalysisStatus = "Waiting for a stable fashion item."
         automaticallySavedPieceCount = 0
+        receivedFrameCount = 0
+        analyzedFrameCount = 0
+        lastAnalysisAt = nil
+        lastDetectionAt = nil
+        latestDebugSnapshot = nil
+        lastActivityFeedbackSignature = nil
         errorMessage = nil
     }
 
@@ -170,7 +264,8 @@ final class LiveScreenCaptureManager: NSObject {
         await screenActivityManager.start(
             id: UUID().uuidString,
             source: "Authorized full display",
-            phase: "Live screen active"
+            phase: "Live screen active",
+            visualState: .watching
         )
     }
 
@@ -182,6 +277,7 @@ final class LiveScreenCaptureManager: NSObject {
         latestFramePixelWidth = 0
         latestFramePixelHeight = 0
         automaticAnalysisStatus = nil
+        lastActivityFeedbackSignature = nil
         errorMessage = nil
         await screenActivityManager.end(phase: "Live screen stopped")
     }
@@ -194,6 +290,7 @@ final class LiveScreenCaptureManager: NSObject {
         latestFramePixelWidth = 0
         latestFramePixelHeight = 0
         automaticAnalysisStatus = nil
+        lastActivityFeedbackSignature = nil
         errorMessage = error.localizedDescription
         await screenActivityManager.end(
             phase: "Live screen interrupted",
@@ -218,6 +315,7 @@ final class LiveScreenCaptureManager: NSObject {
         latestFrameAt = capturedAt
         latestFramePixelWidth = pixelWidth
         latestFramePixelHeight = pixelHeight
+        receivedFrameCount += 1
         frameBuffer.append(frame)
         let retentionCutoff = capturedAt.addingTimeInterval(-4)
         frameBuffer.removeAll { $0.capturedAt < retentionCutoff }
@@ -225,6 +323,26 @@ final class LiveScreenCaptureManager: NSObject {
             frameBuffer.removeFirst(frameBuffer.count - 6)
         }
         frameHandler?(frame)
+    }
+
+    private func publishActivityFeedback(
+        phase: String,
+        itemCount: Int,
+        visualState: StylezamCaptureActivityVisualState
+    ) {
+        guard isCapturing else { return }
+        let signature = "\(visualState.rawValue)|\(phase)|\(itemCount)"
+        guard signature != lastActivityFeedbackSignature else { return }
+        lastActivityFeedbackSignature = signature
+        Task { @MainActor [screenActivityManager] in
+            await screenActivityManager.update(
+                phase: phase,
+                itemCount: itemCount,
+                isComplete: visualState == .saved,
+                failed: visualState == .failed,
+                visualState: visualState
+            )
+        }
     }
 }
 
@@ -252,10 +370,10 @@ private final class LiveScreenFrameGate: @unchecked Sendable {
                 if analysisIdle {
                     interval = processInfo.isLowPowerModeEnabled ? 7.0 : 4.0
                 } else {
-                    interval = processInfo.isLowPowerModeEnabled ? 2.4 : 1.45
+                    interval = processInfo.isLowPowerModeEnabled ? 1.6 : 0.85
                 }
             case .fair:
-                interval = analysisIdle ? 6.0 : 2.2
+                interval = analysisIdle ? 6.0 : 1.4
             case .serious, .critical:
                 return false
             @unknown default:

@@ -90,6 +90,18 @@ Live mode samples preview frames rather than processing every camera frame. Cand
 
 Recent Live and screen box crops use a perceptual dHash guard to suppress obvious repeats. These are deterministic capture heuristics, not biometric or identity recognition and not calibrated accuracy guarantees.
 
+Live Screen samples at a 0.85-second nominal active cadence. Newly sampled
+content receives one immediate full-screen tensor instead of waiting for the
+entire page or video frame to become motionless. If that quick pass is empty and
+the next low-resolution content signature agrees, the engine performs one
+detail-aware discovery pass; a found region is confirmed with one focused
+tensor. Two agreeing label/box/appearance observations promote the original
+device-resolution frame to the accepted still pipeline. The continuous Live
+Activity changes symbol and text for scanning, recognition, crop generation,
+and save completion. An opt-in developer diagnostic retains one authorized
+frame in memory and renders the model's actual boxes and crops inside Stylezam;
+the app never attempts to draw an overlay over another app.
+
 ## Local persistence
 
 The Library stores source images, readable garment box-crop JPEGs,
@@ -99,7 +111,10 @@ enough for a product-facing cutout. A bounded snapshot keeps the most recent
 media. Deleting a scan removes its source and crop files; clearing Library
 removes all local media and saved legacy records.
 
-Live screen preview frames remain in a short in-memory rolling buffer. Stopping capture clears that buffer.
+Live screen preview frames remain in a short in-memory rolling buffer. Stopping
+capture clears that buffer. When the developer box-retention toggle is enabled,
+one latest analyzed frame may remain visible in Live Screen Inspector until the
+next stream starts or the toggle is disabled.
 
 ## Item coverage
 

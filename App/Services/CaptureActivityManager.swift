@@ -6,7 +6,12 @@ final class CaptureActivityManager {
     private var activity: Activity<StylezamCaptureActivityAttributes>?
     private var activeCaptureID: String?
 
-    func start(id: String, source: String, phase: String) async {
+    func start(
+        id: String,
+        source: String,
+        phase: String,
+        visualState: StylezamCaptureActivityVisualState = .detecting
+    ) async {
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
         if let activity {
             await activity.end(nil, dismissalPolicy: .immediate)
@@ -24,7 +29,8 @@ final class CaptureActivityManager {
                         phase: phase,
                         itemCount: 0,
                         isComplete: false,
-                        failed: false
+                        failed: false,
+                        visualState: visualState
                     ),
                     staleDate: .now.addingTimeInterval(90)
                 )
@@ -41,7 +47,8 @@ final class CaptureActivityManager {
         phase: String,
         itemCount: Int,
         isComplete: Bool,
-        failed: Bool
+        failed: Bool,
+        visualState: StylezamCaptureActivityVisualState = .detecting
     ) async {
         guard let activity, matches(captureID) else { return }
         await activity.update(
@@ -50,7 +57,8 @@ final class CaptureActivityManager {
                     phase: phase,
                     itemCount: itemCount,
                     isComplete: isComplete,
-                    failed: failed
+                    failed: failed,
+                    visualState: visualState
                 ),
                 staleDate: .now.addingTimeInterval(90)
             )
@@ -79,7 +87,8 @@ final class CaptureActivityManager {
                     phase: phase,
                     itemCount: itemCount,
                     isComplete: !failed,
-                    failed: failed
+                    failed: failed,
+                    visualState: failed ? .failed : .saved
                 ),
                 staleDate: nil
             ),
@@ -101,7 +110,8 @@ final class CaptureActivityManager {
                     phase: phase,
                     itemCount: 0,
                     isComplete: !failed,
-                    failed: failed
+                    failed: failed,
+                    visualState: failed ? .failed : .saved
                 ),
                 staleDate: nil
             ),
