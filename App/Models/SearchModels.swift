@@ -99,6 +99,13 @@ struct StylezamAssistantTurn: Hashable, Sendable {
     let suggestedQuestions: [String]
 }
 
+struct StylezamAssistantContextItem: Identifiable, Sendable {
+    let id: String
+    let title: String
+    let category: String
+    let imageData: Data?
+}
+
 enum ProductSearchProgress: Equatable, Sendable {
     case preparing
     case searchingImage(String)
@@ -326,7 +333,7 @@ enum ProductSearchError: LocalizedError, Equatable {
         case let .fireworksBudgetReached(limit):
             "The local Fireworks monthly safety budget of \(limit.formatted(.currency(code: "USD"))) has been reached."
         case let .planLimitReached(kind, limit):
-            "Your Free plan includes \(limit) \(kind) per month. Plus and Pro are previews and cannot be purchased in this build."
+            "Your current plan includes \(limit) \(kind) per month. Open Membership to review App Store plans."
         case let .invalidResponse(provider):
             "\(provider) returned a response Stylezam could not read."
         case let .provider(message): message

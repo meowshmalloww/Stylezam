@@ -17,15 +17,6 @@ enum AccountPlan: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var monthlyPrice: String {
-        switch self {
-        case .free: "$0"
-        case .plus: "$6.99"
-        case .pro: "$14.99"
-        case .developer: "Internal"
-        }
-    }
-
     var productSearchAllowance: String {
         switch self {
         case .free: "10 searches / month"
@@ -53,7 +44,23 @@ enum AccountPlan: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    var isAvailable: Bool { self == .free || self == .developer }
+    var isAvailable: Bool { true }
+
+    var cloudStorageBytes: Int64 {
+        switch self {
+        case .free: 250 * 1_024 * 1_024
+        case .plus: 5 * 1_024 * 1_024 * 1_024
+        case .pro, .developer: 25 * 1_024 * 1_024 * 1_024
+        }
+    }
+
+    var cloudStorageAllowance: String {
+        switch self {
+        case .free: "250 MB"
+        case .plus: "5 GB"
+        case .pro, .developer: "25 GB"
+        }
+    }
 
     var productSearchLimit: Int? {
         switch self {

@@ -46,6 +46,7 @@ actor ProductSearchService {
         localLabel: String,
         refinement: String? = nil,
         searchIntent: AIShoppingSearchIntent? = nil,
+        ownedWardrobeContext: [String] = [],
         apiKey: String,
         modelID: String
     ) async throws -> (GarmentUnderstanding, SearchProviderResponse) {
@@ -70,6 +71,7 @@ actor ProductSearchService {
         Do not invent a brand. Include visible brand/model text only when clearly readable.
         \(intentInstruction)
         \(refinementInstruction)
+        \(ownedWardrobeContext.isEmpty ? "" : "The user owns these relevant pieces: \(ownedWardrobeContext.prefix(4).joined(separator: "; ")). Make the shopping query coordinate with them when that helps the request, but do not search for the owned pieces themselves.")
         """
         let imageURL = imageDataURL(for: imageData)
         let body: [String: Any] = [
@@ -127,16 +129,20 @@ actor ProductSearchService {
     func assistantReply(
         imageData: Data,
         localLabel: String,
+        libraryContext: [StylezamAssistantContextItem],
         history: [StylezamChatMessage],
         question: String,
         apiKey: String,
         modelID: String
     ) async throws -> (StylezamAssistantTurn, SearchProviderResponse) {
         let imageURL = imageDataURL(for: imageData)
+        let boundedLibraryContext = Array(libraryContext.prefix(4))
         let systemPrompt = """
-        You are Stylezam AI, a careful, useful fashion shopping assistant. Maintain context across the conversation and reason from the selected garment image.
+        You are Stylezam AI, a careful, useful fashion shopping assistant. Maintain context across the conversation and reason from the selected garment plus the few Library pieces retrieved on device for this question.
 
         Be direct and conversational. Explain visible construction, color, silhouette, styling, likely material, care, fit, and shopping terminology when relevant. Clearly distinguish what is visible from what is only likely. Never claim an exact brand, model, material, authenticity, store price, or availability unless it is explicit in the image or supplied conversation. If the user wants products or current prices, explain that Stylezam can perform a live shopping search.
+
+        Library context is private owned-wardrobe context, not live inventory. Mention an owned piece only when relevant and call it "in your Library." Never imply that Bright Data or a shopping provider can browse the private Library.
 
         Return strict JSON with exactly these keys:
         answer: a useful answer, usually 1-4 short paragraphs.
@@ -159,6 +165,28 @@ actor ProductSearchService {
                 "content": "I’ll use this selected item as the visual context for our conversation.",
             ],
         ]
+        if !boundedLibraryContext.isEmpty {
+            var content: [[String: Any]] = [[
+                "type": "text",
+                "text": "On-device metadata retrieval selected these relevant owned pieces for this question. Only use what helps: " + boundedLibraryContext.map { "\($0.title) (\($0.category))" }.joined(separator: "; "),
+            ]]
+            // Keep the privacy/cost bound hard: selected crop plus at most two additional crops.
+            for item in boundedLibraryContext.filter({ $0.imageData != nil }).prefix(2) {
+                content.append([
+                    "type": "text",
+                    "text": "Relevant Library piece: \(item.title) (\(item.category))",
+                ])
+                content.append([
+                    "type": "image_url",
+                    "image_url": ["url": imageDataURL(for: item.imageData!)],
+                ])
+            }
+            messages.append(["role": "user", "content": content])
+            messages.append([
+                "role": "assistant",
+                "content": "I’ll use only the relevant Library pieces supplied for this question.",
+            ])
+        }
         for turn in boundedChatHistory(history) {
             messages.append([
                 "role": turn.role == .user ? "user" : "assistant",

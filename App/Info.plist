@@ -31,9 +31,15 @@
     <string>Stylezam uses the camera only when you choose to capture a fashion look.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Choose a fashion image so Stylezam can detect and separate its visible pieces on this iPhone.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Stylezam uses the microphone only while you speak a question to Stylezam AI. Audio is not saved or uploaded.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Stylezam converts a spoken question to editable text on this iPhone before you send it.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Stylezam scans the screen you authorize on this iPhone and automatically saves a garment only after it remains stable.</string>
     <key>NSSupportsLiveActivities</key><true/>
+    <key>STYLEZAM_SUPABASE_URL</key><string>$(STYLEZAM_SUPABASE_URL)</string>
+    <key>STYLEZAM_SUPABASE_PUBLISHABLE_KEY</key><string>$(STYLEZAM_SUPABASE_PUBLISHABLE_KEY)</string>
     <key>UIApplicationSupportsIndirectInputEvents</key><true/>
     <key>UIBackgroundModes</key>
     <array><string>screen-capture</string></array>

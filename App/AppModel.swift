@@ -15,6 +15,8 @@ final class AppModel {
     let credentials: CredentialStore
     let searchUsage: SearchUsageStore
     let account: AccountSession
+    let subscriptions: SubscriptionStore
+    let cloudLibrary: SupabaseCloudLibrary
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
@@ -59,7 +61,9 @@ final class AppModel {
         modelPack: ModelPackManager = ModelPackManager(),
         credentials: CredentialStore = CredentialStore(),
         searchUsage: SearchUsageStore = SearchUsageStore(),
-        account: AccountSession = AccountSession()
+        account: AccountSession = AccountSession(),
+        subscriptions: SubscriptionStore = SubscriptionStore(),
+        cloudLibrary: SupabaseCloudLibrary = SupabaseCloudLibrary()
     ) {
         self.settings = settings
         self.library = library
@@ -68,6 +72,13 @@ final class AppModel {
         self.credentials = credentials
         self.searchUsage = searchUsage
         self.account = account
+        self.subscriptions = subscriptions
+        self.cloudLibrary = cloudLibrary
+    }
+
+    var activePlan: AccountPlan {
+        if account.isDeveloper { return .developer }
+        return subscriptions.entitledPlan
     }
 
     func start() async {
@@ -82,7 +93,24 @@ final class AppModel {
             settings.brightDataZone = zone
         }
 #endif
+        account.setAccountChangeHandler { [weak self] account in
+            guard let self else { return }
+            cloudLibrary.configure(
+                ownerID: account?.uid,
+                plan: activePlan,
+                export: library.cloudLibraryExport()
+            )
+        }
+        library.setCloudChangeHandler { [weak self] export in
+            self?.cloudLibrary.scheduleSync(export)
+        }
         await account.start()
+        await subscriptions.start()
+        cloudLibrary.configure(
+            ownerID: account.account?.uid,
+            plan: activePlan,
+            export: library.cloudLibraryExport()
+        )
         await modelPack.refresh()
         if let modelURL = modelPack.activeModelURL {
             try? await visionEngine.prepare(modelURL: modelURL)
@@ -778,6 +806,38 @@ final class AppModel {
         }
     }
 
+    @discardableResult
+    func purchaseSubscription(
+        plan: AccountPlan,
+        period: SubscriptionBillingPeriod
+    ) async -> Bool {
+        let purchased = await subscriptions.purchase(plan: plan, period: period)
+        cloudLibrary.updatePlan(activePlan)
+        if purchased {
+            cloudLibrary.syncNow(export: library.cloudLibraryExport())
+        }
+        return purchased
+    }
+
+    func restoreSubscriptions() async {
+        await subscriptions.restorePurchases()
+        cloudLibrary.updatePlan(activePlan)
+        cloudLibrary.syncNow(export: library.cloudLibraryExport())
+    }
+
+    @discardableResult
+    func deleteAccountAndLibrary() async -> Bool {
+        do {
+            try await cloudLibrary.deleteCloudLibrary()
+        } catch {
+            lastError = "The private Cloud Library could not be deleted. \(error.localizedDescription)"
+            return false
+        }
+        guard await account.deleteAccount() else { return false }
+        clearLibrary()
+        return true
+    }
+
     func deleteLibraryItems(
         scanIDs: Set<UUID>,
         searchIDs: Set<String>,
@@ -805,7 +865,7 @@ final class AppModel {
         progress: ((ProductSearchProgress) -> Void)? = nil
     ) async throws -> SavedProductSearch {
         progress?(.preparing)
-        guard let activePlan = account.account?.plan else {
+        guard account.account != nil else {
             throw ProductSearchError.provider("Sign in with Google before searching.")
         }
         if let limit = activePlan.productSearchLimit,
@@ -903,11 +963,17 @@ final class AppModel {
             switch pipeline {
             case .privateAIText:
                 progress?(.analyzingRequest)
+                let wardrobeMatches = relevantWardrobeItems(
+                    scanID: scanID,
+                    garmentID: garmentID,
+                    question: refinement ?? ""
+                )
                 let (analysis, fireworkResponse) = try await productSearchService.understandGarment(
                     imageData: context.imageData,
                     localLabel: context.garmentLabel,
                     refinement: refinement,
                     searchIntent: aiSearchIntent,
+                    ownedWardrobeContext: wardrobeMatches.map(\.promptSummary),
                     apiKey: fireworksKey!,
                     modelID: settings.fireworksModelID
                 )
@@ -927,6 +993,16 @@ final class AppModel {
                     cheaperFirst: aiSearchIntent == .cheaper
                 )
                 results = shoppingResponse.results
+                let rankingVector = StylezamMetadataEmbedding.vector(
+                    for: analysis.searchQuery + " "
+                        + wardrobeMatches.map(\.promptSummary).joined(separator: " ")
+                )
+                let alignment: (ProductResultDTO) -> Double = { product in
+                    StylezamMetadataEmbedding.cosine(
+                        rankingVector,
+                        StylezamMetadataEmbedding.vector(for: product.title)
+                    ) + product.score * 0.18
+                }
                 if aiSearchIntent == .cheaper {
                     results.sort { left, right in
                         switch (left.price, right.price) {
@@ -934,15 +1010,17 @@ final class AppModel {
                             if leftPrice.amount != rightPrice.amount {
                                 return leftPrice.amount < rightPrice.amount
                             }
-                            return left.score > right.score
+                            return alignment(left) > alignment(right)
                         case (_?, nil):
                             return true
                         case (nil, _?):
                             return false
                         default:
-                            return left.score > right.score
+                            return alignment(left) > alignment(right)
                         }
                     }
+                } else {
+                    results.sort { alignment($0) > alignment($1) }
                 }
                 understanding = analysis
                 providerSummary = "Stylezam AI + \(keywordProvider.title)"
@@ -1067,7 +1145,7 @@ final class AppModel {
         garmentID: String,
         question: String
     ) async throws -> StylezamChatMessage {
-        guard let activePlan = account.account?.plan else {
+        guard account.account != nil else {
             throw ProductSearchError.provider("Sign in with Google before using the assistant.")
         }
         if let limit = activePlan.assistantQuestionLimit,
@@ -1077,6 +1155,15 @@ final class AppModel {
         }
         let context = try garmentSearchContext(scanID: scanID, garmentID: garmentID)
         let history = library.chatMessages(for: context.key)
+        let localMatches = relevantWardrobeItems(
+            scanID: scanID,
+            garmentID: garmentID,
+            question: question
+        )
+        async let cloudMatchesRequest = cloudLibrary.relevantGarments(
+            for: question + " " + context.garmentLabel,
+            limit: 4
+        )
         guard let key = try credentials.credential(for: .fireworks), !key.isEmpty else {
             throw ProductSearchError.missingCredential(SearchCredentialKind.fireworks.title)
         }
@@ -1089,9 +1176,34 @@ final class AppModel {
         )
         let startedAt = Date()
         do {
+            let cloudMatches = await cloudMatchesRequest
+            var assistantContext = localMatches
+                .filter { !($0.scanID == scanID && $0.garmentID == garmentID) }
+                .prefix(3)
+                .map { item in
+                    StylezamAssistantContextItem(
+                        id: item.id,
+                        title: item.title,
+                        category: item.category,
+                        imageData: item.cropURL.flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
+                    )
+                }
+            let existingIDs = Set(assistantContext.map(\.id))
+            assistantContext.append(contentsOf: cloudMatches
+                .filter { !existingIDs.contains($0.recordID) && $0.recordID != context.key }
+                .prefix(max(0, 4 - assistantContext.count))
+                .map {
+                    StylezamAssistantContextItem(
+                        id: $0.recordID,
+                        title: $0.title,
+                        category: $0.category ?? "fashion item",
+                        imageData: nil
+                    )
+                })
             let (turn, response) = try await productSearchService.assistantReply(
                 imageData: context.imageData,
                 localLabel: context.garmentLabel,
+                libraryContext: assistantContext,
                 history: history,
                 question: question,
                 apiKey: key,
@@ -1128,6 +1240,22 @@ final class AppModel {
             )
             throw error
         }
+    }
+
+    func relevantWardrobeItems(
+        scanID: UUID,
+        garmentID: String,
+        question: String,
+        limit: Int = 4
+    ) -> [WardrobeContextItem] {
+        WardrobeRetrievalService.relevantItems(
+            question: question,
+            selectedScanID: scanID,
+            selectedGarmentID: garmentID,
+            scans: library.scans,
+            cropURL: { library.cropURL(for: $0) },
+            limit: limit
+        )
     }
 
     private func garmentSearchContext(scanID: UUID, garmentID: String) throws -> GarmentSearchContext {

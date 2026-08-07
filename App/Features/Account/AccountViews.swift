@@ -143,7 +143,7 @@ struct AccountView: View {
                     NavigationLink {
                         SubscriptionPlansView()
                     } label: {
-                        LabeledContent("Plan", value: account.plan.title)
+                        LabeledContent("Plan", value: model.activePlan.title)
                     }
                     Button("Refresh account access") {
                         Task { await model.account.refreshDeveloperAccess() }
@@ -176,11 +176,11 @@ struct AccountView: View {
         ) {
             Button("Delete account and library", role: .destructive) {
                 Task {
-                    if await model.account.deleteAccount() { model.clearLibrary() }
+                    _ = await model.deleteAccountAndLibrary()
                 }
             }
         } message: {
-            Text("This deletes the Firebase Authentication user plus captures, crops, searches, saved products, and local profile data on this iPhone. It cannot be undone.")
+            Text("This deletes the private Cloud Library first, then the Firebase Authentication user plus every local capture, crop, search, saved product, person photo, and profile on this iPhone. It cannot be undone.")
         }
     }
 }
@@ -189,9 +189,10 @@ struct InitialPlanSelectionView: View {
     let completion: () -> Void
 
     @Environment(AppModel.self) private var model
+    @State private var billingPeriod: SubscriptionBillingPeriod = .annual
 
     private var currentPlan: AccountPlan {
-        model.account.account?.plan ?? .free
+        model.activePlan
     }
 
     private var previewPlans: [AccountPlan] {
@@ -211,23 +212,50 @@ struct InitialPlanSelectionView: View {
                     Text("Choose your plan.")
                         .font(.system(size: 40, weight: .semibold))
                         .tracking(-1.3)
-                    Text("Start with the available plan today. Plus and Pro remain visible so their intended limits are clear, but they cannot be purchased yet.")
+                    Text("Every plan includes private garment sync. Person photos, original captures, and try-on portraits always stay on this iPhone.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
+                BillingPeriodPicker(selection: $billingPeriod)
+
                 ForEach(previewPlans) { plan in
-                    PlanCard(plan: plan, active: plan == currentPlan)
-                        .opacity(plan.isAvailable ? 1 : 0.66)
+                    PlanCard(
+                        plan: plan,
+                        period: billingPeriod,
+                        price: model.subscriptions.price(for: plan, period: billingPeriod),
+                        annualSavings: model.subscriptions.annualSavings(for: plan),
+                        active: plan == currentPlan,
+                        productAvailable: model.subscriptions.product(
+                            for: plan,
+                            period: billingPeriod
+                        ) != nil,
+                        isPurchasing: model.subscriptions.isPurchasing,
+                        onChoose: plan == .plus || plan == .pro ? {
+                            Task {
+                                if await model.purchaseSubscription(
+                                    plan: plan,
+                                    period: billingPeriod
+                                ) { completion() }
+                            }
+                        } : nil
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
                 }
 
+                if let message = model.subscriptions.errorMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
                 Text("Search results, prices, and provider availability can change. Confirm important details with the merchant.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             .padding(StylezamDesign.pageInset)
             .padding(.bottom, 104)
+            .animation(.easeInOut(duration: 0.24), value: billingPeriod)
         }
         .background(StylezamDesign.canvas)
         .safeAreaInset(edge: .bottom) {
@@ -253,6 +281,7 @@ struct InitialPlanSelectionView: View {
 }
 
 struct AccountIdentityHeader: View {
+    @Environment(AppModel.self) private var model
     let account: StylezamAccount
 
     var body: some View {
@@ -275,7 +304,7 @@ struct AccountIdentityHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text(account.plan == .developer ? "Unlimited internal access" : "Free plan")
+                Text("\(model.activePlan.title) · \(model.activePlan.cloudStorageAllowance) cloud allowance")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(StylezamDesign.cobalt)
             }
@@ -346,6 +375,7 @@ private struct ProfileEditorView: View {
 
 struct SubscriptionPlansView: View {
     @Environment(AppModel.self) private var model
+    @State private var billingPeriod: SubscriptionBillingPeriod = .annual
 
     private var visiblePlans: [AccountPlan] {
         model.account.isDeveloper ? [.developer, .free, .plus, .pro] : [.free, .plus, .pro]
@@ -359,23 +389,58 @@ struct SubscriptionPlansView: View {
                     Text("Choose your pace.")
                         .font(.system(size: 34, weight: .semibold))
                         .tracking(-1)
-                    Text("Free is active today. Paid plans are pricing previews until StoreKit subscriptions are implemented and tested.")
+                    Text("Choose monthly flexibility or save with annual billing. Prices and purchases come directly from the App Store.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 4)
 
+                BillingPeriodPicker(selection: $billingPeriod)
+
                 ForEach(visiblePlans) { plan in
-                    PlanCard(plan: plan, active: model.account.account?.plan == plan)
+                    PlanCard(
+                        plan: plan,
+                        period: billingPeriod,
+                        price: model.subscriptions.price(for: plan, period: billingPeriod),
+                        annualSavings: model.subscriptions.annualSavings(for: plan),
+                        active: model.activePlan == plan,
+                        productAvailable: model.subscriptions.product(
+                            for: plan,
+                            period: billingPeriod
+                        ) != nil,
+                        isPurchasing: model.subscriptions.isPurchasing,
+                        onChoose: plan == .plus || plan == .pro ? {
+                            Task {
+                                _ = await model.purchaseSubscription(
+                                    plan: plan,
+                                    period: billingPeriod
+                                )
+                            }
+                        } : nil
+                    )
                 }
 
-                Text("Allowances are product targets, not a promise of unlimited provider availability. Store pricing, taxes, and final limits may change before launch.")
+                Button("Restore purchases") {
+                    Task { await model.restoreSubscriptions() }
+                }
+                .font(.subheadline.weight(.semibold))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 7)
+
+                if let message = model.subscriptions.errorMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+
+                Text("Cloud allowances are per Stylezam account and enforced separately from the Supabase project’s pooled capacity. Shopping providers and merchant availability can still change.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
             }
             .padding(StylezamDesign.pageInset)
             .padding(.bottom, 30)
+            .animation(.easeInOut(duration: 0.24), value: billingPeriod)
         }
         .background(StylezamDesign.canvas)
         .navigationTitle("Plans")
@@ -385,7 +450,13 @@ struct SubscriptionPlansView: View {
 
 private struct PlanCard: View {
     let plan: AccountPlan
+    let period: SubscriptionBillingPeriod
+    let price: String
+    let annualSavings: Int?
     let active: Bool
+    let productAvailable: Bool
+    let isPurchasing: Bool
+    let onChoose: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -399,10 +470,11 @@ private struct PlanCard: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(plan.monthlyPrice)
+                    Text(price)
                         .font(.title3.weight(.semibold))
+                        .contentTransition(.numericText())
                     if plan == .plus || plan == .pro {
-                        Text("per month")
+                        Text(period == .monthly ? "per month" : "per year")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -412,15 +484,50 @@ private struct PlanCard: View {
             EditorialRule()
             planLine("magnifyingglass", plan.productSearchAllowance)
             planLine("sparkles", plan.assistantAllowance)
+            planLine("icloud", "\(plan.cloudStorageAllowance) private garment storage")
             planLine("iphone", "On device garment detection")
 
-            Text(active ? "CURRENT PLAN" : plan.isAvailable ? "AVAILABLE" : "COMING SOON")
-                .font(.caption2.weight(.bold))
-                .tracking(1)
-                .foregroundStyle(active ? .white : .secondary)
-                .padding(.horizontal, 11)
-                .padding(.vertical, 7)
-                .background(active ? StylezamDesign.cobalt : Color(uiColor: .tertiarySystemFill), in: Capsule())
+            HStack(spacing: 9) {
+                Text(active ? "CURRENT PLAN" : plan == .free ? "ALWAYS AVAILABLE" : productAvailable ? "APP STORE" : "NOT CONFIGURED")
+                    .font(.caption2.weight(.bold))
+                    .tracking(1)
+                    .foregroundStyle(active ? .white : .secondary)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(active ? StylezamDesign.cobalt : Color(uiColor: .tertiarySystemFill), in: Capsule())
+
+                if period == .annual, let annualSavings, annualSavings > 0,
+                   plan == .plus || plan == .pro
+                {
+                    Text("SAVE \(annualSavings)%")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(StylezamDesign.cobalt)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(StylezamDesign.cobalt.opacity(0.1), in: Capsule())
+                }
+                Spacer()
+            }
+
+            if !active, let onChoose, plan == .plus || plan == .pro {
+                Button(action: onChoose) {
+                    HStack {
+                        Text(productAvailable ? "Choose \(plan.title)" : "Unavailable from App Store")
+                        Spacer()
+                        if isPurchasing {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "arrow.right")
+                        }
+                    }
+                    .font(.headline)
+                    .padding(.horizontal, 16)
+                    .frame(height: 50)
+                }
+                .stylezamGlassButton(prominent: true)
+                .tint(StylezamDesign.cobalt)
+                .disabled(!productAvailable || isPurchasing)
+            }
         }
         .padding(19)
         .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -434,5 +541,40 @@ private struct PlanCard: View {
         Label(title, systemImage: icon)
             .font(.subheadline)
             .foregroundStyle(.primary)
+    }
+}
+
+private struct BillingPeriodPicker: View {
+    @Binding var selection: SubscriptionBillingPeriod
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(SubscriptionBillingPeriod.allCases) { period in
+                Button {
+                    withAnimation(.spring(response: 0.34, dampingFraction: 0.84)) {
+                        selection = period
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(period.title)
+                            .font(.subheadline.weight(.semibold))
+                        if period == .annual {
+                            Text("BEST VALUE")
+                                .font(.system(size: 8, weight: .bold))
+                                .tracking(0.6)
+                                .foregroundStyle(selection == period ? .white.opacity(0.78) : StylezamDesign.cobalt)
+                        }
+                    }
+                    .foregroundStyle(selection == period ? .white : .primary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(selection == period ? StylezamDesign.cobalt : .clear, in: Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+        .overlay { Capsule().stroke(StylezamDesign.hairline, lineWidth: 0.75) }
     }
 }

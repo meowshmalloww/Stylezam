@@ -15,6 +15,7 @@ struct StylezamChatView: View {
     @State private var searchProgress: ProductSearchProgress = .preparing
     @State private var errorMessage: String?
     @State private var retryRequest: ChatRetryRequest?
+    @State private var speechInput = OnDeviceSpeechInput()
     @FocusState private var composerFocused: Bool
 
     private let starterQuestions = [
@@ -130,6 +131,13 @@ struct StylezamChatView: View {
             .navigationDestination(for: ProductResultDTO.self) { product in
                 ProductDetailView(product: product)
             }
+            .onChange(of: speechInput.transcript) { _, transcript in
+                if speechInput.isRecording || !transcript.isEmpty { draft = transcript }
+            }
+            .onChange(of: speechInput.errorMessage) { _, message in
+                if let message { errorMessage = message }
+            }
+            .onDisappear { speechInput.cancel() }
         }
     }
 
@@ -159,7 +167,7 @@ struct StylezamChatView: View {
                 Text(garment?.title.capitalized ?? "Selected piece")
                     .font(.title3.weight(.semibold))
                     .lineLimit(2)
-                Text("AI keeps this crop in context for every answer and shopping request.")
+                Text("AI searches your Library first, then uses only the few pieces relevant to your question.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -424,40 +432,84 @@ struct StylezamChatView: View {
     }
 
     private var composer: some View {
-        HStack(alignment: .bottom, spacing: 9) {
-            TextField("Message Stylezam", text: $draft, axis: .vertical)
-                .focused($composerFocused)
-                .lineLimit(1...5)
-                .textInputAutocapitalization(.sentences)
-                .submitLabel(.send)
-                .onSubmit { send(nil) }
-                .padding(.horizontal, 15)
-                .padding(.vertical, 11)
-                .background(
-                    Color(uiColor: .secondarySystemBackground),
-                    in: RoundedRectangle(cornerRadius: 21, style: .continuous)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 21, style: .continuous)
-                        .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        VStack(alignment: .leading, spacing: 8) {
+            if speechInput.isRecording {
+                HStack(spacing: 11) {
+                    SpeechLevelMeter(level: speechInput.level)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Listening on this iPhone")
+                            .font(.caption.weight(.semibold))
+                        Text("Tap stop when you’re finished. Review the words before sending.")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Cancel") { speechInput.cancel() }
+                        .font(.caption.weight(.semibold))
                 }
-
-            Button { send(nil) } label: {
-                Image(systemName: "arrow.up")
-                    .font(.body.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 44, height: 44)
-                    .background(StylezamDesign.cobalt, in: Circle())
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
-            .buttonStyle(.plain)
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy)
-            .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy ? 0.34 : 1)
-            .accessibilityLabel("Send message")
+
+            HStack(alignment: .bottom, spacing: 9) {
+                Button {
+                    if speechInput.isRecording {
+                        speechInput.stop()
+                    } else {
+                        composerFocused = false
+                        Task { await speechInput.start() }
+                    }
+                } label: {
+                    Image(systemName: speechInput.isRecording ? "stop.fill" : "waveform")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(speechInput.isRecording ? .white : StylezamDesign.cobalt)
+                        .frame(width: 44, height: 44)
+                        .background(
+                            speechInput.isRecording
+                                ? AnyShapeStyle(StylezamDesign.cobalt)
+                                : AnyShapeStyle(Color(uiColor: .secondarySystemBackground)),
+                            in: Circle()
+                        )
+                        .overlay { Circle().stroke(StylezamDesign.hairline, lineWidth: 0.75) }
+                }
+                .buttonStyle(.plain)
+                .disabled(isBusy)
+                .accessibilityLabel(speechInput.isRecording ? "Stop listening" : "Speak a question")
+
+                TextField("Message Stylezam", text: $draft, axis: .vertical)
+                    .focused($composerFocused)
+                    .lineLimit(1...5)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.send)
+                    .onSubmit { send(nil) }
+                    .padding(.horizontal, 15)
+                    .padding(.vertical, 11)
+                    .background(
+                        Color(uiColor: .secondarySystemBackground),
+                        in: RoundedRectangle(cornerRadius: 21, style: .continuous)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 21, style: .continuous)
+                            .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+                    }
+
+                Button { send(nil) } label: {
+                    Image(systemName: "arrow.up")
+                        .font(.body.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 44, height: 44)
+                        .background(StylezamDesign.cobalt, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy)
+                .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isBusy ? 0.34 : 1)
+                .accessibilityLabel("Send message")
+            }
         }
         .padding(.horizontal, StylezamDesign.pageInset)
         .padding(.top, 10)
         .padding(.bottom, 8)
         .background(.bar)
+        .animation(.spring(response: 0.35, dampingFraction: 0.84), value: speechInput.isRecording)
     }
 
     private var assistantMark: some View {
@@ -473,6 +525,7 @@ struct StylezamChatView: View {
         let question = (suppliedQuestion ?? draft)
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !question.isEmpty, !isBusy else { return }
+        if speechInput.isRecording { speechInput.stop() }
         if suppliedQuestion == nil { draft = "" }
         composerFocused = false
         pendingUserText = question

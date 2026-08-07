@@ -26,6 +26,9 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS.git
     exactVersion: 9.2.0
+  Supabase:
+    url: https://github.com/supabase/supabase-swift.git
+    exactVersion: 2.54.1
 
 targets:
   Stylezam:
@@ -63,6 +66,8 @@ targets:
         product: FirebaseAnalyticsCore
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: Supabase
+        product: Supabase
       - target: StylezamWidgets
         embed: true
       - target: StylezamShare

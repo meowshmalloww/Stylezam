@@ -30,7 +30,8 @@ await auth.setCustomUserClaims(user.uid, {
   ...existingClaims,
   developer: true,
   plan: "developer",
+  role: "authenticated",
 });
 
-console.log(`Developer claim granted to Firebase UID ${user.uid}.`);
+console.log(`Developer and Supabase authenticated claims granted to Firebase UID ${user.uid}.`);
 console.log("Sign out and back in, or tap Refresh developer access in Stylezam.");

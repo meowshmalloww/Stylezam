@@ -7,10 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0292C60511674F3CB97601DA /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 1432C59A036288204CDC08E2 /* Supabase */; };
 		0B7C3C2E439D3B2EFE88B17D /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */; };
 		0BB798823EBEA25C4274BB81 /* garment-segmentation.json in Resources */ = {isa = PBXBuildFile; fileRef = EA76A6D38A5A5DA27D9473E5 /* garment-segmentation.json */; };
 		0DB1EB29EDA0AADAAAAB5906 /* StylezamControlUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CB7E4C165132539BE264F9 /* StylezamControlUITests.swift */; };
 		0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */; };
+		0E8A399772A2525A40B6D806 /* OnDeviceSpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191B25973AFF803839245236 /* OnDeviceSpeechInput.swift */; };
 		0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0323FB49E9A47D9209839A59 /* Assets.xcassets */; };
 		197425BF0FA96D593BC17093 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3508C5A578324E82F996A38B /* AppModels.swift */; };
 		1D9CE91AAAB9A3B84CA961D3 /* StylezamCaptureActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */; };
@@ -34,7 +36,9 @@
 		4AC1CCCDE9F2DC74F3B7C63F /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 23EC7B3710F3524794102889 /* FirebaseAuth */; };
 		4C4F5CD7D712F0FD6E61EA34 /* AccountSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF3733E7C459231377964274 /* AccountSession.swift */; };
 		4F99A5B4A3E3016D1733BD5E /* StylezamLiveScreenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F029DC5536934700D19D628 /* StylezamLiveScreenControl.swift */; };
+		52D24316F6E0AA6AD2D2BEEE /* SupabaseCloudLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = D91640BC403AE5A4F1158B78 /* SupabaseCloudLibrary.swift */; };
 		5477192D67F401EFEB756C39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */; };
+		5AA2C9AEA91628D46170B49F /* WardrobeRetrievalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBAD59CC2916FA9DFB6F0FE /* WardrobeRetrievalService.swift */; };
 		5CAA0AD8A15FB701955FDA4B /* StylezamShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 0B6CC0BB7556FB16639E0BFE /* StylezamShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		612527C8D504AACECBB047A0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186586B04572ED4CBAC07684 /* AppModel.swift */; };
 		616181D89E9A424AE1140568 /* PersistentTryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */; };
@@ -50,6 +54,7 @@
 		81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FFF5ED05C00039B172D585 /* StylezamDesign.swift */; };
 		821CDE01A3D4760F0A03B973 /* StylezamControlDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D457582E4F89E76DAED199 /* StylezamControlDestination.swift */; };
 		83EB3C5DC0A3967C316620C7 /* SearchUsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDA430F4B7EAA4B66F24C408 /* SearchUsageStore.swift */; };
+		87DEC009E961C10B67638107 /* SpeechLevelMeter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FDB031D2F0D58AE5FC7B767 /* SpeechLevelMeter.swift */; };
 		8A92DC227FA912701BACD6A9 /* LiveScreenCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */; };
 		8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */; };
 		8C30A42D80D392E9389CA986 /* LibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F790B57A92BDB9737A707E7 /* LibraryStore.swift */; };
@@ -63,6 +68,7 @@
 		A5352F1DD870CE7709C40963 /* StylezamWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */; };
 		AA7F0C31451C4B802854BFC2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2D218B380E2F95B01735CA1B /* PrivacyInfo.xcprivacy */; };
+		AE2CDDF5EFA82B4D9018E5E6 /* CloudLibraryModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63D690A6859A181567E9FF37 /* CloudLibraryModels.swift */; };
 		B2E843A9A85E21403CA081F1 /* AccountModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D86DEC967CA5715C957D401E /* AccountModels.swift */; };
 		B9B5CBAF9671DF404412C6D1 /* ScreenCaptureAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */; };
 		BE433491522CE13D20518260 /* LiveScreenAutoCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A452935B31CD065B1BFBC9 /* LiveScreenAutoCaptureCoordinator.swift */; };
@@ -81,9 +87,11 @@
 		E38666AB4433101A34885641 /* VisionAndProductModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A3492CF917004962F6DACD /* VisionAndProductModels.swift */; };
 		E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */; };
 		EAF4BEF7975C4B347C0A4586 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
+		EDC40C2B2934E26114F9D623 /* WardrobeRetrievalTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C649967F95E285EBF35048F2 /* WardrobeRetrievalTests.swift */; };
 		F36D719E6BB5959E1BF4A536 /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
 		F422F7A2449F720684071D48 /* StylezamChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C03E5A010AC21D3FC127413 /* StylezamChatView.swift */; };
 		F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A940D99785B136691E06C4A /* CaptureSheet.swift */; };
+		F66424935FD442BB7E0BF232 /* SubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EF17BB3D942FB10368EEBC /* SubscriptionStore.swift */; };
 		F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70AC81BE3A88E7297739342 /* VisionDebugView.swift */; };
 		FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */; };
 		FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */; };
@@ -150,8 +158,10 @@
 		11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentVisionEngine.swift; sourceTree = "<group>"; };
 		13CB7E4C165132539BE264F9 /* StylezamControlUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamControlUITests.swift; sourceTree = "<group>"; };
 		186586B04572ED4CBAC07684 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		191B25973AFF803839245236 /* OnDeviceSpeechInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnDeviceSpeechInput.swift; sourceTree = "<group>"; };
 		1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDuplicateGuardTests.swift; sourceTree = "<group>"; };
+		1FDB031D2F0D58AE5FC7B767 /* SpeechLevelMeter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechLevelMeter.swift; sourceTree = "<group>"; };
 		253C45E1C87F7D4022EEFEEE /* StylezamTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StylezamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28EDEA4381FED85305717CBF /* Stylezam.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Stylezam.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDuplicateGuard.swift; sourceTree = "<group>"; };
@@ -166,6 +176,7 @@
 		431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamMotion.swift; sourceTree = "<group>"; };
 		48962ED198B3B07771116D6B /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
+		48EF17BB3D942FB10368EEBC /* SubscriptionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubscriptionStore.swift; sourceTree = "<group>"; };
 		492A4B493D55E34D4E5BCFE9 /* DetectionCorrectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionCorrectionView.swift; sourceTree = "<group>"; };
 		496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
 		4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -175,6 +186,7 @@
 		5CD56358BDF26FC853C97071 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
 		5D6149F74411CB2250C2927B /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		5DC04B74AB8E68E1E0241FBE /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		63D690A6859A181567E9FF37 /* CloudLibraryModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudLibraryModels.swift; sourceTree = "<group>"; };
 		6CA4917D63CFC878EA00D5B8 /* LiveScreenDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenDebugView.swift; sourceTree = "<group>"; };
 		7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCaptureAvailability.swift; sourceTree = "<group>"; };
 		7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailView.swift; sourceTree = "<group>"; };
@@ -192,6 +204,7 @@
 		A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDetectionQuality.swift; sourceTree = "<group>"; };
 		A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
 		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		ABBAD59CC2916FA9DFB6F0FE /* WardrobeRetrievalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeRetrievalService.swift; sourceTree = "<group>"; };
 		AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
 		B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViews.swift; sourceTree = "<group>"; };
 		B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureControl.swift; sourceTree = "<group>"; };
@@ -200,12 +213,14 @@
 		C19D1132056E5B01A68DADF9 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStore.swift; sourceTree = "<group>"; };
 		C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistentTryOnView.swift; sourceTree = "<group>"; };
+		C649967F95E285EBF35048F2 /* WardrobeRetrievalTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeRetrievalTests.swift; sourceTree = "<group>"; };
 		C70AC81BE3A88E7297739342 /* VisionDebugView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionDebugView.swift; sourceTree = "<group>"; };
 		C9D457582E4F89E76DAED199 /* StylezamControlDestination.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamControlDestination.swift; sourceTree = "<group>"; };
 		CFBA8BBA158DB2AB23971AE2 /* StylezamWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamWidgets.swift; sourceTree = "<group>"; };
 		D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnWorkflowTests.swift; sourceTree = "<group>"; };
 		D502690A307F9CB0DEBB3755 /* SearchModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchModels.swift; sourceTree = "<group>"; };
 		D86DEC967CA5715C957D401E /* AccountModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountModels.swift; sourceTree = "<group>"; };
+		D91640BC403AE5A4F1158B78 /* SupabaseCloudLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseCloudLibrary.swift; sourceTree = "<group>"; };
 		E6F89F6DCF7700FA3D3E4477 /* jacket.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = jacket.jpg; sourceTree = "<group>"; };
 		E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		EA76A6D38A5A5DA27D9473E5 /* garment-segmentation.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "garment-segmentation.json"; sourceTree = "<group>"; };
@@ -224,6 +239,7 @@
 				4AC1CCCDE9F2DC74F3B7C63F /* FirebaseAuth in Frameworks */,
 				2D76956930B9C8E59FB2F0E9 /* FirebaseAnalyticsCore in Frameworks */,
 				2EA02C4805935EB808DCD7FD /* GoogleSignIn in Frameworks */,
+				0292C60511674F3CB97601DA /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -255,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				5D6149F74411CB2250C2927B /* SearchView.swift */,
+				1FDB031D2F0D58AE5FC7B767 /* SpeechLevelMeter.swift */,
 				0C03E5A010AC21D3FC127413 /* StylezamChatView.swift */,
 			);
 			path = Search;
@@ -305,12 +322,16 @@
 				5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */,
 				835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */,
 				E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */,
+				191B25973AFF803839245236 /* OnDeviceSpeechInput.swift */,
 				3AEE3FA2E562C606ACEABDAB /* ProductSearchService.swift */,
 				7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */,
 				BDA430F4B7EAA4B66F24C408 /* SearchUsageStore.swift */,
 				C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */,
 				B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */,
 				104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */,
+				48EF17BB3D942FB10368EEBC /* SubscriptionStore.swift */,
+				D91640BC403AE5A4F1158B78 /* SupabaseCloudLibrary.swift */,
+				ABBAD59CC2916FA9DFB6F0FE /* WardrobeRetrievalService.swift */,
 				11D7B431AD3D7BEA40E09136 /* YouCamTryOnService.swift */,
 			);
 			path = Services;
@@ -391,6 +412,7 @@
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
 				A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */,
 				D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */,
+				C649967F95E285EBF35048F2 /* WardrobeRetrievalTests.swift */,
 			);
 			path = StylezamTests;
 			sourceTree = "<group>";
@@ -446,6 +468,7 @@
 			children = (
 				D86DEC967CA5715C957D401E /* AccountModels.swift */,
 				3508C5A578324E82F996A38B /* AppModels.swift */,
+				63D690A6859A181567E9FF37 /* CloudLibraryModels.swift */,
 				A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */,
 				D502690A307F9CB0DEBB3755 /* SearchModels.swift */,
 				90A3492CF917004962F6DACD /* VisionAndProductModels.swift */,
@@ -576,6 +599,7 @@
 				23EC7B3710F3524794102889 /* FirebaseAuth */,
 				A54C5B6E9778693EEC5A9248 /* FirebaseAnalyticsCore */,
 				16CAA1D950DE5F43465B14C5 /* GoogleSignIn */,
+				1432C59A036288204CDC08E2 /* Supabase */,
 			);
 			productName = Stylezam;
 			productReference = 28EDEA4381FED85305717CBF /* Stylezam.app */;
@@ -693,6 +717,7 @@
 			packageReferences = (
 				AB995DF5AECEF79C3E533D60 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				DDD0C40572C916C5D9B1A68D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
+				FA12228DCF28E7ED75B9532C /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 0742F5738BED00E79B442C26 /* Products */;
@@ -757,6 +782,7 @@
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
 				D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */,
 				CE689F73168B7873FC653C97 /* TryOnWorkflowTests.swift in Sources */,
+				EDC40C2B2934E26114F9D623 /* WardrobeRetrievalTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -799,6 +825,7 @@
 				3031C041FFC99D16D2089A61 /* CameraSessionController.swift in Sources */,
 				375DF52023B702EBA4328FE7 /* CaptureActivityManager.swift in Sources */,
 				F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */,
+				AE2CDDF5EFA82B4D9018E5E6 /* CloudLibraryModels.swift in Sources */,
 				9805CE7058ECC70DF2B197AC /* CredentialStore.swift in Sources */,
 				6D04556DF5B9D31F831F446C /* DetectionCorrectionView.swift in Sources */,
 				E1CEFAA15C79553A29F31DCE /* FirstRunExperienceView.swift in Sources */,
@@ -815,6 +842,7 @@
 				8D9AC9D137D5E38F72F5D128 /* LiveScreenDebugView.swift in Sources */,
 				A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */,
 				FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */,
+				0E8A399772A2525A40B6D806 /* OnDeviceSpeechInput.swift in Sources */,
 				616181D89E9A424AE1140568 /* PersistentTryOnView.swift in Sources */,
 				66A2F4550BE3CAE37FE07D02 /* ProductComparisonView.swift in Sources */,
 				CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */,
@@ -827,6 +855,7 @@
 				C231B38854630C54DF79E113 /* SearchView.swift in Sources */,
 				FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */,
 				0B7C3C2E439D3B2EFE88B17D /* SettingsView.swift in Sources */,
+				87DEC009E961C10B67638107 /* SpeechLevelMeter.swift in Sources */,
 				C366E4AF7E9683D6DFA38F8F /* StylezamApp.swift in Sources */,
 				465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */,
 				6E487DF493CFE206E884087D /* StylezamCaptureActivityAttributes.swift in Sources */,
@@ -835,9 +864,12 @@
 				81260976E8048F5712C3D946 /* StylezamDesign.swift in Sources */,
 				2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */,
 				E9D790482C628FACBF73A2D4 /* StylezamShortcuts.swift in Sources */,
+				F66424935FD442BB7E0BF232 /* SubscriptionStore.swift in Sources */,
+				52D24316F6E0AA6AD2D2BEEE /* SupabaseCloudLibrary.swift in Sources */,
 				7F28690E56B4A0EEC46F968A /* TryOnView.swift in Sources */,
 				E38666AB4433101A34885641 /* VisionAndProductModels.swift in Sources */,
 				F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */,
+				5AA2C9AEA91628D46170B49F /* WardrobeRetrievalService.swift in Sources */,
 				45BEC38F3C8E4A0378DDC300 /* YouCamTryOnService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1277,9 +1309,22 @@
 				version = 9.2.0;
 			};
 		};
+		FA12228DCF28E7ED75B9532C /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/supabase/supabase-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 2.54.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		1432C59A036288204CDC08E2 /* Supabase */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = FA12228DCF28E7ED75B9532C /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			productName = Supabase;
+		};
 		16CAA1D950DE5F43465B14C5 /* GoogleSignIn */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DDD0C40572C916C5D9B1A68D /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;

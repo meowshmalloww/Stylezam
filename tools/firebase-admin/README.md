@@ -9,4 +9,4 @@ This is a local Firebase Admin utility. It does not use Firestore and it must ne
 5. Run `npm install`, then `npm run grant-developer -- approved@example.com` once per approved account.
 6. In Stylezam, sign out and back in or tap **Refresh developer access**.
 
-The script preserves existing custom claims and adds `developer: true` and `plan: "developer"`. Never put the service-account JSON, its private key, or the Admin SDK inside the iOS target.
+The script preserves existing custom claims and adds `developer: true`, `plan: "developer"`, and the `role: "authenticated"` claim required by Supabase third-party auth. A public release must assign the authenticated role from a trusted account-creation backend for every approved user; it must never let the iOS client mint claims. Never put the service-account JSON, its private key, or the Admin SDK inside the iOS target.
