@@ -1522,6 +1522,9 @@ private extension AppModel {
         let thermalStateAtEnd: String
         let memoryFootprintAtStartBytes: UInt64?
         let memoryFootprintAtEndBytes: UInt64?
+        let peakMemoryFootprintBytes: UInt64?
+        let memoryPressureWarningCount: Int
+        let memoryPressureCriticalCount: Int
         let accuracyPassed: Int
         let accuracyTotal: Int
         let categoryAccuracyPassed: Int
@@ -1733,6 +1736,8 @@ private extension AppModel {
             }
 
             let repetitions = min(5, max(2, manifest.repetitions))
+            let memoryPressureRecorder = DeviceMemoryPressureRecorder()
+            defer { memoryPressureRecorder.stop() }
             let thermalAtStart = Self.thermalStateName(ProcessInfo.processInfo.thermalState)
             let memoryAtStart = Self.processMemoryFootprint()
             var caseReports: [DeviceQualityBenchmarkCaseReport] = []
@@ -1803,6 +1808,11 @@ private extension AppModel {
                 )
             }
 
+            let memoryPressure = memoryPressureRecorder.snapshot()
+            let peakMemoryFootprint = caseReports
+                .flatMap(\.runs)
+                .compactMap(\.memoryFootprintBytes)
+                .max()
             let report = DeviceQualityBenchmarkReport(
                 createdAt: .now,
                 deviceModel: UIDevice.current.model,
@@ -1814,6 +1824,9 @@ private extension AppModel {
                 thermalStateAtEnd: Self.thermalStateName(ProcessInfo.processInfo.thermalState),
                 memoryFootprintAtStartBytes: memoryAtStart,
                 memoryFootprintAtEndBytes: Self.processMemoryFootprint(),
+                peakMemoryFootprintBytes: peakMemoryFootprint,
+                memoryPressureWarningCount: memoryPressure.warning,
+                memoryPressureCriticalCount: memoryPressure.critical,
                 accuracyPassed: caseReports.filter(\.accurate).count,
                 accuracyTotal: caseReports.count,
                 categoryAccuracyPassed: caseReports.filter(\.categoryAccurate).count,
@@ -1945,6 +1958,62 @@ private extension AppModel {
             softEdge: softEdge,
             opaque: opaque
         )
+    }
+}
+
+private final class DeviceMemoryPressureRecorder: @unchecked Sendable {
+    struct Snapshot {
+        let warning: Int
+        let critical: Int
+    }
+
+    private let lock = NSLock()
+    private let source: DispatchSourceMemoryPressure
+    private var warningCount = 0
+    private var criticalCount = 0
+    private var isStopped = false
+
+    init() {
+        source = DispatchSource.makeMemoryPressureSource(
+            eventMask: [.warning, .critical],
+            queue: DispatchQueue(label: "com.stylezam.quality-benchmark.memory-pressure")
+        )
+        source.setEventHandler { [weak self] in
+            self?.recordCurrentEvent()
+        }
+        source.resume()
+    }
+
+    func snapshot() -> Snapshot {
+        lock.lock()
+        defer { lock.unlock() }
+        return Snapshot(warning: warningCount, critical: criticalCount)
+    }
+
+    func stop() {
+        lock.lock()
+        let shouldCancel = !isStopped
+        isStopped = true
+        lock.unlock()
+        if shouldCancel {
+            source.cancel()
+        }
+    }
+
+    private func recordCurrentEvent() {
+        let event = source.data
+        lock.lock()
+        defer { lock.unlock() }
+        if event.contains(.warning) {
+            warningCount += 1
+        }
+        if event.contains(.critical) {
+            criticalCount += 1
+        }
+    }
+
+    deinit {
+        stop()
     }
 }
 #endif
