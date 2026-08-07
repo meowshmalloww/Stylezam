@@ -10,6 +10,9 @@ struct LibraryView: View {
     @State private var selectedSearch: SavedProductSearch?
     @State private var isSelecting = false
     @State private var selection: Set<LibrarySelection> = []
+    @State private var libraryQuery = ""
+    @State private var categoryFilter: LibraryCategoryFilter = .all
+    @State private var sortOrder: LibrarySortOrder = .newest
     @State private var isConfirmingSelectionDelete = false
     @State private var pendingWardrobeDeletion: SavedWardrobeItem?
     @State private var pendingTryOnDeletion: SavedTryOn?
@@ -37,6 +40,7 @@ struct LibraryView: View {
                 .padding(.top, 8)
 
                 categoryBar
+                libraryOrganizer
 
                 if let loadError = model.library.loadError {
                     InlineErrorView(message: loadError)
@@ -63,6 +67,11 @@ struct LibraryView: View {
         .background(StylezamDesign.canvas)
         .navigationTitle("Library")
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(
+            text: $libraryQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: "Search pieces, brands, and colors"
+        )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button(isSelecting ? "Done" : "Select") {
@@ -71,7 +80,7 @@ struct LibraryView: View {
                         if !isSelecting { selection.removeAll() }
                     }
                 }
-                .disabled(count(for: section) == 0)
+                .disabled(visibleCount == 0)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -151,6 +160,12 @@ struct LibraryView: View {
             Text("The selected local captures, crops, searches, saves, or try-ons will be removed from this iPhone.")
         }
         .onChange(of: section) { _, _ in
+            selection.removeAll()
+        }
+        .onChange(of: categoryFilter) { _, _ in
+            selection.removeAll()
+        }
+        .onChange(of: libraryQuery) { _, _ in
             selection.removeAll()
         }
         .onChange(of: model.activeScanID, initial: true) { _, scanID in
@@ -263,11 +278,101 @@ struct LibraryView: View {
         }
     }
 
+    private var libraryOrganizer: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            HStack(spacing: 10) {
+                Label("Organize", systemImage: "line.3.horizontal.decrease")
+                    .font(.subheadline.weight(.semibold))
+
+                Text(visibleCount == count(for: section)
+                     ? countLabel(visibleCount, singular: "item")
+                     : "\(visibleCount) of \(count(for: section))")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                Spacer(minLength: 8)
+
+                Menu {
+                    Picker("Sort Library", selection: $sortOrder) {
+                        ForEach(LibrarySortOrder.allCases) { order in
+                            Label(order.title, systemImage: order.symbol)
+                                .tag(order)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Text(sortOrder.shortTitle)
+                        Image(systemName: "chevron.up.chevron.down")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .padding(.horizontal, 11)
+                    .frame(height: 34)
+                    .background(Color(uiColor: .secondarySystemBackground), in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(Color.primary.opacity(0.09), lineWidth: 1)
+                    }
+                }
+                .accessibilityLabel("Sort Library")
+                .accessibilityValue(sortOrder.title)
+            }
+
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    ForEach(LibraryCategoryFilter.allCases) { filter in
+                        Button {
+                            withAnimation(.snappy(duration: 0.22)) {
+                                categoryFilter = filter
+                            }
+                        } label: {
+                            Label(filter.title, systemImage: filter.symbol)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(
+                                    categoryFilter == filter ? Color.white : Color.primary
+                                )
+                                .padding(.horizontal, 12)
+                                .frame(height: 36)
+                                .background(
+                                    categoryFilter == filter
+                                        ? StylezamDesign.cobalt
+                                        : Color(uiColor: .secondarySystemBackground),
+                                    in: Capsule()
+                                )
+                                .overlay {
+                                    Capsule()
+                                        .stroke(
+                                            categoryFilter == filter
+                                                ? Color.clear
+                                                : Color.primary.opacity(0.09),
+                                            lineWidth: 1
+                                        )
+                                }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(
+                            categoryFilter == filter ? .isSelected : []
+                        )
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+        }
+        .padding(14)
+        .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .animation(.easeInOut(duration: 0.18), value: visibleCount)
+    }
+
     private var recentScans: some View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
                 title: "Captured looks",
-                detail: countLabel(model.library.scans.count, singular: "capture")
+                detail: countLabel(filteredScans.count, singular: "capture")
             )
 
             if model.library.scans.isEmpty {
@@ -276,9 +381,11 @@ struct LibraryView: View {
                     title: "No captures yet",
                     message: "Camera, imported, shared, and live-screen scans will appear here."
                 )
+            } else if filteredScans.isEmpty {
+                filteredEmptyState
             } else {
                 LazyVGrid(columns: galleryColumns, alignment: .leading, spacing: 24) {
-                    ForEach(model.library.scans) { scan in
+                    ForEach(filteredScans) { scan in
                         RecentScanCard(
                             scan: scan,
                             imageURL: model.library.displayImageURL(for: scan),
@@ -300,7 +407,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
                 title: "Product matches",
-                detail: countLabel(model.library.searches.count, singular: "search")
+                detail: countLabel(filteredSearches.count, singular: "search")
             )
             if model.library.searches.isEmpty {
                 emptyState(
@@ -308,9 +415,11 @@ struct LibraryView: View {
                     title: "No searches yet",
                     message: "Completed product searches will remain here until you delete them."
                 )
+            } else if filteredSearches.isEmpty {
+                filteredEmptyState
             } else {
                 LazyVGrid(columns: galleryColumns, alignment: .leading, spacing: 24) {
-                    ForEach(model.library.searches) { search in
+                    ForEach(filteredSearches) { search in
                         SearchHistoryCard(
                             search: search,
                             onOpen: { selectedSearch = search },
@@ -331,7 +440,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
                 title: "Saved pieces",
-                detail: countLabel(model.library.products.count + model.library.wardrobeItems.count, singular: "item")
+                detail: countLabel(filteredWardrobeItems.count + filteredProducts.count, singular: "item")
             )
 
             if model.library.products.isEmpty && model.library.wardrobeItems.isEmpty {
@@ -340,13 +449,15 @@ struct LibraryView: View {
                     title: "Nothing saved",
                     message: "Bookmark a product match and it will stay here for later."
                 )
+            } else if filteredWardrobeItems.isEmpty && filteredProducts.isEmpty {
+                filteredEmptyState
             } else {
                 LazyVGrid(
                     columns: galleryColumns,
                     alignment: .leading,
                     spacing: 26
                 ) {
-                    ForEach(model.library.wardrobeItems) { item in
+                    ForEach(filteredWardrobeItems) { item in
                         let railEntry = model.library.tryOnRail.first {
                             $0.wardrobeItemID == item.id
                         }
@@ -424,7 +535,7 @@ struct LibraryView: View {
                             action: { toggle(.wardrobe(item.id)) }
                         )
                     }
-                    ForEach(model.library.products) { saved in
+                    ForEach(filteredProducts) { saved in
                         ZStack(alignment: .topTrailing) {
                             NavigationLink(value: saved.product) {
                                 SavedProductCard(saved: saved)
@@ -460,7 +571,7 @@ struct LibraryView: View {
         VStack(alignment: .leading, spacing: 15) {
             EditorialSectionHeader(
                 title: "Appearance previews",
-                detail: countLabel(model.library.tryOns.count, singular: "preview")
+                detail: countLabel(filteredTryOns.count, singular: "preview")
             )
 
             if model.library.tryOns.isEmpty {
@@ -469,13 +580,15 @@ struct LibraryView: View {
                     title: "No try-ons yet",
                     message: "Save a completed appearance preview and its outfit details will stay here."
                 )
+            } else if filteredTryOns.isEmpty {
+                filteredEmptyState
             } else {
                 LazyVGrid(
                     columns: galleryColumns,
                     alignment: .leading,
                     spacing: 24
                 ) {
-                    ForEach(model.library.tryOns) { tryOn in
+                    ForEach(filteredTryOns) { tryOn in
                         ZStack(alignment: .topTrailing) {
                             Button {
                                 selectedTryOn = tryOn
@@ -531,11 +644,289 @@ struct LibraryView: View {
         .padding(.vertical, 32)
     }
 
+    private var filteredEmptyState: some View {
+        ContentUnavailableView {
+            Label("No matching items", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+            Text("Try another category or clear your Library search.")
+        } actions: {
+            Button("Clear filters") {
+                libraryQuery = ""
+                categoryFilter = .all
+            }
+            .buttonStyle(.bordered)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+    }
+
+    private var visibleCount: Int {
+        switch section {
+        case .recent: filteredScans.count
+        case .matches: filteredSearches.count
+        case .saved: filteredWardrobeItems.count + filteredProducts.count
+        case .tryOns: filteredTryOns.count
+        }
+    }
+
+    private var filteredScans: [SavedScan] {
+        let matches = model.library.scans.filter { scan in
+            guard scanMatchesCategory(scan) else { return false }
+            return matchesQuery(scanSearchTerms(scan))
+        }
+        return ordered(matches, date: \SavedScan.createdAt) { scan in
+            scan.items.first(where: \.accepted)?.title ?? scan.items.first?.title ?? "Capture"
+        }
+    }
+
+    private var filteredSearches: [SavedProductSearch] {
+        let matches = model.library.searches.filter { search in
+            guard searchMatchesCategory(search) else { return false }
+            return matchesQuery(searchSearchTerms(search))
+        }
+        return ordered(matches, date: \SavedProductSearch.createdAt) { search in
+            search.generatedQuery ?? search.results.first?.title ?? "Product search"
+        }
+    }
+
+    private var filteredWardrobeItems: [SavedWardrobeItem] {
+        let matches = model.library.wardrobeItems.filter { item in
+            categoryFilter.contains(item.category)
+                && matchesQuery(wardrobeSearchTerms(item))
+        }
+        return ordered(matches, date: \SavedWardrobeItem.savedAt) { $0.title }
+    }
+
+    private var filteredProducts: [SavedProduct] {
+        let matches = model.library.products.filter { saved in
+            categoryFilter.contains(productCategory(saved.product))
+                && matchesQuery(productSearchTerms(saved.product))
+        }
+        return ordered(matches, date: \SavedProduct.savedAt) { $0.product.title }
+    }
+
+    private var filteredTryOns: [SavedTryOn] {
+        let matches = model.library.tryOns.filter { tryOn in
+            guard tryOnMatchesCategory(tryOn) else { return false }
+            var terms = [
+                tryOn.displayTitle,
+                tryOn.photoContext?.title ?? "",
+                tryOn.gender?.title ?? "",
+            ]
+            for item in tryOn.items {
+                terms.append(contentsOf: [item.title, item.category.title, item.garmentRegion.title])
+                if let product = item.sourceProduct {
+                    terms.append(contentsOf: productSearchTerms(product))
+                }
+            }
+            if let product = tryOn.product {
+                terms.append(contentsOf: productSearchTerms(product))
+            }
+            return matchesQuery(terms)
+        }
+        return ordered(matches, date: \SavedTryOn.createdAt) { $0.displayTitle }
+    }
+
+    private func scanMatchesCategory(_ scan: SavedScan) -> Bool {
+        guard categoryFilter != .all else { return true }
+        return scan.items.contains { item in
+            categoryFilter.contains(
+                TryOnCategory.infer(
+                    category: item.category,
+                    title: "\(item.title) \(item.localLabel)"
+                )
+            )
+        }
+    }
+
+    private func searchMatchesCategory(_ search: SavedProductSearch) -> Bool {
+        guard categoryFilter != .all else { return true }
+        if search.results.contains(where: { categoryFilter.contains(productCategory($0)) }) {
+            return true
+        }
+        return categoryFilter.contains(
+            TryOnCategory.infer(
+                category: search.results.first?.category,
+                title: search.generatedQuery ?? search.generatedSuggestions.joined(separator: " ")
+            )
+        )
+    }
+
+    private func tryOnMatchesCategory(_ tryOn: SavedTryOn) -> Bool {
+        guard categoryFilter != .all else { return true }
+        if tryOn.items.contains(where: { categoryFilter.contains($0.category) }) {
+            return true
+        }
+        guard let product = tryOn.product else { return false }
+        return categoryFilter.contains(productCategory(product))
+    }
+
+    private func scanSearchTerms(_ scan: SavedScan) -> [String] {
+        var terms = [scan.origin.rawValue, scan.mode.rawValue]
+        for item in scan.items {
+            terms.append(contentsOf: [
+                item.title,
+                item.localLabel,
+                item.category ?? "",
+                item.brand ?? "",
+            ])
+            terms.append(contentsOf: item.colors)
+            terms.append(contentsOf: item.materials)
+            terms.append(contentsOf: item.patterns)
+            terms.append(contentsOf: item.details)
+            terms.append(contentsOf: item.visibleText)
+        }
+        return terms
+    }
+
+    private func searchSearchTerms(_ search: SavedProductSearch) -> [String] {
+        var terms = [
+            search.providerSummary,
+            search.generatedQuery ?? "",
+            search.aiSearchIntent?.title ?? "",
+        ]
+        terms.append(contentsOf: search.generatedSuggestions)
+        for result in search.results {
+            terms.append(contentsOf: productSearchTerms(result))
+        }
+        return terms
+    }
+
+    private func wardrobeSearchTerms(_ item: SavedWardrobeItem) -> [String] {
+        var terms = [item.title, item.category.title, item.garmentRegion?.title ?? ""]
+        if let product = item.sourceProduct {
+            terms.append(contentsOf: productSearchTerms(product))
+        }
+        return terms
+    }
+
+    private func productSearchTerms(_ product: ProductResultDTO) -> [String] {
+        [
+            product.title,
+            product.brand ?? "",
+            product.category ?? "",
+            product.color ?? "",
+            product.merchant,
+            product.provider,
+        ]
+    }
+
+    private func productCategory(_ product: ProductResultDTO) -> TryOnCategory {
+        TryOnCategory.infer(category: product.category, title: product.title)
+    }
+
+    private func matchesQuery(_ terms: [String]) -> Bool {
+        let query = libraryQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        let tokens = query
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .split(whereSeparator: \Character.isWhitespace)
+            .map(String.init)
+        let haystack = terms
+            .joined(separator: " ")
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+        return tokens.allSatisfy(haystack.contains)
+    }
+
+    private func ordered<Value>(
+        _ values: [Value],
+        date: KeyPath<Value, Date>,
+        title: (Value) -> String
+    ) -> [Value] {
+        values.sorted { lhs, rhs in
+            switch sortOrder {
+            case .newest:
+                lhs[keyPath: date] > rhs[keyPath: date]
+            case .oldest:
+                lhs[keyPath: date] < rhs[keyPath: date]
+            case .name:
+                title(lhs).localizedStandardCompare(title(rhs)) == .orderedAscending
+            }
+        }
+    }
+
     private func countLabel(_ count: Int, singular: String) -> String {
         if count == 1 {
             return "1 \(singular)"
         }
         return "\(count) \(singular)s"
+    }
+}
+
+private enum LibraryCategoryFilter: String, CaseIterable, Identifiable {
+    case all
+    case clothes
+    case bags
+    case shoes
+    case accessories
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .clothes: "Clothes"
+        case .bags: "Bags"
+        case .shoes: "Shoes"
+        case .accessories: "Accessories"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: "square.grid.2x2"
+        case .clothes: "tshirt"
+        case .bags: "handbag"
+        case .shoes: "shoe"
+        case .accessories: "sparkles"
+        }
+    }
+
+    func contains(_ category: TryOnCategory) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .clothes:
+            category == .clothes
+        case .bags:
+            category == .bag
+        case .shoes:
+            category == .shoes
+        case .accessories:
+            ![TryOnCategory.clothes, .bag, .shoes].contains(category)
+        }
+    }
+}
+
+private enum LibrarySortOrder: String, CaseIterable, Identifiable {
+    case newest
+    case oldest
+    case name
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .newest: "Newest first"
+        case .oldest: "Oldest first"
+        case .name: "Name A–Z"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .newest: "Newest"
+        case .oldest: "Oldest"
+        case .name: "A–Z"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .newest: "arrow.down"
+        case .oldest: "arrow.up"
+        case .name: "textformat"
+        }
     }
 }
 
