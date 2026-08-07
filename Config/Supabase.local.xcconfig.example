@@ -1,5 +1,0 @@
-// Copy to Supabase.local.xcconfig. This local file is ignored by Git.
-// These are the Project URL and publishable key from Supabase > Connect.
-// Never use the secret/service-role key in an iOS application.
-STYLEZAM_SUPABASE_URL = https:/$()/YOUR_PROJECT.supabase.co
-STYLEZAM_SUPABASE_PUBLISHABLE_KEY = sb_publishable_SET_ME

@@ -39,8 +39,7 @@ Motion previews: [launch sequence](./Artifacts/VisualQA/stylezam-launch-sequence
 | Stylezam AI | Persistent Fireworks vision chat with on-device voice dictation. Local metadata embeddings retrieve at most a few relevant owned pieces before the selected crop and up to two matching crops enter a request. Similar and cheaper actions create grounded text queries and make one keyword-shopping request. |
 | Try On | Reusable person photos, automatic Outfit / Hand and Wrist / Face and Neck context, manual override, an opt-in rail, sequential multi-item composition, and YouCam category tasks. |
 | Media finishing | Optional YouCam enhancement, lighting, background removal, background replacement, and 480p / 720p / 1080p five-second video generation. |
-| Cloud Library | Optional Supabase private-bucket sync for garment/wardrobe crops plus Search, Finds, and chat metadata. Full captures, person photos, try-on references, and generated try-on portraits remain device-only. |
-| Accounts | Firebase Google Sign-In, StoreKit 2 monthly/annual Plus and Pro products, restore support, signed Developer claims, and per-plan private-cloud allowances. |
+| Accounts | Firebase Google Sign-In, StoreKit 2 monthly/annual Plus and Pro products, restore support, and signed Developer claims. |
 
 Supported try-on categories are clothes, bags, scarves, shoes, hats, rings, bracelets, earrings, watches, and necklaces. A scan adds a piece to the reusable wardrobe but does not turn it on automatically. Opening **Try On** activates only the piece the user chose; additional pieces must be selected deliberately.
 
@@ -54,7 +53,6 @@ flowchart LR
     Local --> Crops["High-resolution crops · masks · deduplication"]
     Crops --> Library["Private local Library"]
     Library --> Retrieve["On-device metadata embeddings"]
-    Library -. "opt-in garment crops + metadata" .-> Cloud["Supabase private Storage + Postgres RLS"]
     Crops --> Choice["User selects a piece"]
     Choice --> Visual["One rotating visual-search provider"]
     Retrieve --> Chat["Bounded relevant Library context"]
@@ -121,7 +119,7 @@ STYLEZAM_BRIGHTDATA_ZONE=
 STYLEZAM_YOUCAM_API_KEY=
 ```
 
-Firebase Google Sign-In and optional Supabase Cloud Library use the private local configuration described in [Setup](./docs/SETUP.md). Supabase needs the Project URL and publishable key only; never put its secret/service-role key in the app. Do not distribute a working-directory archive containing `.env`, local cloud configuration, signing files, or derived build products.
+Firebase Google Sign-In uses the private local configuration described in [Setup](./docs/SETUP.md). Do not distribute a working-directory archive containing `.env`, Firebase configuration, signing files, or derived build products.
 
 ## Live Screen on iOS 27
 
@@ -139,7 +137,7 @@ xcodebuild -project Stylezam.xcodeproj \
   test
 ```
 
-The repository check verifies the model manifest and hashes, regenerates the Xcode project, builds every target, and confirms the compiled app contains the model. The test suite also verifies detection correction, duplicate handling, cloud privacy projection, bounded Library retrieval, try-on state, performance safeguards, and the system sharing picker.
+The repository check verifies the model manifest and hashes, regenerates the Xcode project, builds every target, and confirms the compiled app contains the model. The test suite also verifies detection correction, duplicate handling, bounded Library retrieval, try-on state, performance safeguards, and the system sharing picker.
 
 ## Repository map
 
@@ -156,7 +154,7 @@ scripts/                project generation, device installation, and verificatio
 
 ## Privacy and release boundary
 
-Detection, full captures, face/person photos, and try-on media are local. Optional cloud sync stores only private garment crops and structured Library metadata behind Firebase identity plus Supabase RLS. AI audio is transient and on-device; only the editable transcript is sent after the user submits it. A chat turn performs local/pgvector retrieval first and sends one selected crop plus no more than two relevant owned crops. Network requests otherwise occur only after an explicit product-search, AI, cloud-sync, or upload-consented try-on action. Provider credentials in a debug build live in Keychain, but a public App Store release must use a scoped server-side credential broker; shipping reusable service keys inside an app is not secure.
+Captures, garment crops, the Library, face/person photos, searches, chat history, and try-on media are stored locally. AI audio is transient and on-device; only the editable transcript is sent after the user submits it. A chat turn performs local metadata retrieval first and sends one selected crop plus no more than two relevant owned crops. Network requests otherwise occur only after an explicit product-search, AI, or upload-consented try-on action. Provider credentials in a debug build live in Keychain, but a public App Store release must use a scoped server-side credential broker; shipping reusable service keys inside an app is not secure.
 
 Google Web Detection returns matching pages and images, not guaranteed store inventory. Prices are current provider observations rather than tracked price history. YouCam output is generative and is not proof of physical fit. Read [Privacy](./docs/PRIVACY.md), [Architecture](./docs/ARCHITECTURE.md), and [Model decision](./docs/MODEL_DECISION.md) before distribution.
 

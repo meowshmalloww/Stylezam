@@ -37,46 +37,6 @@ final class WardrobeRetrievalTests: XCTestCase {
         XCTAssertFalse(results.contains { $0.garmentID == "rejected" })
     }
 
-    @MainActor
-    func testCloudProjectionExcludesPersonAndTryOnMedia() throws {
-        let root = FileManager.default.temporaryDirectory
-            .appending(path: "stylezam-cloud-privacy-\(UUID().uuidString)", directoryHint: .isDirectory)
-        defer { try? FileManager.default.removeItem(at: root) }
-        let store = LibraryStore(rootURL: root)
-        let candidate = GarmentCandidate(
-            id: "garment",
-            localLabel: "shirt",
-            confidence: 0.99,
-            box: BoundingBoxDTO(x: 0, y: 0, width: 1, height: 1),
-            boxCropData: Data("private-crop".utf8),
-            cropData: nil
-        )
-        _ = try store.addScan(
-            imageData: Data("full-private-capture".utf8),
-            origin: .camera,
-            mode: .photo,
-            detection: GarmentDetectionBatch(method: .coreML, candidates: [candidate], metrics: nil)
-        )
-        let person = try store.addTryOnPersonPhoto(
-            imageData: Data("face-and-body".utf8),
-            context: .outfit
-        )
-        _ = try store.addTryOn(
-            jobID: "try-on",
-            personPhotoID: person.id,
-            photoContext: .outfit,
-            imageData: Data("generated-person".utf8)
-        )
-
-        let projection = store.cloudLibraryExport()
-        XCTAssertEqual(projection.garments.count, 1)
-        XCTAssertEqual(projection.eligibleCropCount, 1)
-        XCTAssertTrue(store.tryOnPersonPhotos.count == 1)
-        XCTAssertTrue(store.tryOns.count == 1)
-        // CloudLibraryExport has no capture, person-photo, or try-on media collection by design.
-        XCTAssertEqual(projection.wardrobe.count, 0)
-    }
-
     private func makeScan(
         id: UUID = UUID(),
         daysAgo: Double,

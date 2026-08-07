@@ -20,7 +20,7 @@ struct SettingsView: View {
                         SettingsLinkLabel(
                             icon: "creditcard",
                             title: "Membership",
-                            detail: "\(model.activePlan.title) · \(model.activePlan.cloudStorageAllowance) private cloud allowance"
+                            detail: "\(model.activePlan.title) · \(model.activePlan.productSearchAllowance.lowercased())"
                         )
                     }
                 } header: {
@@ -43,16 +43,6 @@ struct SettingsView: View {
             }
 
             Section {
-                NavigationLink {
-                    CloudLibrarySettingsView()
-                } label: {
-                    SettingsLinkLabel(
-                        icon: "icloud",
-                        title: "Cloud Library",
-                        detail: model.cloudLibrary.state.title + " · garment crops only"
-                    )
-                }
-
                 NavigationLink {
                     ControlSetupView()
                 } label: {
@@ -114,109 +104,6 @@ struct SettingsView: View {
 
     private var developerToolsAvailable: Bool {
         model.account.isDeveloper
-    }
-}
-
-private struct CloudLibrarySettingsView: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        List {
-            Section {
-                VStack(alignment: .leading, spacing: 13) {
-                    HStack(spacing: 13) {
-                        Image(systemName: model.cloudLibrary.isEnabled ? "icloud.fill" : "icloud")
-                            .font(.title2)
-                            .foregroundStyle(StylezamDesign.cobalt)
-                            .symbolEffect(.breathe, options: .repeating, isActive: model.cloudLibrary.state == .syncing)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(model.cloudLibrary.state.title)
-                                .font(.headline)
-                            Text("Private backup for your garment Library")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    if case let .failed(message) = model.cloudLibrary.state {
-                        Text(message)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                }
-                .padding(.vertical, 6)
-            }
-
-            if model.cloudLibrary.isConfigured {
-                Section {
-                    Toggle(
-                        "Sync garment Library",
-                        isOn: Binding(
-                            get: { model.cloudLibrary.isEnabled },
-                            set: {
-                                model.cloudLibrary.setEnabled(
-                                    $0,
-                                    export: model.library.cloudLibraryExport()
-                                )
-                            }
-                        )
-                    )
-                    LabeledContent("Storage", value: model.cloudLibrary.usageSummary)
-                    LabeledContent("Plan", value: model.activePlan.title)
-                    if let lastSync = model.cloudLibrary.lastSyncedAt {
-                        LabeledContent("Last sync") {
-                            Text(lastSync, style: .relative)
-                        }
-                    }
-                    Button {
-                        model.cloudLibrary.syncNow(export: model.library.cloudLibraryExport())
-                    } label: {
-                        Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
-                    }
-                    .disabled(!model.cloudLibrary.isEnabled || model.cloudLibrary.state == .syncing)
-                } header: {
-                    Text("Sync")
-                }
-            } else {
-                Section("Connect Supabase") {
-                    Text("Add your Project URL and publishable key to Config/Supabase.local.xcconfig, run the included migration, then register Firebase in Supabase Third-party Auth.")
-                        .font(.subheadline)
-                    setupLine("1", "Copy Supabase.local.xcconfig.example")
-                    setupLine("2", "Run supabase/migrations in the SQL editor")
-                    setupLine("3", "Add Firebase Third-party Auth and the authenticated role claim")
-                    Text("Never place a service-role key in the app.")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.red)
-                }
-            }
-
-            Section("What syncs") {
-                Label("Detected garment crops", systemImage: "tshirt")
-                Label("Searches, Finds, and product metadata", systemImage: "magnifyingglass")
-                Label("AI conversation text", systemImage: "bubble.left.and.text.bubble.right")
-            }
-
-            Section("Always stays on this iPhone") {
-                Label("Original camera and screen captures", systemImage: "iphone")
-                Label("Face and try-on person photos", systemImage: "person.crop.rectangle")
-                Label("Generated try-on portraits", systemImage: "wand.and.stars")
-                Text("Stylezam uses a private bucket with per-user access rules. Shopping providers receive text queries, never access to your private Library. Stylezam does not create a public image URL for those providers.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .navigationTitle("Cloud Library")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func setupLine(_ number: String, _ title: String) -> some View {
-        HStack(alignment: .top, spacing: 11) {
-            Text(number)
-                .font(.caption.monospacedDigit().weight(.bold))
-                .foregroundStyle(StylezamDesign.cobalt)
-                .frame(width: 20, height: 20)
-                .background(StylezamDesign.cobalt.opacity(0.1), in: Circle())
-            Text(title).font(.subheadline)
-        }
     }
 }
 
@@ -415,11 +302,6 @@ private struct PrivacySettingsView: View {
                 detail: "Stylezam sends only the selected garment crop after you tap Find. Stylezam AI retrieves metadata first and can send the selected crop plus at most two relevant Library crops. Bright Data and other keyword-shopping services receive generated text, not private Library access."
             )
             privacySection(
-                title: "Optional Cloud Library",
-                icon: "icloud",
-                detail: "When you turn it on, a private Supabase bucket stores garment crops plus structured Search, Finds, and chat metadata. Original captures, face/person photos, worn-reference frames, and generated try-on portraits always stay on this iPhone."
-            )
-            privacySection(
                 title: "Only when you create a try-on",
                 icon: "wand.and.sparkles",
                 detail: "After you allow the upload, Stylezam sends the selected person photo and each selected item reference to YouCam, downloads the generated preview, and requests remote task deletion. A lower-body reference is a separate full photo that must visibly show the garment worn by one clear person—not the crop shown on the rail—and may include people, surroundings, or page content."
@@ -437,7 +319,7 @@ private struct PrivacySettingsView: View {
             } header: {
                 Text("Your data")
             } footer: {
-                Text("This removes local captures, garment crops, scan-memory signatures, searches, saved products, wardrobe pieces, the try-on rail, person photos, past try-ons, and appearance previews. If Cloud Library is on, its next sync also removes the corresponding private cloud records and crops.")
+                Text("This permanently removes local captures, garment crops, scan-memory signatures, searches, saved products, wardrobe pieces, the try-on rail, person photos, past try-ons, and appearance previews from this iPhone.")
             }
         }
         .navigationTitle("Privacy")

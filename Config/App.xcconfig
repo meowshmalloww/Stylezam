@@ -1,7 +1,3 @@
 // Safe, committed defaults. Put the Firebase value in Firebase.local.xcconfig.
 GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.SET_ME
 #include? "Firebase.local.xcconfig"
-// Public client configuration only. Never put a service-role key in an iOS build.
-STYLEZAM_SUPABASE_URL =
-STYLEZAM_SUPABASE_PUBLISHABLE_KEY =
-#include? "Supabase.local.xcconfig"

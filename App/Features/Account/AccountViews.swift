@@ -180,7 +180,7 @@ struct AccountView: View {
                 }
             }
         } message: {
-            Text("This deletes the private Cloud Library first, then the Firebase Authentication user plus every local capture, crop, search, saved product, person photo, and profile on this iPhone. It cannot be undone.")
+            Text("This deletes the Firebase Authentication user plus every local capture, crop, search, saved product, person photo, and profile on this iPhone. It cannot be undone.")
         }
     }
 }
@@ -212,7 +212,7 @@ struct InitialPlanSelectionView: View {
                     Text("Choose your plan.")
                         .font(.system(size: 40, weight: .semibold))
                         .tracking(-1.3)
-                    Text("Every plan includes private garment sync. Person photos, original captures, and try-on portraits always stay on this iPhone.")
+                    Text("Choose monthly flexibility or annual value. Your captures, Library, and try-on photos stay on this iPhone.")
                         .font(.body)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -304,7 +304,7 @@ struct AccountIdentityHeader: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                Text("\(model.activePlan.title) · \(model.activePlan.cloudStorageAllowance) cloud allowance")
+                Text(model.activePlan.title)
                     .font(.caption.weight(.medium))
                     .foregroundStyle(StylezamDesign.cobalt)
             }
@@ -433,7 +433,7 @@ struct SubscriptionPlansView: View {
                         .foregroundStyle(.red)
                 }
 
-                Text("Cloud allowances are per Stylezam account and enforced separately from the Supabase project’s pooled capacity. Shopping providers and merchant availability can still change.")
+                Text("Subscription limits apply to product searches and Stylezam AI questions. Shopping providers and merchant availability can still change.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.top, 4)
@@ -484,7 +484,6 @@ private struct PlanCard: View {
             EditorialRule()
             planLine("magnifyingglass", plan.productSearchAllowance)
             planLine("sparkles", plan.assistantAllowance)
-            planLine("icloud", "\(plan.cloudStorageAllowance) private garment storage")
             planLine("iphone", "On device garment detection")
 
             HStack(spacing: 9) {

@@ -1,6 +1,6 @@
 # Privacy and data handling
 
-This document describes the local-vision, optional private-cloud, developer product-search, and optional photo try-on build. Detected crops can enter the local wardrobe and Try On rail automatically in the off state, but Supabase sync is opt-in and YouCam receives data only when the user explicitly selects pieces, consents, and creates a try-on or motion preview.
+This document describes the local-vision, developer product-search, and optional photo try-on build. Detected crops can enter the local wardrobe and Try On rail automatically in the off state, but YouCam receives data only when the user explicitly selects pieces, consents, and creates a try-on or motion preview.
 
 Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for the required-reason APIs it uses. The manifests declare no tracking and no tracking domains. App Store privacy answers still require final account-specific review.
 
@@ -26,12 +26,6 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
 - The recent iOS 27 screen-frame buffer and latest Inspector frame, which remain in memory rather than becoming a rolling recording.
 - Spoken Stylezam AI audio. The app requires on-device speech recognition support, discards the audio session after transcription, and sends only the editable question text when the user submits it.
 
-## Optional private Cloud Library
-
-When the signed-in user enables Cloud Library, Stylezam uploads only compressed garment crops, wardrobe display crops, and structured garment/search/product/chat metadata to a non-public Supabase bucket and owner-scoped Postgres rows. Firebase supplies the signed identity token; Supabase Row Level Security compares every row and storage path to that token's subject. Metadata embeddings are generated locally and are not a recoverable photograph.
-
-Original camera captures, authorized screen frames, reusable person/face photos, lower-body worn-reference frames, Past Try-On portraits, and generated videos are excluded from the cloud projection. Shopping providers cannot browse the private Library. Text-shopping routes receive a structured query; the app does not create a public crop URL for them. Supabase retrieval returns only a small relevant metadata set, and one Stylezam AI turn includes the selected crop plus at most two additional relevant crops available on the device.
-
 Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
 
 The capture and garment-detection pipeline has no remote inference call. Accepted garment crops are promoted to the persistent rail locally with selection off. For detected lower-body pieces, a full source-frame copy is retained locally as a best-effort candidate for YouCam's worn-garment requirement while the crop remains the visible thumbnail. Stylezam cannot validate locally that the frame visibly shows the garment worn by one clear person. The rail reports ready/missing state and lets the user add or replace that reference. Identical reference frames are content-deduplicated. The separate Try On workspace uploads the chosen person photo and only the explicitly selected references compatible with that photo context to YouCam after upload consent, polls each sequential category task, and downloads the result. Selected incompatible pieces stay parked locally. Next to consent, the app explains that a lower-body upload uses the full reference frame rather than the displayed crop and that the frame can contain people, surroundings, or page content. **View as video** separately uploads the completed still for an image-to-video task.
@@ -51,10 +45,9 @@ The app does not analyze every camera or screen frame. Both live paths have inde
 
 ## Network boundary
 
-Detection, segmentation, cropping, Library capture, automatic wardrobe/rail promotion, rail toggles, person-photo reuse, and speech audio remain local. Detection never starts a product search, downloads merchant imagery, or calls YouCam. Network activity begins only after the user enables Cloud Library, explicitly starts product search, submits an AI question, opens a merchant link, loads a remote product thumbnail, opens Try On with a configured key (a credential-only feature-cost check), creates a consented try-on, or requests a motion preview. The connection check uploads no user image.
+Detection, segmentation, cropping, Library capture, automatic wardrobe/rail promotion, rail toggles, person-photo reuse, and speech audio remain local. Detection never starts a product search, downloads merchant imagery, or calls YouCam. Network activity begins only after the user explicitly starts product search, submits an AI question, opens a merchant link, loads a remote product thumbnail, opens Try On with a configured key (a credential-only feature-cost check), creates a consented try-on, or requests a motion preview. The connection check uploads no user image.
 
-- Fireworks receives the selected garment crop, bounded recent conversation, submitted text, and no more than two additional relevant Library crops selected by local/cloud metadata retrieval.
-- Supabase receives only the opt-in privacy-filtered projection described above. It does not receive speech audio or excluded person/full-capture media.
+- Fireworks receives the selected garment crop, bounded recent conversation, submitted text, and no more than two additional relevant Library crops selected by local metadata retrieval.
 - Serper, SearchAPI.io, SerpApi, or Bright Data receives generated or user-refined text when chosen by the rotating keyword route, not the photo.
 - Lykdat receives the selected crop when chosen as the direct image provider.
 - Google Cloud Vision receives the selected crop only when Web Detection is chosen. Stylezam requests no label, text, face, logo, or other Vision feature in that call.

@@ -16,7 +16,6 @@ final class AppModel {
     let searchUsage: SearchUsageStore
     let account: AccountSession
     let subscriptions: SubscriptionStore
-    let cloudLibrary: SupabaseCloudLibrary
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
@@ -62,8 +61,7 @@ final class AppModel {
         credentials: CredentialStore = CredentialStore(),
         searchUsage: SearchUsageStore = SearchUsageStore(),
         account: AccountSession = AccountSession(),
-        subscriptions: SubscriptionStore = SubscriptionStore(),
-        cloudLibrary: SupabaseCloudLibrary = SupabaseCloudLibrary()
+        subscriptions: SubscriptionStore = SubscriptionStore()
     ) {
         self.settings = settings
         self.library = library
@@ -73,7 +71,6 @@ final class AppModel {
         self.searchUsage = searchUsage
         self.account = account
         self.subscriptions = subscriptions
-        self.cloudLibrary = cloudLibrary
     }
 
     var activePlan: AccountPlan {
@@ -93,24 +90,8 @@ final class AppModel {
             settings.brightDataZone = zone
         }
 #endif
-        account.setAccountChangeHandler { [weak self] account in
-            guard let self else { return }
-            cloudLibrary.configure(
-                ownerID: account?.uid,
-                plan: activePlan,
-                export: library.cloudLibraryExport()
-            )
-        }
-        library.setCloudChangeHandler { [weak self] export in
-            self?.cloudLibrary.scheduleSync(export)
-        }
         await account.start()
         await subscriptions.start()
-        cloudLibrary.configure(
-            ownerID: account.account?.uid,
-            plan: activePlan,
-            export: library.cloudLibraryExport()
-        )
         await modelPack.refresh()
         if let modelURL = modelPack.activeModelURL {
             try? await visionEngine.prepare(modelURL: modelURL)
@@ -811,28 +792,15 @@ final class AppModel {
         plan: AccountPlan,
         period: SubscriptionBillingPeriod
     ) async -> Bool {
-        let purchased = await subscriptions.purchase(plan: plan, period: period)
-        cloudLibrary.updatePlan(activePlan)
-        if purchased {
-            cloudLibrary.syncNow(export: library.cloudLibraryExport())
-        }
-        return purchased
+        await subscriptions.purchase(plan: plan, period: period)
     }
 
     func restoreSubscriptions() async {
         await subscriptions.restorePurchases()
-        cloudLibrary.updatePlan(activePlan)
-        cloudLibrary.syncNow(export: library.cloudLibraryExport())
     }
 
     @discardableResult
     func deleteAccountAndLibrary() async -> Bool {
-        do {
-            try await cloudLibrary.deleteCloudLibrary()
-        } catch {
-            lastError = "The private Cloud Library could not be deleted. \(error.localizedDescription)"
-            return false
-        }
         guard await account.deleteAccount() else { return false }
         clearLibrary()
         return true
@@ -1160,10 +1128,6 @@ final class AppModel {
             garmentID: garmentID,
             question: question
         )
-        async let cloudMatchesRequest = cloudLibrary.relevantGarments(
-            for: question + " " + context.garmentLabel,
-            limit: 4
-        )
         guard let key = try credentials.credential(for: .fireworks), !key.isEmpty else {
             throw ProductSearchError.missingCredential(SearchCredentialKind.fireworks.title)
         }
@@ -1176,10 +1140,9 @@ final class AppModel {
         )
         let startedAt = Date()
         do {
-            let cloudMatches = await cloudMatchesRequest
-            var assistantContext = localMatches
+            let assistantContext = localMatches
                 .filter { !($0.scanID == scanID && $0.garmentID == garmentID) }
-                .prefix(3)
+                .prefix(4)
                 .map { item in
                     StylezamAssistantContextItem(
                         id: item.id,
@@ -1188,18 +1151,6 @@ final class AppModel {
                         imageData: item.cropURL.flatMap { try? Data(contentsOf: $0, options: .mappedIfSafe) }
                     )
                 }
-            let existingIDs = Set(assistantContext.map(\.id))
-            assistantContext.append(contentsOf: cloudMatches
-                .filter { !existingIDs.contains($0.recordID) && $0.recordID != context.key }
-                .prefix(max(0, 4 - assistantContext.count))
-                .map {
-                    StylezamAssistantContextItem(
-                        id: $0.recordID,
-                        title: $0.title,
-                        category: $0.category ?? "fashion item",
-                        imageData: nil
-                    )
-                })
             let (turn, response) = try await productSearchService.assistantReply(
                 imageData: context.imageData,
                 localLabel: context.garmentLabel,

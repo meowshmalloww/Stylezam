@@ -47,7 +47,6 @@ final class LibraryStore {
     private let tryOnPeopleURL: URL
     private let snapshotURL: URL
     private var acceptsWrites = true
-    @ObservationIgnored private var cloudChangeHandler: ((CloudLibraryExport) -> Void)?
     private let tryOnMediaCache: NSCache<NSUUID, CachedTryOnMedia> = {
         let cache = NSCache<NSUUID, CachedTryOnMedia>()
         cache.countLimit = 12
@@ -99,35 +98,6 @@ final class LibraryStore {
     var tryOns: [SavedTryOn] { snapshot.tryOns }
     var tryOnRail: [TryOnRailEntry] { snapshot.tryOnRail }
     var tryOnPersonPhotos: [SavedTryOnPersonPhoto] { snapshot.tryOnPersonPhotos }
-
-    func setCloudChangeHandler(_ handler: ((CloudLibraryExport) -> Void)?) {
-        cloudChangeHandler = handler
-    }
-
-    /// A privacy-filtered cloud projection. Original captures, person photos, lower-body reference
-    /// frames, and generated try-on images are intentionally absent because they can contain a
-    /// face, private screen content, or a complete body photo.
-    func cloudLibraryExport() -> CloudLibraryExport {
-        let garments = snapshot.scans.flatMap { scan in
-            scan.items.map { garment in
-                CloudGarmentExport(
-                    recordID: "\(scan.id.uuidString):\(garment.id)",
-                    scan: scan,
-                    garment: garment,
-                    cropURL: garment.isPipelineEligible ? cropURL(for: garment) : nil
-                )
-            }
-        }
-        return CloudLibraryExport(
-            garments: garments,
-            wardrobe: snapshot.wardrobeItems.map {
-                CloudWardrobeExport(item: $0, cropURL: imageURL(for: $0))
-            },
-            searches: snapshot.searches,
-            products: snapshot.products,
-            chats: snapshot.chats
-        )
-    }
 
     var activeTryOnPhoto: SavedTryOnPersonPhoto? {
         guard let id = snapshot.activeTryOnPhotoID else {
@@ -1386,6 +1356,5 @@ final class LibraryStore {
         encoder.outputFormatting = [.sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
         try encoder.encode(snapshot).write(to: snapshotURL, options: .atomic)
-        cloudChangeHandler?(cloudLibraryExport())
     }
 }

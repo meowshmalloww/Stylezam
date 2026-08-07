@@ -12,14 +12,9 @@ final class AccountSession {
     private(set) var account: StylezamAccount?
     private(set) var isWorking = false
     private(set) var errorMessage: String?
-    @ObservationIgnored private var accountChangeHandler: ((StylezamAccount?) -> Void)?
 
     var isAuthenticated: Bool { account != nil }
     var isDeveloper: Bool { account?.isDeveloper == true }
-
-    func setAccountChangeHandler(_ handler: ((StylezamAccount?) -> Void)?) {
-        accountChangeHandler = handler
-    }
 
     func start() async {
         guard configureFirebaseIfPresent() else { return }
@@ -30,7 +25,6 @@ final class AccountSession {
             await loadAccount(from: user, forceTokenRefresh: true)
         } else {
             account = nil
-            accountChangeHandler?(nil)
         }
     }
 
@@ -92,7 +86,6 @@ final class AccountSession {
             GIDSignIn.sharedInstance.signOut()
             try Auth.auth().signOut()
             account = nil
-            accountChangeHandler?(nil)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -109,7 +102,6 @@ final class AccountSession {
             UserDefaults.standard.removeObject(forKey: profileKey(uid: uid))
             GIDSignIn.sharedInstance.signOut()
             account = nil
-            accountChangeHandler?(nil)
             return true
         } catch {
             errorMessage = "Google may require you to sign in again before deleting the account. \(error.localizedDescription)"
@@ -154,12 +146,10 @@ final class AccountSession {
                 profile: loadProfile(uid: user.uid, defaultName: resolvedName),
                 isDeveloper: developer
             )
-            accountChangeHandler?(account)
             errorMessage = nil
         } catch {
             errorMessage = "Your account signed in, but its access role could not be verified. \(error.localizedDescription)"
             account = nil
-            accountChangeHandler?(nil)
         }
     }
 

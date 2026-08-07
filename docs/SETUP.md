@@ -64,26 +64,11 @@ npm run grant-developer -- approved-one@example.com
 npm run grant-developer -- approved-two@example.com
 ```
 
-Use the two addresses approved for this project in the environment variable. The script checks the allowlist, preserves existing claims, and assigns `developer: true`, `plan: "developer"`, and Supabase's required `role: "authenticated"`. It writes no Firestore record. Sign out/in afterward or tap **Refresh developer access**. Debug and Release builds reveal Developer Debug only for a refreshed Firebase ID token containing the signed custom claim.
+Use the two addresses approved for this project in the environment variable. The script checks the allowlist, preserves existing claims, and assigns `developer: true` plus `plan: "developer"`. It writes no Firestore record. Sign out/in afterward or tap **Refresh developer access**. Debug and Release builds reveal Developer Debug only for a refreshed Firebase ID token containing the signed custom claim.
 
-## 2B. Configure optional Supabase Cloud Library
+## 2B. Configure StoreKit plans
 
-Stylezam uses the official `supabase-swift` package pinned in `project.yml`. The client uses the existing Firebase ID token through Supabase Third-party Auth; it does not create a second login.
-
-1. Create a Supabase project and open **Authentication → Third-party Auth**. Add the Firebase Project ID already used by Stylezam.
-2. Give approved Firebase users the signed custom claim `role: "authenticated"`. The developer utility above does this for internal testers. Production accounts need the equivalent trusted account-creation backend; the iOS client must not mint claims.
-3. In Supabase SQL Editor, run `supabase/migrations/202608070001_private_cloud_library.sql`. It creates private tables, pgvector search, a non-public image bucket, and owner-only RLS policies.
-4. Copy the local client configuration and fill it with **Connect → Project URL** and the **publishable** key:
-
-   ```bash
-   cp Config/Supabase.local.xcconfig.example Config/Supabase.local.xcconfig
-   ```
-
-5. Regenerate and rebuild. Sign in, open **Settings → Cloud Library**, review the privacy boundary, and enable sync.
-
-The app uploads 2048 px JPEG garment crops using content-addressed paths. It syncs structured garment, wardrobe, search, saved-product, and AI-chat metadata. It never syncs original captures, screen frames, person photos, lower-body worn-reference frames, or generated try-on portraits. The bucket is private and the shopping pipeline does not create public signed URLs. Short-lived signed URLs should be introduced only for an explicit feature with a new disclosure.
-
-StoreKit product IDs are `com.stylezam.app.plus.monthly`, `com.stylezam.app.plus.annual`, `com.stylezam.app.pro.monthly`, and `com.stylezam.app.pro.annual`. Create them in one subscription group in App Store Connect. Cloud allowances shown in the app are 250 MB Free, 5 GB Plus, and 25 GB Pro. A production App Store Server notification handler must verify entitlements and update `stylezam_cloud_entitlements`; the migration intentionally prevents the iOS publishable key from granting itself a paid quota.
+StoreKit product IDs are `com.stylezam.app.plus.monthly`, `com.stylezam.app.plus.annual`, `com.stylezam.app.pro.monthly`, and `com.stylezam.app.pro.annual`. Create them in one subscription group in App Store Connect. Stylezam loads localized prices, calculates the annual discount from the configured App Store prices, verifies transactions on device, and supports Restore Purchases.
 
 ## 3. Configure private developer search
 
@@ -150,7 +135,6 @@ On the connected iPhone, verify:
 - Google Sign-In restores the account after relaunch;
 - profile edits survive relaunch locally and sign-out returns to the required login screen;
 - Free is the fallback public plan; configured Plus/Pro monthly and annual products load localized prices from StoreKit and restore verified entitlements;
-- Cloud Library stays off until the user enables it, reports owner-scoped usage, syncs garment crops and structured records, and excludes all person/try-on media;
 - Stylezam AI voice input refuses server speech recognition, keeps audio transient, and places the on-device transcript in the editable composer;
 - a Library-wide AI question retrieves no more than four metadata records and sends no more than two additional relevant crops;
 - Debug and Release builds require a Firebase `developer: true` custom claim for Developer Debug and unlimited usage;
