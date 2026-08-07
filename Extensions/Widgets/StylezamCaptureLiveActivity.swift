@@ -58,22 +58,19 @@ struct StylezamCaptureLiveActivity: Widget {
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    VStack(spacing: 9) {
-                        ScanStageRail(
-                            state: context.state.visualState,
-                            sequence: context.state.sequence ?? 0,
-                            cobalt: cobalt,
-                            savedGreen: savedGreen
-                        )
-                        HStack {
-                            Text(context.attributes.source)
-                            Spacer()
-                            Text(stageCaption(for: context.state.visualState))
-                                .contentTransition(.interpolate)
-                        }
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.secondary)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(tint(for: context.state.visualState))
+                            .frame(width: 6, height: 6)
+                        Text(context.attributes.source)
+                            .lineLimit(1)
+                        Spacer(minLength: 8)
+                        Text(stageCaption(for: context.state.visualState))
+                            .contentTransition(.interpolate)
+                            .lineLimit(1)
                     }
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(.secondary)
                 }
             } compactLeading: {
                 Image(systemName: symbol(for: context.state.visualState))
@@ -85,6 +82,10 @@ struct StylezamCaptureLiveActivity: Widget {
                     Text(context.state.itemCount, format: .number)
                         .font(.caption.bold().monospacedDigit())
                         .foregroundStyle(cobalt)
+                } else {
+                    Circle()
+                        .fill(tint(for: context.state.visualState))
+                        .frame(width: 6, height: 6)
                 }
             } minimal: {
                 Image(systemName: symbol(for: context.state.visualState))
@@ -94,7 +95,7 @@ struct StylezamCaptureLiveActivity: Widget {
             }
             .widgetURL(URL(string: "stylezam://library"))
             .keylineTint(cobalt)
-            .contentMargins(.horizontal, 12, for: .expanded)
+            .contentMargins(.horizontal, 10, for: .expanded)
         }
     }
 
@@ -126,49 +127,5 @@ struct StylezamCaptureLiveActivity: Widget {
         case .saved: "In Library"
         case .failed: "Needs attention"
         }
-    }
-}
-
-private struct ScanStageRail: View {
-    let state: StylezamCaptureActivityVisualState
-    let sequence: Int
-    let cobalt: Color
-    let savedGreen: Color
-
-    private let stages: [StylezamCaptureActivityVisualState] = [
-        .watching, .detecting, .recognized, .cropping, .saved,
-    ]
-
-    var body: some View {
-        HStack(spacing: 5) {
-            ForEach(Array(stages.enumerated()), id: \.offset) { index, stage in
-                Circle()
-                    .fill(color(for: stage))
-                    .frame(width: stage == state ? 9 : 6, height: stage == state ? 9 : 6)
-                    .shadow(
-                        color: stage == state ? color(for: stage).opacity(0.65) : .clear,
-                        radius: 5
-                    )
-                    .accessibilityHidden(true)
-                if index < stages.count - 1 {
-                    Capsule()
-                        .fill(index < currentIndex ? cobalt : Color.secondary.opacity(0.22))
-                        .frame(height: 2)
-                }
-            }
-        }
-        .animation(.spring(response: 0.42, dampingFraction: 0.72), value: sequence)
-        .accessibilityLabel("Capture progress: \(state.rawValue)")
-    }
-
-    private var currentIndex: Int {
-        stages.firstIndex(of: state) ?? 0
-    }
-
-    private func color(for stage: StylezamCaptureActivityVisualState) -> Color {
-        if state == .failed { return .red }
-        if stage == .saved, currentIndex >= stages.count - 1 { return savedGreen }
-        let index = stages.firstIndex(of: stage) ?? 0
-        return index <= currentIndex ? cobalt : Color.secondary.opacity(0.24)
     }
 }

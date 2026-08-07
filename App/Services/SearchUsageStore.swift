@@ -16,8 +16,8 @@ final class SearchUsageStore {
         reservedUnits: 0
     )
 
-    init() {
-        let root = FileManager.default.urls(
+    init(rootURL: URL? = nil) {
+        let root = rootURL ?? FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
         )[0].appending(path: "Stylezam", directoryHint: .isDirectory)
@@ -71,15 +71,17 @@ final class SearchUsageStore {
         }.count
     }
 
-    /// Chooses one eligible visual provider for one garment request. A healthy
-    /// provider receives at most two consecutive requests before the route
-    /// advances. A failed provider advances immediately so retries do not keep
-    /// hammering the same service.
+    /// Chooses one eligible visual provider for one garment request. The caller
+    /// controls the maximum streak; production search uses one request so the
+    /// route advances after every attempt.
     func routedImageProvider(
         from eligibleProviders: [ImageSearchProvider],
         maximumConsecutiveRequests: Int = 2
     ) -> ImageSearchProvider? {
-        let eligible = ImageSearchProvider.allCases.filter(eligibleProviders.contains)
+        var eligible: [ImageSearchProvider] = []
+        for provider in eligibleProviders where !eligible.contains(provider) {
+            eligible.append(provider)
+        }
         guard let first = eligible.first else { return nil }
 
         let recent = currentMonthRecords
@@ -98,6 +100,29 @@ final class SearchUsageStore {
             record.providers.first == lastRaw && record.status != .failed
         }.count
         return streak >= max(1, maximumConsecutiveRequests) ? next : lastProvider
+    }
+
+    /// Chooses exactly one keyword-shopping provider. Private AI search records
+    /// contain Fireworks plus one shopping provider, so that second provider is
+    /// the round-robin cursor. Failed attempts advance on the following search.
+    func routedKeywordProvider(
+        from eligibleProviders: [KeywordSearchProvider]
+    ) -> KeywordSearchProvider? {
+        var eligible: [KeywordSearchProvider] = []
+        for provider in eligibleProviders where !eligible.contains(provider) {
+            eligible.append(provider)
+        }
+        guard let first = eligible.first else { return nil }
+
+        let recent = currentMonthRecords
+            .filter { $0.kind == .productSearch && $0.providers.contains("fireworks") }
+            .sorted { $0.createdAt < $1.createdAt }
+        guard let lastRaw = recent.last?.providers.first(where: { $0 != "fireworks" }),
+              let lastProvider = KeywordSearchProvider(rawValue: lastRaw),
+              let lastIndex = eligible.firstIndex(of: lastProvider)
+        else { return first }
+
+        return eligible[(lastIndex + 1) % eligible.count]
     }
 
     @discardableResult

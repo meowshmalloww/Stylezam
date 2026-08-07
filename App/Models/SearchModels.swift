@@ -16,9 +16,9 @@ enum ProductSearchPipeline: String, Codable, CaseIterable, Identifiable, Sendabl
     var detail: String {
         switch self {
         case .privateAIText:
-            "Uses Fireworks only for an AI request, then searches those generated words with Serper."
+            "Uses Fireworks to prepare shopping terms, then sends one request to the next ready keyword provider."
         case .directImage:
-            "Sends the selected crop to one eligible visual-search provider. The router advances after at most two healthy requests."
+            "Sends the selected crop to one eligible visual-search provider, advancing the route after every request."
         }
     }
 }
@@ -151,6 +151,35 @@ enum ImageSearchProvider: String, Codable, CaseIterable, Identifiable, Sendable 
     }
 }
 
+enum KeywordSearchProvider: String, Codable, CaseIterable, Identifiable, Sendable {
+    case serper
+    case searchAPI = "searchapi"
+    case serpAPI = "serpapi"
+    case brightData = "brightdata"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .serper: "Serper.dev Shopping"
+        case .searchAPI: "SearchAPI.io Shopping"
+        case .serpAPI: "SerpApi Shopping"
+        case .brightData: "Bright Data Shopping"
+        }
+    }
+
+    var credential: SearchCredentialKind {
+        switch self {
+        case .serper: .serper
+        case .searchAPI: .searchAPI
+        case .serpAPI: .serpAPI
+        case .brightData: .brightData
+        }
+    }
+
+    var requiresZone: Bool { self == .brightData }
+}
+
 enum SearchCredentialKind: String, CaseIterable, Identifiable, Sendable {
     case fireworks
     case serper
@@ -243,6 +272,7 @@ enum SearchUsageKind: String, Codable, Sendable {
     case productSearch
     case assistant
     case providerTest
+    case tryOnInference
 }
 
 enum SearchUsageStatus: String, Codable, Sendable {

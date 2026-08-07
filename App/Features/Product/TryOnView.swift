@@ -9,6 +9,7 @@ struct TryOnCameraCaptureView: View {
     @State private var captureTask: Task<Void, Never>?
     @State private var didCapture = false
     @State private var countdownValue: Int?
+    @State private var zoomGestureAnchor: CGFloat?
 
     var body: some View {
         ZStack {
@@ -20,6 +21,7 @@ struct TryOnCameraCaptureView: View {
                     rotationChanged: camera.driver.setVideoRotationAngle
                 )
                 .ignoresSafeArea()
+                .simultaneousGesture(cameraZoomGesture)
             } else if let error = camera.errorMessage {
                 cameraUnavailable(error)
             } else {
@@ -83,7 +85,7 @@ struct TryOnCameraCaptureView: View {
 
             Spacer()
 
-            VStack(spacing: 20) {
+            VStack(spacing: 16) {
                 VStack(spacing: 5) {
                     Text(context.captureTitle)
                         .font(.headline)
@@ -94,6 +96,8 @@ struct TryOnCameraCaptureView: View {
                         .frame(maxWidth: 330)
                 }
                 .foregroundStyle(.white)
+
+                zoomControls
 
                 HStack {
                     toolButton(
@@ -137,6 +141,54 @@ struct TryOnCameraCaptureView: View {
             }
             .padding(.bottom, 24)
         }
+    }
+
+    private var zoomControls: some View {
+        HStack(spacing: 4) {
+            ForEach(camera.availableZoomPresets, id: \.self) { factor in
+                Button {
+                    camera.setZoomFactor(factor)
+                } label: {
+                    Text(zoomLabel(factor))
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(
+                            abs(camera.zoomFactor - factor) < 0.08 ? .black : .white
+                        )
+                        .frame(minWidth: 34, minHeight: 30)
+                        .background(
+                            abs(camera.zoomFactor - factor) < 0.08
+                                ? Color.white
+                                : Color.clear,
+                            in: Capsule()
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Zoom \(zoomLabel(factor))")
+            }
+        }
+        .padding(4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay { Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .opacity(camera.maximumZoomFactor > camera.minimumZoomFactor + 0.01 ? 1 : 0)
+        .accessibilityHidden(camera.maximumZoomFactor <= camera.minimumZoomFactor + 0.01)
+    }
+
+    private var cameraZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { magnification in
+                let anchor = zoomGestureAnchor ?? camera.zoomFactor
+                if zoomGestureAnchor == nil { zoomGestureAnchor = anchor }
+                camera.setZoomFactor(anchor * magnification)
+            }
+            .onEnded { _ in
+                zoomGestureAnchor = nil
+            }
+    }
+
+    private func zoomLabel(_ factor: CGFloat) -> String {
+        factor.rounded() == factor
+            ? "\(Int(factor))×"
+            : String(format: "%.1f×", factor)
     }
 
     private func startCountdown() {

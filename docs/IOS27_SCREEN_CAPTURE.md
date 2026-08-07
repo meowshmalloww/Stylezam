@@ -66,7 +66,7 @@ Do not copy the entire sample project into Stylezam. Compare the sample’s curr
 - iOS requires Stylezam to present the system picker and does not provide an API to programmatically return to the previously used app.
 - Protected/DRM output may be blank and must remain blank.
 - The frame buffer stays in memory and is cleared when capture stops.
-- A stable automatic capture becomes a local source image and local garment crops, and its accepted crops enter the persistent selected Try On rail on device. Detection starts no network call; data leaves only after an explicit Search action or a consented Try On action.
+- A stable automatic capture becomes a local source image and local garment crops, and its accepted crops enter the persistent Try On rail in the off state. Detection starts no network call; data leaves only after an explicit Search action or a consented Try On action.
 - The system indicator and Dynamic Island/Live Activity are the allowed status surfaces.
 - A custom overlay surrounding another app is not part of this design.
 - If the OS suspends or terminates Stylezam and no valid recent frame exists, the normal camera sheet opens instead of fabricating a screen result.

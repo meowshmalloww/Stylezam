@@ -379,7 +379,7 @@ struct SearchView: View {
         case .similar:
             "AI prepared visible shopping terms and one live request returned these alternatives."
         case .cheaper:
-            "Prices are current Serper observations, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
+            "Prices are current observations from the routed shopping provider, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
         case nil:
             "One visual-provider request returned these products. Similar means visually related—not proof of an exact SKU."
         }
@@ -695,7 +695,7 @@ private struct SearchProductCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
 
             HStack(spacing: 6) {
-                Text("\(product.matchTier.label) · \(product.confidencePercent)%")
+                Text(product.matchSummaryLabel)
                     .font(.caption2.weight(.semibold))
                     .foregroundStyle(StylezamDesign.cobalt)
                 Spacer(minLength: 0)

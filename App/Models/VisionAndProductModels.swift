@@ -124,6 +124,23 @@ struct ProductResultDTO: Codable, Identifiable, Hashable, Sendable {
     var confidencePercent: Int {
         Int((min(1, max(0, score)) * 100).rounded())
     }
+
+    /// Only exposes a percentage when it came from the provider or from an
+    /// exact, reproducible query/title term overlap. Rank-only results remain
+    /// qualitative so Stylezam never invents visual precision.
+    var matchMetricLabel: String? {
+        guard case let .string(basis)? = attributes["scoreBasis"] else { return nil }
+        switch basis {
+        case "provider": return "\(confidencePercent)% visual match"
+        case "query": return "\(confidencePercent)% query match"
+        default: return nil
+        }
+    }
+
+    var matchSummaryLabel: String {
+        guard let matchMetricLabel else { return matchTier.label }
+        return "\(matchTier.label) · \(matchMetricLabel)"
+    }
 }
 
 enum JSONValue: Codable, Hashable, Sendable {

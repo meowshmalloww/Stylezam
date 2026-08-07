@@ -161,9 +161,11 @@ enum TryOnPhotoContext: String, Codable, CaseIterable, Identifiable, Sendable {
 }
 
 enum TryOnGender: String, Codable, CaseIterable, Identifiable, Sendable {
-    case female, male
+    case automatic, female, male
     var id: String { rawValue }
     var title: String { rawValue.capitalized }
+
+    var isProviderValue: Bool { self != .automatic }
 }
 
 struct TryOnTrayItem: Identifiable, Hashable, Sendable {
@@ -472,6 +474,7 @@ struct SavedTryOnPersonPhoto: Codable, Identifiable, Hashable, Sendable {
     let imageFilename: String
     let context: TryOnPhotoContext
     let contentDigest: String
+    var inferredGender: TryOnGender?
 }
 
 struct SavedTryOnItemSnapshot: Codable, Identifiable, Hashable, Sendable {

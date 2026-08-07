@@ -25,7 +25,7 @@ Home is a calm overview with a compact identity header, a restrained editorial i
 
 ### Capture
 
-The center tab action opens a custom full-screen camera. Photo/Live modes, flash, automatic Live toggle, shutter, front/rear switch, garment outlines, and one-line guidance are reachable without Apple’s legacy image-picker camera chrome. Controls use dark translucent media chrome so the scene stays legible; no decorative scan waves or random circles are added.
+The center tab action opens a custom full-screen camera. Photo/Live modes, flash, automatic Live toggle, shutter, front/rear switch, pinch and preset optical zoom, garment outlines, and one-line guidance are reachable without Apple’s legacy image-picker camera chrome. Controls use dark translucent media chrome so the scene stays legible; no decorative scan waves or random circles are added.
 
 ### Search
 
@@ -33,9 +33,9 @@ Search accepts a fashion reference image, detects its pieces, and lets the user 
 
 ### Try On
 
-Try On opens as a focused full-screen workflow rather than taking over a permanent tab. The person-photo stage is swipeable: prior photos are reusable, and the final page adds a new camera or Photos image. An expandable **Pieces / Shop** rail shows the persistent current set, with every accepted detected crop arriving selected by default. Users can toggle several pieces, remove a rail entry, add a product photo or wardrobe item, and open purchase links for selected, parked, and toggled-off products.
+Try On opens as a focused full-screen workflow rather than taking over a permanent tab. The person-photo stage is swipeable: prior photos are reusable, and the final page adds a new zoom-capable camera or Photos image. An expandable **Pieces / Shop** rail shows the persistent current set. Detected crops arrive off; opening Try On from one piece activates only that piece. Users can deliberately toggle several pieces, remove a rail entry, add a product photo or wardrobe item, and open purchase links for selected, parked, and toggled-off products.
 
-The primary Create action requires explicit upload consent, shows its task count, and composes the compatible selected look through sequential category-specific YouCam tasks. Incompatible selected pieces remain visibly parked for another photo type and are not uploaded. The UI describes this as one look-creation action, not as one provider call. After a still is ready, **View as video** plays three seconds from YouCam's 5-second, 480p image-to-video v2 output and then restores the still. Save creates a Past Try-On entry whose applied/parked item manifest and purchase links remain tied to that saved look. Generated media is never represented as proof of physical fit.
+The primary Create action requires explicit upload consent, shows its task count, and composes the compatible selected look through sequential category-specific YouCam tasks. Photo context and presentation are inferred first, while visible manual controls remain available for corrections. Incompatible selected pieces remain visibly parked for another photo type and are not uploaded. Optional enhancement, lighting, background removal, and background replacement are disclosed before submission. After a still is ready, **View as video** supports five-second 480p, 720p, or 1080p output and a non-obstructing replay control. Save creates a Past Try-On entry whose applied/parked item manifest and purchase links remain tied to that saved look. Generated media is never represented as proof of physical fit.
 
 ### Library
 

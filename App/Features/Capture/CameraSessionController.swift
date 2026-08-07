@@ -4,6 +4,12 @@ import Foundation
 import Observation
 import UIKit
 
+struct CameraZoomCapabilities: Sendable {
+    let minimum: CGFloat
+    let maximum: CGFloat
+    let current: CGFloat
+}
+
 @MainActor
 @Observable
 final class CameraSessionController {
@@ -12,6 +18,9 @@ final class CameraSessionController {
     private(set) var isCapturingPhoto = false
     private(set) var errorMessage: String?
     private(set) var position: AVCaptureDevice.Position
+    private(set) var zoomFactor: CGFloat = 1
+    private(set) var minimumZoomFactor: CGFloat = 1
+    private(set) var maximumZoomFactor: CGFloat = 1
     var flashEnabled = false
     var onPreviewFrame: ((Data, CGFloat) -> Void)?
 
@@ -36,7 +45,7 @@ final class CameraSessionController {
             return
         }
         do {
-            try await driver.configure(position: position)
+            applyZoomCapabilities(try await driver.configure(position: position))
             driver.previewFrameHandler = { [weak self] data, aspectRatio in
                 Task { @MainActor [weak self] in
                     self?.onPreviewFrame?(data, aspectRatio)
@@ -65,12 +74,33 @@ final class CameraSessionController {
         guard !isCapturingPhoto else { return }
         let next: AVCaptureDevice.Position = position == .back ? .front : .back
         do {
-            try await driver.configure(position: next)
+            applyZoomCapabilities(try await driver.configure(position: next))
             position = next
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    var availableZoomPresets: [CGFloat] {
+        let candidates: [CGFloat] = [minimumZoomFactor, 1, 2, 3]
+        var values: [CGFloat] = []
+        for candidate in candidates where candidate >= minimumZoomFactor - 0.01
+            && candidate <= maximumZoomFactor + 0.01
+        {
+            let normalized = (candidate * 10).rounded() / 10
+            if !values.contains(where: { abs($0 - normalized) < 0.05 }) {
+                values.append(normalized)
+            }
+        }
+        return values.sorted()
+    }
+
+    func setZoomFactor(_ factor: CGFloat) {
+        guard minimumZoomFactor <= maximumZoomFactor else { return }
+        let clamped = min(maximumZoomFactor, max(minimumZoomFactor, factor))
+        zoomFactor = clamped
+        driver.setZoomFactor(clamped)
     }
 
     func capturePhoto() async -> Data? {
@@ -84,6 +114,12 @@ final class CameraSessionController {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func applyZoomCapabilities(_ capabilities: CameraZoomCapabilities) {
+        minimumZoomFactor = capabilities.minimum
+        maximumZoomFactor = capabilities.maximum
+        zoomFactor = capabilities.current
     }
 }
 
@@ -130,12 +166,11 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
     private var outputsConfigured = false
     private var currentRotationAngle: CGFloat = 90
 
-    func configure(position: AVCaptureDevice.Position) async throws {
+    func configure(position: AVCaptureDevice.Position) async throws -> CameraZoomCapabilities {
         try await withCheckedThrowingContinuation { continuation in
             sessionQueue.async { [self] in
                 do {
-                    try configureOnQueue(position: position)
-                    continuation.resume()
+                    continuation.resume(returning: try configureOnQueue(position: position))
                 } catch {
                     continuation.resume(throwing: error)
                 }
@@ -173,6 +208,29 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
         sessionQueue.async { [self] in
             currentRotationAngle = angle
             updateConnectionsOnQueue()
+        }
+    }
+
+    func setZoomFactor(_ factor: CGFloat) {
+        sessionQueue.async { [self] in
+            guard let device = currentInput?.device else { return }
+            let displayMultiplier = max(0.01, device.displayVideoZoomFactorMultiplier)
+            let requestedDeviceFactor = factor / displayMultiplier
+            let upperBound = min(
+                device.maxAvailableVideoZoomFactor,
+                10 / displayMultiplier
+            )
+            let clamped = min(
+                upperBound,
+                max(device.minAvailableVideoZoomFactor, requestedDeviceFactor)
+            )
+            do {
+                try device.lockForConfiguration()
+                device.videoZoomFactor = clamped
+                device.unlockForConfiguration()
+            } catch {
+                return
+            }
         }
     }
 
@@ -214,13 +272,15 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
         }
     }
 
-    private func configureOnQueue(position: AVCaptureDevice.Position) throws {
-        let discovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera],
-            mediaType: .video,
-            position: position
-        )
-        guard let device = discovery.devices.first else {
+    private func configureOnQueue(
+        position: AVCaptureDevice.Position
+    ) throws -> CameraZoomCapabilities {
+        let preferredTypes: [AVCaptureDevice.DeviceType] = position == .back
+            ? [.builtInTripleCamera, .builtInDualWideCamera, .builtInDualCamera, .builtInWideAngleCamera]
+            : [.builtInTrueDepthCamera, .builtInWideAngleCamera]
+        guard let device = preferredTypes.lazy.compactMap({ type in
+            AVCaptureDevice.default(type, for: .video, position: position)
+        }).first else {
             throw CameraSessionError.cameraUnavailable
         }
         let input = try AVCaptureDeviceInput(device: device)
@@ -236,6 +296,26 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
         }
         session.addInput(input)
         currentInput = input
+
+        // Virtual multi-camera devices use an internal factor whose visual meaning
+        // can differ from the value shown by Camera. iOS 18 exposes the exact
+        // multiplier needed to keep Stylezam's 0.5x/1x/2x labels honest.
+        let displayMultiplier = max(0.01, device.displayVideoZoomFactorMultiplier)
+        let minimumZoom = device.minAvailableVideoZoomFactor * displayMultiplier
+        let maximumZoom = min(device.maxAvailableVideoZoomFactor * displayMultiplier, 10)
+        let initialZoom = min(maximumZoom, max(minimumZoom, 1))
+        let initialDeviceZoom = initialZoom / displayMultiplier
+        do {
+            try device.lockForConfiguration()
+            device.videoZoomFactor = min(
+                device.maxAvailableVideoZoomFactor,
+                max(device.minAvailableVideoZoomFactor, initialDeviceZoom)
+            )
+            device.unlockForConfiguration()
+        } catch {
+            // Zoom is an enhancement; a usable camera session must not fail when a
+            // particular format temporarily refuses a configuration lock.
+        }
 
         if !outputsConfigured {
             guard session.canAddOutput(photoOutput), session.canAddOutput(videoOutput) else {
@@ -255,6 +335,11 @@ final class CameraSessionDriver: NSObject, @unchecked Sendable {
             outputsConfigured = true
         }
         updateConnectionsOnQueue()
+        return CameraZoomCapabilities(
+            minimum: minimumZoom,
+            maximum: maximumZoom,
+            current: initialZoom
+        )
     }
 
     private func updateConnectionsOnQueue() {

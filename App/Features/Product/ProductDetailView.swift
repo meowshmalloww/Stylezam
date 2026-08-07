@@ -130,7 +130,7 @@ struct ProductDetailView: View {
 
     private var evidence: some View {
         VStack(alignment: .leading, spacing: 15) {
-            EditorialSectionHeader(title: "Why it appeared", detail: product.matchTier.label)
+            EditorialSectionHeader(title: "Why it appeared", detail: product.matchSummaryLabel)
 
             EditorialRule()
 
@@ -147,23 +147,46 @@ struct ProductDetailView: View {
 
     private var offers: some View {
         VStack(alignment: .leading, spacing: 0) {
-            EditorialSectionHeader(title: "Other sellers", detail: "\(product.offers.count) additional")
-                .padding(.bottom, 7)
+            EditorialSectionHeader(title: "Compare sellers", detail: "\(comparisonOffers.count) observed")
+                .padding(.bottom, 13)
 
-            ForEach(Array(product.offers.enumerated()), id: \.offset) { index, offer in
+            HStack {
+                Text("SELLER")
+                Spacer()
+                Text("OBSERVED PRICE")
+            }
+            .font(.caption2.weight(.bold))
+            .tracking(0.75)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 6)
+
+            ForEach(Array(comparisonOffers.enumerated()), id: \.offset) { index, offer in
                 Button {
                     openURL(offer.url)
                 } label: {
-                    HStack(spacing: 14) {
-                        Text(String(format: "%02d", index + 1))
-                            .font(.caption.monospacedDigit().weight(.bold))
-                            .foregroundStyle(StylezamDesign.cobalt)
+                    HStack(spacing: 12) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(offer.merchant)
-                                .font(.headline)
-                                .foregroundStyle(.primary)
+                            HStack(spacing: 7) {
+                                Text(offer.merchant)
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(1)
+                                if index == 0, offer.price != nil {
+                                    Text("LOWEST")
+                                        .font(.system(size: 8, weight: .bold))
+                                        .tracking(0.6)
+                                        .foregroundStyle(StylezamDesign.cobalt)
+                                        .padding(.horizontal, 6)
+                                        .frame(height: 19)
+                                        .background(StylezamDesign.cobalt.opacity(0.09), in: Capsule())
+                                }
+                            }
                             if let condition = offer.condition {
                                 Text(condition)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else if offer.url == product.productURL {
+                                Text("Primary result")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -176,15 +199,38 @@ struct ProductDetailView: View {
                             .font(.caption.weight(.bold))
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 13)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .motionScrollDepth()
 
-                if index < product.offers.count - 1 {
+                if index < comparisonOffers.count - 1 {
                     EditorialRule()
                 }
+            }
+        }
+    }
+
+    private var comparisonOffers: [MerchantOfferDTO] {
+        let primary = MerchantOfferDTO(
+            merchant: product.merchant,
+            url: product.productURL,
+            price: product.price,
+            shipping: nil,
+            condition: nil
+        )
+        return ([primary] + product.offers).sorted { left, right in
+            switch (left.price, right.price) {
+            case let (leftPrice?, rightPrice?) where leftPrice.currency == rightPrice.currency:
+                if leftPrice.amount != rightPrice.amount { return leftPrice.amount < rightPrice.amount }
+                return left.merchant.localizedCaseInsensitiveCompare(right.merchant) == .orderedAscending
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            default:
+                return left.merchant.localizedCaseInsensitiveCompare(right.merchant) == .orderedAscending
             }
         }
     }

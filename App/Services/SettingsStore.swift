@@ -170,7 +170,13 @@ final class SettingsStore {
     func monthlyRequestLimits(for pipeline: ProductSearchPipeline) -> [String: Int] {
         switch pipeline {
         case .privateAIText:
-            ["fireworks": 100_000, "serper": serperMonthlyLimit]
+            [
+                "fireworks": 100_000,
+                "serper": serperMonthlyLimit,
+                "searchapi": searchAPIMonthlyLimit,
+                "serpapi": serpAPIMonthlyLimit,
+                "brightdata": brightDataMonthlyLimit,
+            ]
         case .directImage:
             [
                 "searchapi": searchAPIMonthlyLimit,

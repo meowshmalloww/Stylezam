@@ -23,6 +23,7 @@ struct CaptureSheet: View {
     @State private var currentLiveContentFingerprint: LiveScreenContentFingerprint?
     @State private var suppressedLiveContentFingerprint: LiveScreenContentFingerprint?
     @State private var liveInferenceGate = LiveContentInferenceGate()
+    @State private var zoomGestureAnchor: CGFloat?
 
     var body: some View {
         ZStack {
@@ -34,6 +35,7 @@ struct CaptureSheet: View {
                     rotationChanged: camera.driver.setVideoRotationAngle
                 )
                     .ignoresSafeArea()
+                    .simultaneousGesture(cameraZoomGesture)
 
                 GarmentGuideOverlay(
                     candidates: candidates,
@@ -228,7 +230,8 @@ struct CaptureSheet: View {
     }
 
     private var bottomControls: some View {
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
+            zoomControls
             modePicker
 
             HStack(alignment: .center) {
@@ -274,6 +277,54 @@ struct CaptureSheet: View {
             }
         }
         .foregroundStyle(.white)
+    }
+
+    private var zoomControls: some View {
+        HStack(spacing: 4) {
+            ForEach(camera.availableZoomPresets, id: \.self) { factor in
+                Button {
+                    camera.setZoomFactor(factor)
+                } label: {
+                    Text(zoomLabel(factor))
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundStyle(
+                            abs(camera.zoomFactor - factor) < 0.08 ? .black : .white
+                        )
+                        .frame(minWidth: 34, minHeight: 30)
+                        .background(
+                            abs(camera.zoomFactor - factor) < 0.08
+                                ? Color.white
+                                : Color.clear,
+                            in: Capsule()
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Zoom \(zoomLabel(factor))")
+            }
+        }
+        .padding(4)
+        .background(.ultraThinMaterial, in: Capsule())
+        .overlay { Capsule().stroke(.white.opacity(0.12), lineWidth: 0.5) }
+        .opacity(camera.maximumZoomFactor > camera.minimumZoomFactor + 0.01 ? 1 : 0)
+        .accessibilityHidden(camera.maximumZoomFactor <= camera.minimumZoomFactor + 0.01)
+    }
+
+    private var cameraZoomGesture: some Gesture {
+        MagnificationGesture()
+            .onChanged { magnification in
+                let anchor = zoomGestureAnchor ?? camera.zoomFactor
+                if zoomGestureAnchor == nil { zoomGestureAnchor = anchor }
+                camera.setZoomFactor(anchor * magnification)
+            }
+            .onEnded { _ in
+                zoomGestureAnchor = nil
+            }
+    }
+
+    private func zoomLabel(_ factor: CGFloat) -> String {
+        factor.rounded() == factor
+            ? "\(Int(factor))×"
+            : String(format: "%.1f×", factor)
     }
 
     private var modePicker: some View {

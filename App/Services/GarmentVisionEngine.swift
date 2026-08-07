@@ -51,11 +51,29 @@ actor GarmentVisionEngine {
         let lowPowerMode: Bool
     }
 
+    private struct ClassificationEvidence {
+        let scores: [String: Double]
+
+        func score(for identifiers: Set<String>) -> Double {
+            scores.reduce(0) { current, pair in
+                guard identifiers.contains(pair.key) else { return current }
+                return max(current, pair.value)
+            }
+        }
+    }
+
+    private struct CachedClassificationEvidence {
+        let signature: UInt64
+        let createdAt: ContinuousClock.Instant
+        let evidence: ClassificationEvidence
+    }
+
     private static let acceptedCaptureBudgetMilliseconds = 9_000.0
     private static let cropReserveMilliseconds = 750.0
 
     private var loadedModelURL: URL?
     private var loadedModel: MLModel?
+    private var classificationCache: [CachedClassificationEvidence] = []
 
     func prepare(modelURL: URL) throws {
         _ = try model(at: modelURL)
@@ -193,8 +211,14 @@ actor GarmentVisionEngine {
             thermalState = Self.thermalStateLabel(ProcessInfo.processInfo.thermalState)
             lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
         }
+        let verifiedDetections = try await verifiedDetections(
+            detections,
+            in: cgImage,
+            maxItems: itemLimit,
+            allowForegroundRecovery: true
+        )
         let cropStarted = Self.now
-        let candidates = detections.map { detection in
+        let candidates = verifiedDetections.map { detection in
             autoreleasepool {
                 GarmentCandidate(
                     id: UUID().uuidString,
@@ -270,14 +294,20 @@ actor GarmentVisionEngine {
             includeMasks: false,
             minimumConfidence: 0.42
         ).detections
-        let detections: [RawDetection]
+        let mappedDetections: [RawDetection]
         if let acceptedFocus {
-            detections = rawDetections.compactMap {
+            mappedDetections = rawDetections.compactMap {
                 Self.remapTileDetection($0, from: acceptedFocus)
             }
         } else {
-            detections = rawDetections
+            mappedDetections = rawDetections
         }
+        let detections = try await verifiedDetections(
+            mappedDetections,
+            in: sourceImage,
+            maxItems: min(12, max(1, maxItems)),
+            allowForegroundRecovery: acceptedFocus == nil
+        )
         let detection = GarmentDetectionBatch(
             method: .coreML,
             candidates: detections.map {
@@ -533,6 +563,262 @@ actor GarmentVisionEngine {
             if selected.count == maxItems { break }
         }
         return selected
+    }
+
+    /// RF-DETR is trained on Fashionpedia, so a bedding texture can look strongly like a bag or
+    /// puffer jacket even when the object is not wearable. Apple's broad on-device classifier is
+    /// used as a cheap second opinion on only the proposed boxes. Strong bedding/furniture
+    /// evidence rejects those out-of-domain regions, while clothing/luggage evidence can correct
+    /// common label swaps such as jeans → skirt. If RF-DETR misses an obvious foreground bag or
+    /// garment entirely, the same evidence can recover one foreground instance without a cloud
+    /// request or another downloaded model.
+    private func verifiedDetections(
+        _ detections: [RawDetection],
+        in image: CGImage,
+        maxItems: Int,
+        allowForegroundRecovery: Bool
+    ) async throws -> [RawDetection] {
+        guard ProcessInfo.processInfo.thermalState != .critical else { return detections }
+
+        var verified: [RawDetection] = []
+        for detection in detections.prefix(maxItems) {
+            guard Self.requiresClassificationVerification(detection) else {
+                verified.append(detection)
+                continue
+            }
+            guard let crop = Self.crop(image: image, to: detection.box),
+                  let evidence = classificationEvidenceForVerification(for: crop)
+            else {
+                verified.append(detection)
+                continue
+            }
+            guard !Self.shouldReject(detection, using: evidence) else { continue }
+            verified.append(Self.refined(detection, using: evidence))
+        }
+        if !verified.isEmpty || !allowForegroundRecovery { return verified }
+
+        guard let frameEvidence = classificationEvidenceForVerification(for: image),
+              let fallback = Self.foregroundFashionLabel(from: frameEvidence)
+        else { return [] }
+        let foreground = try await foregroundDetections(image: image, maxItems: 1)
+        return foreground.prefix(1).map { detection in
+            RawDetection(
+                queryIndex: detection.queryIndex,
+                classID: nil,
+                label: fallback.label,
+                confidence: min(
+                    0.96,
+                    Foundation.sqrt(max(0, detection.confidence * fallback.confidence))
+                ),
+                box: detection.box,
+                maskWidth: detection.maskWidth,
+                maskHeight: detection.maskHeight,
+                mask: detection.mask,
+                maskFrame: detection.maskFrame
+            )
+        }
+    }
+
+    /// The Fashionpedia model is already reliable for most small accessories.
+    /// Broad second-opinion classification is reserved for the label families
+    /// that produced the observed household-object and lower-body mistakes, so
+    /// live preview does not run another Vision model for every candidate.
+    private nonisolated static func requiresClassificationVerification(
+        _ detection: RawDetection
+    ) -> Bool {
+        let label = detection.label.lowercased()
+        return [
+            "bag", "wallet", "purse", "backpack", "jacket", "coat", "cape",
+            "skirt", "pants", "trouser", "jeans", "shorts", "dress",
+        ].contains { label.contains($0) }
+    }
+
+    private nonisolated static func classificationEvidence(
+        for image: CGImage
+    ) -> ClassificationEvidence? {
+        guard min(image.width, image.height) >= 48 else { return nil }
+        let request = VNClassifyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
+        do {
+            try handler.perform([request])
+        } catch {
+            return nil
+        }
+        guard let results = request.results, !results.isEmpty else { return nil }
+        var scores: [String: Double] = [:]
+        for result in results.prefix(45) {
+            let identifier = result.identifier.lowercased()
+            let confidence = Double(result.confidence)
+            let aliases = Set(
+                [identifier]
+                    + identifier
+                        .split(whereSeparator: { $0 == "," || $0 == ";" })
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    + identifier
+                        .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                        .map(String.init)
+            )
+            for alias in aliases where !alias.isEmpty {
+                scores[alias] = max(scores[alias] ?? 0, confidence)
+            }
+        }
+        return ClassificationEvidence(scores: scores)
+    }
+
+    private func classificationEvidenceForVerification(
+        for image: CGImage
+    ) -> ClassificationEvidence? {
+        let now = ContinuousClock.now
+        classificationCache.removeAll {
+            $0.createdAt.duration(to: now) > .seconds(3)
+        }
+        if let signature = Self.classificationSignature(for: image),
+           let cached = classificationCache.first(where: {
+               ($0.signature ^ signature).nonzeroBitCount <= 3
+           })
+        {
+            return cached.evidence
+        }
+        guard let evidence = Self.classificationEvidence(for: image) else { return nil }
+        if let signature = Self.classificationSignature(for: image) {
+            classificationCache.append(
+                CachedClassificationEvidence(
+                    signature: signature,
+                    createdAt: now,
+                    evidence: evidence
+                )
+            )
+            if classificationCache.count > 12 {
+                classificationCache.removeFirst(classificationCache.count - 12)
+            }
+        }
+        return evidence
+    }
+
+    private nonisolated static func classificationSignature(for image: CGImage) -> UInt64? {
+        let width = 8
+        let height = 8
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let average = pixels.reduce(0, { $0 + Int($1) }) / pixels.count
+        var signature: UInt64 = 0
+        for (index, pixel) in pixels.enumerated() where Int(pixel) >= average {
+            signature |= UInt64(1) << UInt64(index)
+        }
+        return signature
+    }
+
+    private nonisolated static let clothingClassifiers: Set<String> = [
+        "clothing", "apparel", "jean", "jeans", "denim", "pants", "trouser", "trousers", "shorts", "skirt",
+        "dress", "shirt", "blouse", "t-shirt", "sweater", "cardigan", "jacket",
+        "coat", "vest", "suit", "jersey", "sock", "stocking", "scarf", "necktie",
+    ]
+    private nonisolated static let bagClassifiers: Set<String> = [
+        "bag", "handbag", "purse", "wallet", "backpack", "back pack", "rucksack",
+        "haversack", "luggage", "suitcase", "duffel", "holdall", "kitbag",
+    ]
+    private nonisolated static let shoeClassifiers: Set<String> = [
+        "shoe", "footwear", "sneaker", "boot", "sandal", "loafer",
+    ]
+    private nonisolated static let accessoryClassifiers: Set<String> = [
+        "hat", "headwear", "cap", "beanie", "glove", "watch", "wristwatch",
+        "eyeglasses", "sunglasses", "jewelry", "necklace", "bracelet", "ring",
+    ]
+    private nonisolated static let nonFashionClassifiers: Set<String> = [
+        "bedding", "pillow", "bed", "blanket", "comforter", "duvet", "quilt",
+        "furniture", "sofa", "couch", "curtain", "towel", "rug", "carpet",
+    ]
+
+    private nonisolated static func shouldReject(
+        _ detection: RawDetection,
+        using evidence: ClassificationEvidence
+    ) -> Bool {
+        let negative = evidence.score(for: nonFashionClassifiers)
+        guard negative >= 0.16 else { return false }
+        let lowerLabel = detection.label.lowercased()
+        let relevantPositive: Double
+        if lowerLabel.contains("bag") || lowerLabel.contains("wallet") {
+            relevantPositive = evidence.score(for: bagClassifiers)
+        } else if lowerLabel.contains("shoe") {
+            relevantPositive = evidence.score(for: shoeClassifiers)
+        } else if lowerLabel.contains("hat") || lowerLabel.contains("watch")
+            || lowerLabel.contains("glove") || lowerLabel.contains("glasses")
+        {
+            relevantPositive = evidence.score(for: accessoryClassifiers)
+        } else {
+            relevantPositive = evidence.score(for: clothingClassifiers)
+        }
+        return negative >= 0.22 && negative > max(0.08, relevantPositive * 1.35)
+    }
+
+    private nonisolated static func refined(
+        _ detection: RawDetection,
+        using evidence: ClassificationEvidence
+    ) -> RawDetection {
+        let jeans = evidence.score(for: ["jean", "jeans", "denim", "pants", "trouser", "trousers"])
+        let skirt = evidence.score(for: ["skirt"])
+        let bag = evidence.score(for: bagClassifiers)
+        let shoe = evidence.score(for: shoeClassifiers)
+        let clothing = evidence.score(for: clothingClassifiers)
+        let label: String
+        let confidence: Double
+        if bag >= 0.18, bag > max(0.08, clothing * 1.25) {
+            label = "bag, wallet"
+            confidence = Foundation.sqrt(max(0, detection.confidence * bag))
+        } else if jeans >= 0.16, jeans > skirt * 1.25 {
+            label = "pants"
+            confidence = Foundation.sqrt(max(0, detection.confidence * jeans))
+        } else if skirt >= 0.16, skirt > jeans * 1.25 {
+            label = "skirt"
+            confidence = Foundation.sqrt(max(0, detection.confidence * skirt))
+        } else if shoe >= 0.18, detection.label.lowercased().contains("shoe") {
+            label = "shoe"
+            confidence = Foundation.sqrt(max(0, detection.confidence * shoe))
+        } else {
+            label = detection.label
+            confidence = detection.confidence
+        }
+        guard label != detection.label || abs(confidence - detection.confidence) > 0.01 else {
+            return detection
+        }
+        return RawDetection(
+            queryIndex: detection.queryIndex,
+            classID: detection.classID,
+            label: label,
+            confidence: min(0.96, max(0.05, confidence)),
+            box: detection.box,
+            maskWidth: detection.maskWidth,
+            maskHeight: detection.maskHeight,
+            mask: detection.mask,
+            maskFrame: detection.maskFrame
+        )
+    }
+
+    private nonisolated static func foregroundFashionLabel(
+        from evidence: ClassificationEvidence
+    ) -> (label: String, confidence: Double)? {
+        let candidates: [(String, Double)] = [
+            ("bag, wallet", evidence.score(for: bagClassifiers)),
+            ("shoe", evidence.score(for: shoeClassifiers)),
+            ("fashion accessory", evidence.score(for: accessoryClassifiers)),
+            ("clothing", evidence.score(for: clothingClassifiers)),
+        ]
+        guard let best = candidates.max(by: { $0.1 < $1.1 }), best.1 >= 0.18 else {
+            return nil
+        }
+        let negative = evidence.score(for: nonFashionClassifiers)
+        guard negative < 0.22 || best.1 >= negative * 0.82 else { return nil }
+        return best
     }
 
     private nonisolated static func effectiveDetectionResolution(

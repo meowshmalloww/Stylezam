@@ -452,7 +452,8 @@ final class LibraryStore {
             createdAt: .now,
             imageFilename: filename,
             context: context,
-            contentDigest: digest
+            contentDigest: digest,
+            inferredGender: nil
         )
         snapshot.tryOnPersonPhotos.insert(photo, at: 0)
         snapshot.activeTryOnPhotoID = photo.id
@@ -480,6 +481,20 @@ final class LibraryStore {
         } catch {
             snapshot = previous
             loadError = error.localizedDescription
+        }
+    }
+
+    func setInferredTryOnGender(_ gender: TryOnGender, for photoID: UUID) throws {
+        guard gender.isProviderValue,
+              let index = snapshot.tryOnPersonPhotos.firstIndex(where: { $0.id == photoID })
+        else { return }
+        let previous = snapshot
+        snapshot.tryOnPersonPhotos[index].inferredGender = gender
+        do {
+            try persist()
+        } catch {
+            snapshot = previous
+            throw error
         }
     }
 
@@ -649,7 +664,8 @@ final class LibraryStore {
     func addDetectedGarmentToTryOnRail(
         scanID: UUID,
         garmentID: String,
-        sourceFrameData: Data? = nil
+        sourceFrameData: Data? = nil,
+        activate: Bool = true
     ) throws -> SavedWardrobeItem? {
         guard let scan = snapshot.scans.first(where: { $0.id == scanID }),
               let garment = scan.items.first(where: { $0.id == garmentID && $0.accepted }),
@@ -684,7 +700,18 @@ final class LibraryStore {
             sourceGarmentID: garmentID,
             garmentRegion: region
         )
-        addWardrobeItemToTryOnRail(item, selected: true)
+        let snapshotBeforeRailUpdate = snapshot
+        upsertRailEntry(
+            for: item.id,
+            selected: activate,
+            preserveExistingSelection: !activate
+        )
+        do {
+            try persist()
+        } catch {
+            snapshot = snapshotBeforeRailUpdate
+            loadError = error.localizedDescription
+        }
         return item
     }
 
@@ -711,7 +738,8 @@ final class LibraryStore {
     func enrichSourceWardrobeItemInTryOnRail(
         _ product: ProductResultDTO,
         sourceScanID: UUID,
-        sourceGarmentID: String
+        sourceGarmentID: String,
+        activate: Bool = true
     ) throws -> SavedWardrobeItem? {
         guard let index = snapshot.wardrobeItems.firstIndex(where: { item in
             item.sourceScanID == sourceScanID && item.sourceGarmentID == sourceGarmentID
@@ -734,7 +762,11 @@ final class LibraryStore {
             tryOnReferenceDigest: existing.tryOnReferenceDigest
         )
         snapshot.wardrobeItems[index] = enriched
-        upsertRailEntry(for: enriched.id, selected: true)
+        upsertRailEntry(
+            for: enriched.id,
+            selected: activate,
+            preserveExistingSelection: !activate
+        )
         do {
             try persist()
             return enriched
@@ -749,13 +781,15 @@ final class LibraryStore {
         _ product: ProductResultDTO,
         imageData: Data,
         sourceScanID: UUID? = nil,
-        sourceGarmentID: String? = nil
+        sourceGarmentID: String? = nil,
+        activate: Bool = true
     ) throws -> SavedWardrobeItem {
         if let sourceScanID, let sourceGarmentID,
            let enriched = try enrichSourceWardrobeItemInTryOnRail(
                product,
                sourceScanID: sourceScanID,
-               sourceGarmentID: sourceGarmentID
+               sourceGarmentID: sourceGarmentID,
+               activate: activate
            )
         {
             return enriched
@@ -814,7 +848,11 @@ final class LibraryStore {
                 tryOnReferenceDigest: existing.tryOnReferenceDigest
             )
             snapshot.wardrobeItems[existingIndex] = updated
-            upsertRailEntry(for: updated.id, selected: true)
+            upsertRailEntry(
+                for: updated.id,
+                selected: activate,
+                preserveExistingSelection: !activate
+            )
             do {
                 try persist()
                 tryOnMediaCache.removeObject(forKey: existing.id as NSUUID)
@@ -837,7 +875,22 @@ final class LibraryStore {
             sourceGarmentID: sourceGarmentID,
             garmentRegion: region
         )
-        addWardrobeItemToTryOnRail(item, selected: true)
+        if activate {
+            addWardrobeItemToTryOnRail(item, selected: true)
+        } else {
+            let snapshotBeforeRailUpdate = snapshot
+            upsertRailEntry(
+                for: item.id,
+                selected: false,
+                preserveExistingSelection: true
+            )
+            do {
+                try persist()
+            } catch {
+                snapshot = snapshotBeforeRailUpdate
+                throw error
+            }
+        }
         return item
     }
 
@@ -1110,9 +1163,15 @@ final class LibraryStore {
         }
     }
 
-    private func upsertRailEntry(for itemID: UUID, selected: Bool) {
+    private func upsertRailEntry(
+        for itemID: UUID,
+        selected: Bool,
+        preserveExistingSelection: Bool = false
+    ) {
         if let index = snapshot.tryOnRail.firstIndex(where: { $0.wardrobeItemID == itemID }) {
-            snapshot.tryOnRail[index].isSelected = selected
+            if !preserveExistingSelection {
+                snapshot.tryOnRail[index].isSelected = selected
+            }
             snapshot.tryOnRail[index].addedAt = .now
             let entry = snapshot.tryOnRail.remove(at: index)
             snapshot.tryOnRail.insert(entry, at: 0)

@@ -1,6 +1,6 @@
 # Privacy and data handling
 
-This document describes the local-vision, developer product-search, and optional photo try-on build. Detected crops can enter the local wardrobe and Try On rail automatically, but YouCam receives data only when the user explicitly consents and creates a try-on or motion preview.
+This document describes the local-vision, developer product-search, and optional photo try-on build. Detected crops can enter the local wardrobe and Try On rail automatically in the off state, but YouCam receives data only when the user explicitly selects pieces, consents, and creates a try-on or motion preview.
 
 Each executable bundle includes an Apple `PrivacyInfo.xcprivacy` manifest for the required-reason APIs it uses. The manifests declare no tracking and no tracking domains. App Store privacy answers still require final account-specific review.
 
@@ -27,7 +27,7 @@ The app links Firebase Analytics Core without IDFA collection capability. Identi
 
 Search credentials are stored in the device-only Keychain. They are never stored in Library JSON. The ignored local `.env` file is a development bootstrap only and is not part of the app bundle. Provider settings inside the app are status-only; users cannot paste, read, or replace a service key.
 
-The capture and garment-detection pipeline has no remote inference call. Accepted garment crops are promoted to the persistent selected rail locally. For detected lower-body pieces, a full source-frame copy is retained locally as a best-effort candidate for YouCam's worn-garment requirement while the crop remains the visible thumbnail. Stylezam cannot validate locally that the frame visibly shows the garment worn by one clear person. The rail reports ready/missing state and lets the user add or replace that reference. Identical reference frames are content-deduplicated. The separate Try On workspace uploads the chosen person photo and only the selected references compatible with that photo context to YouCam after explicit upload consent, polls each sequential category task, and downloads the result. Selected incompatible pieces stay parked locally. Next to consent, the app explains that a lower-body upload uses the full reference frame rather than the displayed crop and that the frame can contain people, surroundings, or page content. **View as video** separately uploads the completed still for an image-to-video task.
+The capture and garment-detection pipeline has no remote inference call. Accepted garment crops are promoted to the persistent rail locally with selection off. For detected lower-body pieces, a full source-frame copy is retained locally as a best-effort candidate for YouCam's worn-garment requirement while the crop remains the visible thumbnail. Stylezam cannot validate locally that the frame visibly shows the garment worn by one clear person. The rail reports ready/missing state and lets the user add or replace that reference. Identical reference frames are content-deduplicated. The separate Try On workspace uploads the chosen person photo and only the explicitly selected references compatible with that photo context to YouCam after upload consent, polls each sequential category task, and downloads the result. Selected incompatible pieces stay parked locally. Next to consent, the app explains that a lower-body upload uses the full reference frame rather than the displayed crop and that the frame can contain people, surroundings, or page content. **View as video** separately uploads the completed still for an image-to-video task.
 
 ## User-controlled input
 
@@ -47,15 +47,15 @@ The app does not analyze every camera or screen frame. Both live paths have inde
 Detection, segmentation, cropping, Library capture, automatic wardrobe/rail promotion, rail toggles, and person-photo reuse remain local. Detection never starts a product search, downloads merchant imagery, or calls YouCam. Network activity begins only after the user explicitly starts product search, asks the image-aware assistant, opens a merchant link, loads a remote product thumbnail, opens Try On with a configured key (a credential-only feature-cost check), creates a consented try-on, or requests a motion preview. The connection check uploads no user image.
 
 - Fireworks receives the selected garment crop, the bounded recent conversation, and the new prompt for Qwen vision.
-- Serper receives generated or user-refined text, not the photo.
+- Serper, SearchAPI.io, SerpApi, or Bright Data receives generated or user-refined text when chosen by the rotating keyword route, not the photo.
 - Lykdat receives the selected crop when chosen as the direct image provider.
 - Google Cloud Vision receives the selected crop only when Web Detection is chosen. Stylezam requests no label, text, face, logo, or other Vision feature in that call.
-- SearchAPI.io and SerpApi receive only an explicitly configured public image URL.
-- Bright Data receives the configured public image URL and zone when selected.
+- SearchAPI.io and SerpApi receive an explicitly configured public image URL only for their Lens routes.
+- Bright Data receives the configured public image URL and zone only for Lens; its text-shopping route receives the query instead.
 
 Stylezam never uploads a private crop to an anonymous image host to satisfy a Google Lens URL requirement.
 
-Photo try-on requires network access. The user must consent immediately before submission. Multi-item looks upload the evolving person image and one reference per sequential category task; this is not a single multi-garment request. The motion option uploads the completed still and requests a 5-second, 480p YouCam image-to-video v2 result, of which Stylezam displays three seconds. YouCam documents a file-retention period of up to 30 days, while generated result links expire sooner; the app discloses this in the Try On workspace. Stylezam requests immediate deletion after downloading each finished task, but the documented 30-day automatic-retention boundary remains the fallback if that request fails. A prototype YouCam token can be stored in the device Keychain. Before release, replace direct bearer authentication with a scoped server-side proxy and align remote deletion behavior with the active YouCam agreement.
+Photo try-on requires network access. The user must consent immediately before submission. Multi-item looks upload the evolving person image and one reference per sequential category task; this is not a single multi-garment request. Enabled finishing operations upload the evolving result to YouCam enhancement, lighting, background-removal, or background-replacement tasks. The motion option uploads the completed still and requests a five-second 480p, 720p, or 1080p YouCam image-to-video v2 result. YouCam documents a file-retention period of up to 30 days, while generated result links expire sooner; the app discloses this in the Try On workspace. Stylezam requests immediate deletion after downloading each finished task, but the documented 30-day automatic-retention boundary remains the fallback if that request fails. A prototype YouCam token can be stored in the device Keychain. Before release, replace direct bearer authentication with a scoped server-side proxy and align remote deletion behavior with the active YouCam agreement.
 
 ## Deletion
 

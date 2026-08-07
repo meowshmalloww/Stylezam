@@ -35,7 +35,7 @@ struct FirstRunExperienceView: View {
             BrandMarkView(size: 34)
             StylezamWordmark()
             Spacer()
-            Text("\(page.rawValue + 1, format: .number.precision(.integerLength(2))) / 05")
+            Text("\(page.rawValue + 1, format: .number.precision(.integerLength(2))) / \(FirstRunPage.allCases.count, format: .number.precision(.integerLength(2)))")
                 .font(.caption.monospacedDigit().weight(.semibold))
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText())
@@ -102,6 +102,7 @@ private enum FirstRunPage: Int, CaseIterable, Identifiable {
     case separate
     case remember
     case discover
+    case everywhere
     case ready
 
     var id: Int { rawValue }
@@ -131,6 +132,8 @@ private struct FirstRunPageView: View {
                     memory
                 case .discover:
                     discovery
+                case .everywhere:
+                    captureEverywhere
                 case .ready:
                     ready
                 }
@@ -142,7 +145,7 @@ private struct FirstRunPageView: View {
         }
         .scrollIndicators(.hidden)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Onboarding page \(page.rawValue + 1) of 5")
+        .accessibilityLabel("Onboarding page \(page.rawValue + 1) of \(FirstRunPage.allCases.count)")
     }
 
     private var welcome: some View {
@@ -176,7 +179,7 @@ private struct FirstRunPageView: View {
                 EditorialKicker(text: "ONE LOOK · MANY PIECES")
                 Text("Keep the outfit.\nSee the pieces.")
                     .onboardingTitle()
-                Text("On-device vision finds garments and accessories, then saves readable crops beside the original photo.")
+                Text("On device vision finds garments and accessories, then saves readable crops beside the original photo.")
                     .onboardingBody()
             }
             .motionReveal()
@@ -253,6 +256,47 @@ private struct FirstRunPageView: View {
         }
     }
 
+    private var captureEverywhere: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 8) {
+                EditorialKicker(text: "READY WHEN STYLE APPEARS")
+                Text("Bring Stylezam\nto the moment.")
+                    .onboardingTitle()
+                Text("Open the camera inside Stylezam, scan another app with Live Screen, or launch a capture from Control Center and Shortcuts.")
+                    .onboardingBody()
+            }
+            .motionReveal()
+
+            VStack(spacing: 10) {
+                OnboardingRouteCard(
+                    number: "01",
+                    icon: "camera.viewfinder",
+                    title: "Camera",
+                    detail: "Use Photo for one careful capture or Live for continuous local detection."
+                )
+                OnboardingRouteCard(
+                    number: "02",
+                    icon: "rectangle.on.rectangle",
+                    title: "Live Screen",
+                    detail: "Add the Stylezam control in Control Center, then choose Live Screen to inspect what is visible."
+                )
+                OnboardingRouteCard(
+                    number: "03",
+                    icon: "command",
+                    title: "Shortcuts",
+                    detail: "Add a Stylezam action to a Shortcut for a capture flow you can launch from anywhere."
+                )
+            }
+            .motionReveal(delay: 0.08, distance: 12)
+
+            Label("iOS always shows its screen sharing indicator while Live Screen is active.", systemImage: "checkmark.shield")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .motionReveal(delay: 0.14, distance: 8)
+        }
+    }
+
     private var ready: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 8) {
@@ -313,9 +357,14 @@ private struct ScanMemoryArtwork: View {
 
                     HStack(spacing: 16) {
                         ZStack {
-                            Image("OnboardingFashionHero")
-                                .resizable()
-                                .scaledToFill()
+                            LinearGradient(
+                                colors: [StylezamDesign.cobalt.opacity(0.1), .white],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                            Image(systemName: "handbag.fill")
+                                .font(.system(size: 43, weight: .medium))
+                                .foregroundStyle(StylezamDesign.cobalt)
                             RoundedRectangle(cornerRadius: 16, style: .continuous)
                                 .stroke(StylezamDesign.cobalt, lineWidth: 2)
                                 .padding(13)
@@ -371,18 +420,22 @@ private struct OnboardingEditorialHero: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack(alignment: .bottomLeading) {
-                Image("OnboardingFashionHero")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: height)
-                    .clipped()
-
+            ZStack {
                 LinearGradient(
-                    colors: [.black.opacity(0.08), .clear, .black.opacity(0.78)],
-                    startPoint: .top,
-                    endPoint: .bottom
+                    colors: [StylezamDesign.cobaltDeep, StylezamDesign.cobalt],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
+
+                Circle()
+                    .fill(.white.opacity(0.08))
+                    .frame(width: geometry.size.width * 0.82)
+                    .blur(radius: 1)
+                    .offset(x: geometry.size.width * 0.28, y: -height * 0.25)
+
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(.white.opacity(0.14), lineWidth: 1)
+                    .padding(18)
 
                 VStack {
                     HStack {
@@ -400,17 +453,36 @@ private struct OnboardingEditorialHero: View {
                 }
                 .padding(20)
 
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("STYLEZAM / 001")
+                HStack(spacing: 12) {
+                    heroGlyph("tshirt.fill", offset: -14)
+                    heroGlyph("handbag.fill", offset: 8)
+                    ZStack {
+                        Circle()
+                            .fill(.white)
+                            .frame(width: 86, height: 86)
+                            .shadow(color: .black.opacity(0.16), radius: 18, y: 10)
+                        Image(systemName: "camera.aperture")
+                            .font(.system(size: 38, weight: .medium))
+                            .foregroundStyle(StylezamDesign.cobalt)
+                    }
+                    .accessibilityHidden(true)
+                    heroGlyph("watch.analog", offset: 8)
+                    heroGlyph("shoe.2.fill", offset: -14)
+                }
+                .padding(.horizontal, 22)
+
+                VStack(alignment: .leading, spacing: 5) {
+                    Spacer()
+                    Text("STYLEZAM / VISUAL SEARCH")
                         .font(.system(size: 9, weight: .bold))
                         .tracking(1.4)
-                        .foregroundStyle(.white.opacity(0.66))
-                    Text("Start with\nwhat you see.")
-                        .font(.system(size: 29, weight: .semibold))
-                        .tracking(-0.75)
+                        .foregroundStyle(.white.opacity(0.62))
+                    Text("Start with what you see.")
+                        .font(.system(size: 25, weight: .semibold))
+                        .tracking(-0.6)
                         .foregroundStyle(.white)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(22)
             }
         }
@@ -422,7 +494,21 @@ private struct OnboardingEditorialHero: View {
         }
         .shadow(color: StylezamDesign.cobalt.opacity(0.12), radius: 22, y: 12)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Editorial outfit with a cobalt jacket, cream trousers, a black bag, and white shoes")
+        .accessibilityLabel("Stylezam camera surrounded by fashion categories")
+    }
+
+    private func heroGlyph(_ systemName: String, offset: CGFloat) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 20, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: 48, height: 48)
+            .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(.white.opacity(0.2), lineWidth: 0.75)
+            }
+            .offset(y: offset)
+            .accessibilityHidden(true)
     }
 }
 
@@ -432,27 +518,25 @@ private struct LookBreakdownArtwork: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                Image("OnboardingFashionHero")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: geometry.size.width, height: height)
-                    .clipped()
-
                 LinearGradient(
-                    colors: [.black.opacity(0.06), .clear, .black.opacity(0.24)],
-                    startPoint: .top,
-                    endPoint: .bottom
+                    colors: [.white, StylezamDesign.cobalt.opacity(0.06)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
                 )
 
-                PieceCallout(index: "01", title: "Jacket")
-                    .position(x: geometry.size.width * 0.35, y: geometry.size.height * 0.24)
-                PieceCallout(index: "02", title: "Bag")
-                    .position(x: geometry.size.width * 0.5, y: geometry.size.height * 0.32)
-                PieceCallout(index: "03", title: "Trousers")
-                    .position(x: geometry.size.width * 0.39, y: geometry.size.height * 0.7)
-                PieceCallout(index: "04", title: "Shoes")
-                    .position(x: geometry.size.width * 0.47, y: geometry.size.height * 0.9)
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        breakdownTile(index: "01", icon: "tshirt.fill", title: "Clothes")
+                        breakdownTile(index: "02", icon: "handbag.fill", title: "Bags")
+                    }
+                    HStack(spacing: 12) {
+                        breakdownTile(index: "03", icon: "shoe.2.fill", title: "Shoes")
+                        breakdownTile(index: "04", icon: "watch.analog", title: "Accessories")
+                    }
+                }
+                .padding(22)
             }
+            .frame(width: geometry.size.width, height: height)
         }
         .frame(height: height)
         .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -461,26 +545,34 @@ private struct LookBreakdownArtwork: View {
                 .stroke(StylezamDesign.hairline, lineWidth: 0.75)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("One outfit separated into a jacket, bag, trousers, and shoes")
+        .accessibilityLabel("One view separated into clothes, bags, shoes, and accessories")
     }
-}
 
-private struct PieceCallout: View {
-    let index: String
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(index)
-                .foregroundStyle(.white.opacity(0.58))
+    private func breakdownTile(index: String, icon: String, title: String) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Text(index)
+                    .font(.caption.monospacedDigit().weight(.medium))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(StylezamDesign.cobalt)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: icon)
+                .font(.system(size: 30, weight: .medium))
+                .foregroundStyle(StylezamDesign.cobalt)
             Text(title)
-                .foregroundStyle(.white)
+                .font(.headline)
         }
-        .font(.system(size: 10, weight: .semibold))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(.black.opacity(0.72), in: Capsule())
-        .overlay { Capsule().stroke(.white.opacity(0.2), lineWidth: 0.5) }
+        .padding(16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        }
     }
 }
 

@@ -470,24 +470,26 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
-                Picker("Preferred provider", selection: $settings.imageSearchProvider) {
+                Picker("Visual rotation starts with", selection: $settings.imageSearchProvider) {
                     ForEach(ImageSearchProvider.allCases) { provider in
                         Text(provider.title).tag(provider)
                     }
                 }
                 LabeledContent(
                     "Routing",
-                    value: model.eligibleImageSearchProviders.contains(settings.imageSearchProvider)
-                        ? "Pinned to preference"
-                        : "Eligible fallback"
+                    value: "One provider per search"
                 )
                 LabeledContent("Eligible providers") {
                     Text(model.eligibleImageSearchProviders.count, format: .number)
                         .monospacedDigit()
                 }
                 LabeledContent(
-                    "Active provider",
+                    "Next visual provider",
                     value: model.activeImageSearchProvider?.title ?? "None ready"
+                )
+                LabeledContent(
+                    "Next keyword provider",
+                    value: model.activeKeywordSearchProvider?.title ?? "None ready"
                 )
 
                 Stepper(
@@ -507,7 +509,7 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Product search")
             } footer: {
-                Text("One tap makes one request to the preferred eligible provider and can return several products. If that provider requires a public image URL or is not configured, Stylezam uses an eligible fallback. Fireworks remains exclusive to Stylezam AI and AI-guided refinements.")
+                Text("Each visual search calls exactly one ready provider, then advances to the next route. AI shopping uses Fireworks once for keywords and exactly one rotating text-shopping provider. Failed routes are recorded and the following search advances.")
             }
 
             Section {
@@ -531,11 +533,14 @@ private struct DeveloperSettingsView: View {
 
             Section {
                 providerReadinessRow(kind: .fireworks, detail: "Understands the piece and conversation")
-                providerReadinessRow(kind: .serper, detail: "Runs AI-generated shopping keywords")
+                keywordProviderReadinessRow(.serper)
+                keywordProviderReadinessRow(.searchAPI)
+                keywordProviderReadinessRow(.serpAPI)
+                keywordProviderReadinessRow(.brightData)
             } header: {
-                Text("Stylezam AI search")
+                Text("AI and keyword shopping")
             } footer: {
-                Text("Fireworks writes one focused shopping query. Serper can return several products from that one dispatched request.")
+                Text("Fireworks writes one focused shopping query. The next ready provider performs one Google Shopping request and can return several products. Keyword search does not need a public crop link.")
             }
 
             Section {
@@ -617,6 +622,25 @@ private struct DeveloperSettingsView: View {
         return readinessRow(
             title: provider.title,
             detail: provider.acceptsPrivateImageData ? "Private crop bytes" : "Public image link",
+            status: status,
+            isReady: isEligible
+        )
+    }
+
+    private func keywordProviderReadinessRow(_ provider: KeywordSearchProvider) -> some View {
+        let hasKey = model.credentials.hasCredential(provider.credential)
+        let isEligible = model.eligibleKeywordSearchProviders.contains(provider)
+        let status: String
+        if !hasKey {
+            status = "Not configured"
+        } else if provider.requiresZone && !isEligible {
+            status = "Needs SERP zone"
+        } else {
+            status = "Ready"
+        }
+        return readinessRow(
+            title: provider.title,
+            detail: provider.requiresZone ? "Text query · SERP zone" : "Text shopping query",
             status: status,
             isReady: isEligible
         )
@@ -731,28 +755,25 @@ private struct SearchDiagnosticsView: View {
 
     var body: some View {
         List {
-            Section("AI & keyword search") {
+            Section {
                 diagnosticCount("Fireworks", provider: "fireworks")
                 diagnosticCount("Serper", provider: "serper")
+                diagnosticCount("SearchAPI.io", provider: "searchapi")
+                diagnosticCount("SerpApi", provider: "serpapi")
+                diagnosticCount("Bright Data", provider: "brightdata")
                 LabeledContent("Estimated Fireworks spend") {
                     Text(model.searchUsage.estimatedFireworksSpend, format: .currency(code: "USD"))
                         .monospacedDigit()
                 }
+            } header: {
+                Text("AI & keyword search")
+            } footer: {
+                Text("SearchAPI.io, SerpApi, and Bright Data counters include both keyword-shopping and visual Lens calls. Each record below shows the exact route used.")
             }
 
             Section("Private image routes") {
                 diagnosticCount("Lykdat", provider: "lykdat")
                 diagnosticCount("Google Vision", provider: "googlevision")
-            }
-
-            Section {
-                diagnosticCount("SearchAPI.io", provider: "searchapi")
-                diagnosticCount("SerpApi", provider: "serpapi")
-                diagnosticCount("Bright Data", provider: "brightdata")
-            } header: {
-                Text("Hosted-link Lens routes")
-            } footer: {
-                Text("These counters remain at zero unless a public HTTPS test-image URL is configured. A key alone is not enough because those Lens endpoints request an image link, not private crop bytes.")
             }
 
             Section("Latest dispatched calls") {

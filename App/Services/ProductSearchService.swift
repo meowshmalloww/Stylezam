@@ -2,6 +2,15 @@ import CryptoKit
 import Foundation
 
 actor ProductSearchService {
+    private enum ScoreFallback: Equatable {
+        case none
+        case queryOverlap
+    }
+
+    private struct TryOnPresentationPayload: Decodable {
+        let presentation: String
+    }
+
     private struct AssistantPayload: Decodable {
         let answer: String
         let suggestedQuestions: [String]
@@ -203,6 +212,61 @@ actor ProductSearchService {
         )
     }
 
+    func inferTryOnPresentation(
+        imageData: Data,
+        apiKey: String,
+        modelID: String
+    ) async throws -> (TryOnGender, SearchProviderResponse) {
+        let body: [String: Any] = [
+            "model": modelID,
+            "reasoning_effort": "none",
+            "temperature": 0,
+            "max_tokens": 40,
+            "response_format": tryOnPresentationResponseFormat(),
+            "messages": [[
+                "role": "user",
+                "content": [
+                    [
+                        "type": "text",
+                        "text": "Choose the YouCam binary presentation parameter that best preserves the visible person's current presentation in this photo. This is an image-rendering control, not a claim about identity. Return male or female only in the required JSON schema.",
+                    ],
+                    ["type": "image_url", "image_url": ["url": imageDataURL(for: imageData)]],
+                ],
+            ]],
+        ]
+        let (data, response) = try await sendJSON(
+            url: URL(string: "https://api.fireworks.ai/inference/v1/chat/completions")!,
+            body: body,
+            headers: ["Authorization": "Bearer \(apiKey)"],
+            provider: "Fireworks"
+        )
+        let root = try jsonObject(data, provider: "Fireworks")
+        let choices = root["choices"] as? [[String: Any]] ?? []
+        guard let message = choices.first?["message"] as? [String: Any],
+              let content = messageText(message),
+              let json = jsonData(fromPossiblyFenced: content),
+              let payload = try? JSONDecoder().decode(TryOnPresentationPayload.self, from: json),
+              let gender = TryOnGender(rawValue: payload.presentation.lowercased()),
+              gender.isProviderValue
+        else {
+            throw ProductSearchError.provider(
+                "Automatic presentation could not be determined. Choose Male or Female and try again."
+            )
+        }
+        let usage = root["usage"] as? [String: Any]
+        return (
+            gender,
+            SearchProviderResponse(
+                results: [],
+                providerRequestID: response.value(forHTTPHeaderField: "x-request-id")
+                    ?? root["id"] as? String,
+                inputTokens: integer(usage?["prompt_tokens"]),
+                outputTokens: integer(usage?["completion_tokens"]),
+                diagnostic: "Fireworks selected the YouCam presentation parameter"
+            )
+        )
+    }
+
     func serperProducts(
         query: String,
         apiKey: String,
@@ -232,7 +296,8 @@ actor ProductSearchService {
             provider: "Serper",
             searchID: searchID,
             limit: limit,
-            targetLabel: query
+            targetLabel: query,
+            scoreFallback: .queryOverlap
         )
         guard !results.isEmpty else { throw ProductSearchError.noResults }
         return SearchProviderResponse(
@@ -242,6 +307,63 @@ actor ProductSearchService {
             outputTokens: nil,
             diagnostic: "One Serper shopping query returned \(results.count) usable results"
         )
+    }
+
+    func keywordProducts(
+        provider: KeywordSearchProvider,
+        query: String,
+        apiKey: String,
+        brightDataZone: String,
+        country: String,
+        language: String,
+        limit: Int,
+        searchID: String,
+        cheaperFirst: Bool
+    ) async throws -> SearchProviderResponse {
+        switch provider {
+        case .serper:
+            return try await serperProducts(
+                query: query,
+                apiKey: apiKey,
+                country: country,
+                language: language,
+                limit: limit,
+                searchID: searchID
+            )
+        case .searchAPI:
+            return try await searchAPIShopping(
+                query: query,
+                apiKey: apiKey,
+                country: country,
+                language: language,
+                limit: limit,
+                searchID: searchID,
+                cheaperFirst: cheaperFirst
+            )
+        case .serpAPI:
+            return try await serpAPIShopping(
+                query: query,
+                apiKey: apiKey,
+                country: country,
+                language: language,
+                limit: limit,
+                searchID: searchID,
+                cheaperFirst: cheaperFirst
+            )
+        case .brightData:
+            guard !brightDataZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ProductSearchError.missingBrightDataZone
+            }
+            return try await brightDataShopping(
+                query: query,
+                apiKey: apiKey,
+                zone: brightDataZone,
+                country: country,
+                language: language,
+                limit: limit,
+                searchID: searchID
+            )
+        }
     }
 
     func directImageSearch(
@@ -381,8 +503,9 @@ actor ProductSearchService {
             let matchingImage = (pageFullImages + pagePartialImages).first
             let imageURL = string(matchingImage?["url"]).flatMap(webURL)
             let hasFullMatch = !pageFullImages.isEmpty
+            let rawScore = number(page["score"]) ?? number(matchingImage?["score"])
             let score = boundedGoogleVisionScore(
-                number(page["score"]) ?? number(matchingImage?["score"]),
+                rawScore,
                 evidence: hasFullMatch ? .exact : .likely
             )
             let rawTitle = string(page["pageTitle"])
@@ -397,7 +520,8 @@ actor ProductSearchService {
                     title: title,
                     evidence: hasFullMatch ? "Full matching image page" : "Partial matching image page",
                     matchTier: hasFullMatch ? .exact : .likely,
-                    score: score
+                    score: score,
+                    scoreIsMeasured: rawScore != nil
                 )
             )
         }
@@ -414,6 +538,7 @@ actor ProductSearchService {
                       seenURLs.insert(imageURL.absoluteString).inserted
                 else { continue }
                 let host = imageURL.host() ?? "the web"
+                let rawScore = number(object["score"])
                 candidates.append(
                     googleVisionResult(
                         searchID: searchID,
@@ -422,7 +547,8 @@ actor ProductSearchService {
                         title: "\(subject) · \(host)",
                         evidence: group.evidence,
                         matchTier: group.tier,
-                        score: boundedGoogleVisionScore(number(object["score"]), evidence: group.tier)
+                        score: boundedGoogleVisionScore(rawScore, evidence: group.tier),
+                        scoreIsMeasured: rawScore != nil
                     )
                 )
             }
@@ -456,7 +582,8 @@ actor ProductSearchService {
         title: String,
         evidence: String,
         matchTier: MatchTier,
-        score: Double
+        score: Double,
+        scoreIsMeasured: Bool
     ) -> ProductResultDTO {
         let provider = "Google Cloud Vision"
         let stable = SHA256.hash(data: Data("\(provider)|\(pageURL.absoluteString)".utf8))
@@ -479,7 +606,10 @@ actor ProductSearchService {
             score: score,
             rating: nil,
             reviewCount: nil,
-            attributes: ["webEvidence": .string(evidence)],
+            attributes: [
+                "webEvidence": .string(evidence),
+                "scoreBasis": scoreIsMeasured ? .string("provider") : .null,
+            ],
             offers: []
         )
     }
@@ -706,6 +836,174 @@ actor ProductSearchService {
         )
     }
 
+    private func searchAPIShopping(
+        query: String,
+        apiKey: String,
+        country: String,
+        language: String,
+        limit: Int,
+        searchID: String,
+        cheaperFirst: Bool
+    ) async throws -> SearchProviderResponse {
+        var components = URLComponents(string: "https://www.searchapi.io/api/v1/search")!
+        var queryItems = [
+            URLQueryItem(name: "engine", value: "google_shopping"),
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "gl", value: country),
+            URLQueryItem(name: "hl", value: language),
+        ]
+        if cheaperFirst {
+            queryItems.append(URLQueryItem(name: "sort_by", value: "price_low_to_high"))
+        }
+        components.queryItems = queryItems
+        var request = URLRequest(url: components.url!)
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        let (data, response) = try await send(request, provider: "SearchAPI.io")
+        let root = try jsonObject(data, provider: "SearchAPI.io")
+        let objects = (root["shopping_results"] as? [[String: Any]])
+            ?? (root["shopping_ads"] as? [[String: Any]])
+            ?? (root["inline_shopping"] as? [[String: Any]])
+            ?? []
+        let results = productResults(
+            objects: objects,
+            provider: "SearchAPI.io",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: query,
+            scoreFallback: .queryOverlap
+        )
+        guard !results.isEmpty else { throw ProductSearchError.noResults }
+        return SearchProviderResponse(
+            results: results,
+            providerRequestID: response.value(forHTTPHeaderField: "x-request-id"),
+            inputTokens: nil,
+            outputTokens: nil,
+            diagnostic: "One SearchAPI.io Shopping query returned \(results.count) usable results"
+        )
+    }
+
+    private func serpAPIShopping(
+        query: String,
+        apiKey: String,
+        country: String,
+        language: String,
+        limit: Int,
+        searchID: String,
+        cheaperFirst: Bool
+    ) async throws -> SearchProviderResponse {
+        var components = URLComponents(string: "https://serpapi.com/search.json")!
+        var queryItems = [
+            URLQueryItem(name: "engine", value: "google_shopping"),
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "gl", value: country),
+            URLQueryItem(name: "hl", value: language),
+            URLQueryItem(name: "api_key", value: apiKey),
+        ]
+        if cheaperFirst {
+            queryItems.append(URLQueryItem(name: "sort_by", value: "1"))
+        }
+        components.queryItems = queryItems
+        let (data, response) = try await send(
+            URLRequest(url: components.url!),
+            provider: "SerpApi"
+        )
+        let root = try jsonObject(data, provider: "SerpApi")
+        let objects = (root["shopping_results"] as? [[String: Any]])
+            ?? (root["inline_shopping"] as? [[String: Any]])
+            ?? []
+        let results = productResults(
+            objects: objects,
+            provider: "SerpApi",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: query,
+            scoreFallback: .queryOverlap
+        )
+        guard !results.isEmpty else { throw ProductSearchError.noResults }
+        return SearchProviderResponse(
+            results: results,
+            providerRequestID: response.value(forHTTPHeaderField: "x-request-id"),
+            inputTokens: nil,
+            outputTokens: nil,
+            diagnostic: "One SerpApi Shopping query returned \(results.count) usable results"
+        )
+    }
+
+    private func brightDataShopping(
+        query: String,
+        apiKey: String,
+        zone: String,
+        country: String,
+        language: String,
+        limit: Int,
+        searchID: String
+    ) async throws -> SearchProviderResponse {
+        var target = URLComponents(string: "https://www.google.com/search")!
+        target.queryItems = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "hl", value: language),
+            URLQueryItem(name: "gl", value: country),
+            URLQueryItem(name: "udm", value: "28"),
+        ]
+        let body: [String: Any] = [
+            "zone": zone,
+            "url": target.url!.absoluteString,
+            "format": "json",
+            "method": "GET",
+            "country": country,
+        ]
+        let (data, response) = try await sendJSON(
+            url: URL(string: "https://api.brightdata.com/request")!,
+            body: body,
+            headers: ["Authorization": "Bearer \(apiKey)"],
+            provider: "Bright Data"
+        )
+        let envelope = try jsonObject(data, provider: "Bright Data")
+        if let innerStatus = integer(envelope["status_code"]), innerStatus != 200 {
+            throw ProductSearchError.provider(
+                "Bright Data reached its API, but Shopping returned HTTP \(innerStatus). Check the configured SERP zone."
+            )
+        }
+        let root = nestedJSONBody(in: envelope)
+        let objects = (root["shopping"] as? [[String: Any]])
+            ?? (root["shopping_results"] as? [[String: Any]])
+            ?? (root["products"] as? [[String: Any]])
+            ?? findProductObjects(in: root)
+        let results = productResults(
+            objects: objects,
+            provider: "Bright Data",
+            searchID: searchID,
+            limit: limit,
+            targetLabel: query,
+            scoreFallback: .queryOverlap
+        )
+        guard !results.isEmpty else {
+            throw ProductSearchError.provider(
+                "Bright Data returned Shopping data but no supported product records. Confirm that the zone returns parsed JSON."
+            )
+        }
+        return SearchProviderResponse(
+            results: results,
+            providerRequestID: response.value(forHTTPHeaderField: "x-request-id"),
+            inputTokens: nil,
+            outputTokens: nil,
+            diagnostic: "One Bright Data Shopping query returned \(results.count) usable results"
+        )
+    }
+
+    private func nestedJSONBody(in envelope: [String: Any]) -> [String: Any] {
+        if let body = envelope["body"] as? [String: Any] {
+            return body
+        }
+        if let text = envelope["body"] as? String,
+           let data = text.data(using: .utf8),
+           let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+        {
+            return body
+        }
+        return envelope
+    }
+
     private func sendJSON(
         url: URL,
         body: [String: Any],
@@ -928,6 +1226,26 @@ actor ProductSearchService {
         ]
     }
 
+    private func tryOnPresentationResponseFormat() -> [String: Any] {
+        [
+            "type": "json_schema",
+            "json_schema": [
+                "name": "stylezam_try_on_presentation",
+                "schema": [
+                    "type": "object",
+                    "properties": [
+                        "presentation": [
+                            "type": "string",
+                            "enum": ["male", "female"],
+                        ],
+                    ] as [String: Any],
+                    "required": ["presentation"],
+                    "additionalProperties": false,
+                ] as [String: Any],
+            ] as [String: Any],
+        ]
+    }
+
     private func findProductObjects(in value: Any) -> [[String: Any]] {
         if let array = value as? [[String: Any]],
            array.contains(where: { productURLString($0) != nil })
@@ -1012,7 +1330,8 @@ actor ProductSearchService {
         provider: String,
         searchID: String,
         limit: Int,
-        targetLabel: String? = nil
+        targetLabel: String? = nil,
+        scoreFallback: ScoreFallback = .none
     ) -> [ProductResultDTO] {
         let targetTerms = normalizedTerms(targetLabel ?? "")
         let candidates = objects.enumerated().compactMap { index, object -> ProductResultDTO? in
@@ -1051,11 +1370,27 @@ actor ProductSearchService {
                 : Double(targetTerms.intersection(titleTerms).count) / Double(targetTerms.count)
             let rawProviderScore = number(object["score"])
                 ?? number(object["similarity"])
-                ?? max(0.34, 0.72 - (Double(index) * 0.025))
-            let providerScore = rawProviderScore > 1
-                ? rawProviderScore / 100
-                : rawProviderScore
-            let score = min(0.96, max(0.2, providerScore * 0.9 + min(0.12, overlap * 0.12)))
+            let providerScore = rawProviderScore.map { $0 > 1 ? $0 / 100 : $0 }
+            let score: Double
+            let scoreBasis: String?
+            if let providerScore {
+                score = min(1, max(0, providerScore))
+                scoreBasis = "provider"
+            } else if scoreFallback == .queryOverlap, !targetTerms.isEmpty {
+                score = min(1, max(0, overlap))
+                scoreBasis = "query"
+            } else {
+                // Preserve the provider's result order without presenting an
+                // invented similarity percentage to the user.
+                score = max(0, 0.001 - (Double(index) * 0.000_001))
+                scoreBasis = nil
+            }
+            let tier: MatchTier
+            if scoreBasis == nil {
+                tier = .similar
+            } else {
+                tier = score >= 0.58 ? .similar : .inspired
+            }
             let stable = SHA256.hash(data: Data("\(provider)|\(productURL.absoluteString)".utf8))
                 .map { String(format: "%02x", $0) }.joined()
             return ProductResultDTO(
@@ -1071,11 +1406,11 @@ actor ProductSearchService {
                 productURL: productURL,
                 merchant: merchant,
                 price: price,
-                matchTier: score >= 0.58 ? .similar : .inspired,
+                matchTier: tier,
                 score: score,
                 rating: number(object["rating"]),
                 reviewCount: integer(object["ratingCount"] ?? object["reviews"]),
-                attributes: [:],
+                attributes: scoreBasis.map { ["scoreBasis": .string($0)] } ?? [:],
                 offers: []
             )
         }

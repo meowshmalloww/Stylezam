@@ -169,6 +169,54 @@ final class AppModel {
         }
     }
 
+    func resolvedTryOnGender(
+        for photo: SavedTryOnPersonPhoto,
+        imageData: Data,
+        preference: TryOnGender
+    ) async throws -> TryOnGender {
+        if preference.isProviderValue { return preference }
+        if let cached = photo.inferredGender, cached.isProviderValue { return cached }
+        guard let key = try credentials.credential(for: .fireworks), !key.isEmpty else {
+            throw ProductSearchError.provider(
+                "Automatic presentation needs Fireworks AI. Add its key in Developer Debug, or choose Male or Female."
+            )
+        }
+        let usageID = try searchUsage.reserveAuxiliary(
+            kind: .tryOnInference,
+            garmentKey: "try-on-person:\(photo.contentDigest)",
+            provider: "fireworks",
+            monthlyLimit: 100_000,
+            fireworksBudgetUSD: settings.fireworksMonthlyBudgetUSD
+        )
+        let startedAt = Date()
+        do {
+            let (resolved, response) = try await productSearchService.inferTryOnPresentation(
+                imageData: imageData,
+                apiKey: key,
+                modelID: settings.fireworksModelID
+            )
+            try library.setInferredTryOnGender(resolved, for: photo.id)
+            searchUsage.complete(
+                usageID,
+                resultCount: 1,
+                latencyMilliseconds: Date().timeIntervalSince(startedAt) * 1_000,
+                estimatedCostUSD: fireworksCost(
+                    inputTokens: response.inputTokens,
+                    outputTokens: response.outputTokens
+                ),
+                diagnostic: response.diagnostic
+            )
+            return resolved
+        } catch {
+            searchUsage.fail(
+                usageID,
+                latencyMilliseconds: Date().timeIntervalSince(startedAt) * 1_000,
+                diagnostic: error.localizedDescription
+            )
+            throw error
+        }
+    }
+
     @discardableResult
     func processCapture(
         imageData: Data,
@@ -268,7 +316,7 @@ final class AppModel {
             let count = detection.candidates.count
             if railPromotion.failed > 0 {
                 let saved = count == 1 ? "1 piece saved" : "\(count) pieces saved"
-                captureStatus = "\(saved) · \(railPromotion.promoted) selected for try-on"
+                captureStatus = "\(saved) · \(railPromotion.promoted) available for try-on"
             } else {
                 captureStatus = count == 0
                     ? "Saved · no distinct pieces found"
@@ -762,20 +810,27 @@ final class AppModel {
         let providers: [String]
         var directKey: String?
         var fireworksKey: String?
-        var serperKey: String?
+        var keywordKey: String?
+        var keywordProvider: KeywordSearchProvider?
         var publicURL: URL?
 
         switch pipeline {
         case .privateAIText:
             fireworksKey = try credentials.credential(for: .fireworks)
-            serperKey = try credentials.credential(for: .serper)
             guard fireworksKey?.isEmpty == false else {
                 throw ProductSearchError.missingCredential(SearchCredentialKind.fireworks.title)
             }
-            guard serperKey?.isEmpty == false else {
-                throw ProductSearchError.missingCredential(SearchCredentialKind.serper.title)
+            guard let selected = activeKeywordSearchProvider else {
+                throw ProductSearchError.provider(
+                    "No keyword-shopping route is ready. Add a Serper, SearchAPI.io, SerpApi, or Bright Data credential in Developer Debug."
+                )
             }
-            providers = ["fireworks", "serper"]
+            keywordProvider = selected
+            keywordKey = try credentials.credential(for: selected.credential)
+            guard keywordKey?.isEmpty == false else {
+                throw ProductSearchError.missingCredential(selected.title)
+            }
+            providers = ["fireworks", selected.rawValue]
         case .directImage:
             guard let selected = activeImageSearchProvider else {
                 throw ProductSearchError.provider(
@@ -830,15 +885,21 @@ final class AppModel {
                     modelID: settings.fireworksModelID
                 )
                 progress?(.searchingStores)
-                let serperResponse = try await productSearchService.serperProducts(
+                guard let keywordProvider else {
+                    throw ProductSearchError.provider("The keyword-shopping route became unavailable.")
+                }
+                let shoppingResponse = try await productSearchService.keywordProducts(
+                    provider: keywordProvider,
                     query: analysis.searchQuery,
-                    apiKey: serperKey!,
+                    apiKey: keywordKey!,
+                    brightDataZone: settings.brightDataZone,
                     country: settings.searchCountry,
                     language: settings.searchLanguage,
                     limit: settings.productResultLimit,
-                    searchID: searchID
+                    searchID: searchID,
+                    cheaperFirst: aiSearchIntent == .cheaper
                 )
-                results = serperResponse.results
+                results = shoppingResponse.results
                 if aiSearchIntent == .cheaper {
                     results.sort { left, right in
                         switch (left.price, right.price) {
@@ -857,8 +918,8 @@ final class AppModel {
                     }
                 }
                 understanding = analysis
-                providerSummary = "AI-guided shopping"
-                diagnostic = "\(fireworkResponse.diagnostic); \(serperResponse.diagnostic)"
+                providerSummary = "Stylezam AI + \(keywordProvider.title)"
+                diagnostic = "\(fireworkResponse.diagnostic); \(shoppingResponse.diagnostic)"
                 estimatedCost = fireworksCost(
                     inputTokens: fireworkResponse.inputTokens,
                     outputTokens: fireworkResponse.outputTokens
@@ -883,9 +944,7 @@ final class AppModel {
                 )
                 results = response.results
                 understanding = nil
-                providerSummary = selected == settings.imageSearchProvider
-                    ? selected.title
-                    : "\(selected.title) · fallback"
+                providerSummary = selected.title
                 diagnostic = response.diagnostic
             }
 
@@ -936,7 +995,7 @@ final class AppModel {
             return url.scheme?.lowercased() == "https"
         }()
 
-        return ImageSearchProvider.allCases.filter { provider in
+        let eligible = ImageSearchProvider.allCases.filter { provider in
             guard credentials.hasCredential(provider.credential) else { return false }
             if provider.acceptsPrivateImageData { return true }
             guard publicURLIsReady else { return false }
@@ -947,14 +1006,33 @@ final class AppModel {
             }
             return true
         }
+        guard let preferredIndex = eligible.firstIndex(of: settings.imageSearchProvider) else {
+            return eligible
+        }
+        return Array(eligible[preferredIndex...] + eligible[..<preferredIndex])
     }
 
     var activeImageSearchProvider: ImageSearchProvider? {
-        let eligible = eligibleImageSearchProviders
-        if eligible.contains(settings.imageSearchProvider) {
-            return settings.imageSearchProvider
+        searchUsage.routedImageProvider(
+            from: eligibleImageSearchProviders,
+            maximumConsecutiveRequests: 1
+        )
+    }
+
+    var eligibleKeywordSearchProviders: [KeywordSearchProvider] {
+        KeywordSearchProvider.allCases.filter { provider in
+            guard credentials.hasCredential(provider.credential) else { return false }
+            if provider.requiresZone {
+                return !settings.brightDataZone
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .isEmpty
+            }
+            return true
         }
-        return searchUsage.routedImageProvider(from: eligible)
+    }
+
+    var activeKeywordSearchProvider: KeywordSearchProvider? {
+        searchUsage.routedKeywordProvider(from: eligibleKeywordSearchProviders)
     }
 
     func askStylezamAI(
@@ -1056,8 +1134,9 @@ final class AppModel {
                 guard let item = try library.addDetectedGarmentToTryOnRail(
                     scanID: scan.id,
                     garmentID: garment.id,
-                    sourceFrameData: sourceFrameData
-                ), isSelectedInTryOnRail(item.id) else {
+                    sourceFrameData: sourceFrameData,
+                    activate: false
+                ), library.tryOnRail.contains(where: { $0.wardrobeItemID == item.id }) else {
                     failures += 1
                     continue
                 }
@@ -1090,7 +1169,8 @@ final class AppModel {
             if try library.enrichSourceWardrobeItemInTryOnRail(
                 product,
                 sourceScanID: scanID,
-                sourceGarmentID: garmentID
+                sourceGarmentID: garmentID,
+                activate: false
             ) != nil {
                 return
             }
@@ -1100,12 +1180,14 @@ final class AppModel {
             // required by clothes v3 whenever the original scan media still exists.
             if try library.addDetectedGarmentToTryOnRail(
                 scanID: scanID,
-                garmentID: garmentID
+                garmentID: garmentID,
+                activate: false
             ) != nil {
                 _ = try library.enrichSourceWardrobeItemInTryOnRail(
                     product,
                     sourceScanID: scanID,
-                    sourceGarmentID: garmentID
+                    sourceGarmentID: garmentID,
+                    activate: false
                 )
                 return
             }
@@ -1119,7 +1201,8 @@ final class AppModel {
                 product,
                 imageData: imageData,
                 sourceScanID: scanID,
-                sourceGarmentID: garmentID
+                sourceGarmentID: garmentID,
+                activate: false
             )
         } catch {
             // Shopping results remain valid even when a merchant image is missing or blocks reuse.

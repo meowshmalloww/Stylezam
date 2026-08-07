@@ -43,7 +43,7 @@ struct LoginPanel: View {
         VStack(spacing: 14) {
             switch model.account.configurationState {
             case .checking:
-                ProgressView("Preparing secure sign-in")
+                ProgressView("Preparing secure sign in")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 18)
             case .ready:
@@ -181,6 +181,73 @@ struct AccountView: View {
             }
         } message: {
             Text("This deletes the Firebase Authentication user plus captures, crops, searches, saved products, and local profile data on this iPhone. It cannot be undone.")
+        }
+    }
+}
+
+struct InitialPlanSelectionView: View {
+    let completion: () -> Void
+
+    @Environment(AppModel.self) private var model
+
+    private var currentPlan: AccountPlan {
+        model.account.account?.plan ?? .free
+    }
+
+    private var previewPlans: [AccountPlan] {
+        currentPlan == .developer ? [.developer, .free, .plus, .pro] : [.free, .plus, .pro]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                HStack(spacing: 10) {
+                    BrandMarkView(size: 38)
+                    StylezamWordmark()
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    EditorialKicker(text: "YOUR MEMBERSHIP")
+                    Text("Choose your plan.")
+                        .font(.system(size: 40, weight: .semibold))
+                        .tracking(-1.3)
+                    Text("Start with the available plan today. Plus and Pro remain visible so their intended limits are clear, but they cannot be purchased yet.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(previewPlans) { plan in
+                    PlanCard(plan: plan, active: plan == currentPlan)
+                        .opacity(plan.isAvailable ? 1 : 0.66)
+                }
+
+                Text("Search results, prices, and provider availability can change. Confirm important details with the merchant.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(StylezamDesign.pageInset)
+            .padding(.bottom, 104)
+        }
+        .background(StylezamDesign.canvas)
+        .safeAreaInset(edge: .bottom) {
+            Button(action: completion) {
+                HStack {
+                    Text("Continue with \(currentPlan.title)")
+                        .font(.headline)
+                    Spacer()
+                    Image(systemName: "arrow.right")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .padding(.horizontal, 18)
+                .frame(maxWidth: .infinity)
+                .frame(height: 56)
+            }
+            .stylezamGlassButton(prominent: true)
+            .tint(StylezamDesign.cobalt)
+            .padding(.horizontal, StylezamDesign.pageInset)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
         }
     }
 }
@@ -345,7 +412,7 @@ private struct PlanCard: View {
             EditorialRule()
             planLine("magnifyingglass", plan.productSearchAllowance)
             planLine("sparkles", plan.assistantAllowance)
-            planLine("iphone", "On-device garment detection")
+            planLine("iphone", "On device garment detection")
 
             Text(active ? "CURRENT PLAN" : plan.isAvailable ? "AVAILABLE" : "COMING SOON")
                 .font(.caption2.weight(.bold))

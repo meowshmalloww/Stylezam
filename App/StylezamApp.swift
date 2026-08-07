@@ -3,12 +3,13 @@ import SwiftUI
 
 @main
 struct StylezamApp: App {
-    private static let currentOnboardingVersion = 3
+    private static let currentOnboardingVersion = 4
 
     @UIApplicationDelegateAdaptor(StylezamAppDelegate.self) private var appDelegate
     @State private var model = AppModel()
     @State private var isShowingLaunchExperience = true
     @AppStorage("stylezam.onboarding.version") private var onboardingVersion = 0
+    @AppStorage("stylezam.initial-plan.uid") private var confirmedPlanUID = ""
 
     var body: some Scene {
         WindowGroup {
@@ -47,6 +48,18 @@ struct StylezamApp: App {
             ProgressView("Restoring your account")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(StylezamDesign.canvas)
+        } else if model.account.account == nil {
+            LoginView()
+                .environment(model)
+        } else if let account = model.account.account,
+                  confirmedPlanUID != account.uid
+        {
+            InitialPlanSelectionView {
+                withAnimation(.easeInOut(duration: 0.28)) {
+                    confirmedPlanUID = account.uid
+                }
+            }
+            .environment(model)
         } else {
             RootView()
                 .environment(model)

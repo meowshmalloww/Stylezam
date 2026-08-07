@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import OSLog
+import UIKit
 
 #if canImport(ScreenCaptureKit)
 import CoreImage
@@ -402,6 +403,8 @@ private final class LiveScreenCaptureAdapter: NSObject,
     private var stream: SCStream?
     private let frameGate = LiveScreenFrameGate()
     private let imageContext = CIContext(options: [.cacheIntermediates: false])
+    private let geometryLock = NSLock()
+    private var normalizedDisplayInsets = UIEdgeInsets.zero
     private let sampleQueue = DispatchQueue(
         label: "com.stylezam.live-screen.frames",
         qos: .userInitiated
@@ -435,6 +438,7 @@ private final class LiveScreenCaptureAdapter: NSObject,
     func startCapture(with filter: SCContentFilter) async {
         await tearDownStream()
         frameGate.setAnalysisIdle(false)
+        updateDisplayInsets(for: filter)
         manager?.prepareForStreamStart()
         let configuration = SCStreamConfiguration()
         configuration.capturesAudio = false
@@ -480,6 +484,29 @@ private final class LiveScreenCaptureAdapter: NSObject,
         self.stream = nil
     }
 
+    @MainActor
+    private func updateDisplayInsets(for filter: SCContentFilter) {
+        guard filter.style == .display,
+              let window = UIApplication.shared.connectedScenes
+                .compactMap({ $0 as? UIWindowScene })
+                .flatMap(\.windows)
+                .first(where: \.isKeyWindow),
+              window.bounds.width > 0,
+              window.bounds.height > 0
+        else {
+            geometryLock.withLock { normalizedDisplayInsets = .zero }
+            return
+        }
+        let safe = window.safeAreaInsets
+        let normalized = UIEdgeInsets(
+            top: min(0.15, max(0, safe.top / window.bounds.height)),
+            left: min(0.15, max(0, safe.left / window.bounds.width)),
+            bottom: min(0.15, max(0, safe.bottom / window.bounds.height)),
+            right: min(0.15, max(0, safe.right / window.bounds.width))
+        )
+        geometryLock.withLock { normalizedDisplayInsets = normalized }
+    }
+
     nonisolated func stream(
         _ stream: SCStream,
         didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
@@ -492,9 +519,10 @@ private final class LiveScreenCaptureAdapter: NSObject,
               let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
         else { return }
 
-        let image = CIImage(cvPixelBuffer: pixelBuffer).oriented(
+        let orientedImage = CIImage(cvPixelBuffer: pixelBuffer).oriented(
             Self.videoOrientation(for: sampleBuffer)
         )
+        let image = contentImageByRemovingSystemSafeAreas(from: orientedImage)
         guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
               let data = imageContext.jpegRepresentation(
                   of: image,
@@ -517,6 +545,27 @@ private final class LiveScreenCaptureAdapter: NSObject,
                 pixelHeight: height
             )
         }
+    }
+
+    private nonisolated func contentImageByRemovingSystemSafeAreas(
+        from image: CIImage
+    ) -> CIImage {
+        let insets = geometryLock.withLock { normalizedDisplayInsets }
+        guard insets != .zero else { return image }
+        let extent = image.extent
+        let cropRect = CGRect(
+            x: extent.minX + extent.width * insets.left,
+            y: extent.minY + extent.height * insets.bottom,
+            width: extent.width * max(0.7, 1 - insets.left - insets.right),
+            height: extent.height * max(0.7, 1 - insets.top - insets.bottom)
+        ).integral.intersection(extent)
+        guard cropRect.width >= 320, cropRect.height >= 320 else { return image }
+        return image
+            .cropped(to: cropRect)
+            .transformed(by: CGAffineTransform(
+                translationX: -cropRect.minX,
+                y: -cropRect.minY
+            ))
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {

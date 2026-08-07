@@ -1,6 +1,8 @@
 import Foundation
+import ImageIO
 import Security
 import UIKit
+import Vision
 
 enum YouCamCredentialStore {
     private static let service = "com.stylezam.youcam"
@@ -83,6 +85,31 @@ struct YouCamVideoResult: Sendable {
     let videoData: Data
 }
 
+enum YouCamVideoResolution: String, CaseIterable, Identifiable, Sendable {
+    case p480 = "480"
+    case p720 = "720"
+    case p1080 = "1080"
+
+    var id: String { rawValue }
+    var title: String { "\(rawValue)p" }
+}
+
+struct YouCamFinishingOptions: Sendable, Equatable {
+    var removesBackground = false
+    var changesBackground = false
+    var backgroundPrompt = "Clean neutral editorial studio with soft natural shadows"
+    var improvesLighting = false
+    var enhancesPhoto = false
+
+    var enabledTaskCount: Int {
+        [removesBackground, changesBackground, improvesLighting, enhancesPhoto]
+            .filter { $0 }
+            .count
+    }
+
+    static let none = YouCamFinishingOptions()
+}
+
 private enum YouCamTaskCreationRequest: Sendable {
     case tryOn(
         endpoint: String,
@@ -92,11 +119,11 @@ private enum YouCamTaskCreationRequest: Sendable {
         referenceID: String,
         gender: TryOnGender
     )
-    case video(endpoint: String, sourceID: String)
+    case video(endpoint: String, sourceID: String, resolution: YouCamVideoResolution)
 
     var endpoint: String {
         switch self {
-        case let .tryOn(endpoint, _, _, _, _, _), let .video(endpoint, _):
+        case let .tryOn(endpoint, _, _, _, _, _), let .video(endpoint, _, _):
             endpoint
         }
     }
@@ -217,9 +244,18 @@ actor YouCamTryOnService {
         personImage: Data,
         items: [TryOnTrayItem],
         gender: TryOnGender,
+        finishing: YouCamFinishingOptions = .none,
         progress: @Sendable (Int, Int, String) async -> Void
     ) async throws -> (jobID: String, imageData: Data) {
         guard !items.isEmpty else { throw YouCamTryOnError.server("Select at least one item.") }
+        let requiresGender = items.contains {
+            [.bag, .scarf, .shoes, .hat].contains($0.category)
+        }
+        guard !requiresGender || gender.isProviderValue else {
+            throw YouCamTryOnError.server(
+                "Choose Automatic, Male, or Female again before starting this accessory try-on."
+            )
+        }
         let referenceImages = try items.map { item -> Data in
             guard item.region == .lowerBody else { return item.imageData }
             guard let referenceImageData = item.referenceImageData,
@@ -231,17 +267,26 @@ actor YouCamTryOnService {
             }
             return referenceImageData
         }
+        for (item, referenceImage) in zip(items, referenceImages) {
+            try Self.validateReferenceImage(referenceImage, for: item)
+        }
+        guard !(finishing.removesBackground && finishing.changesBackground) else {
+            throw YouCamTryOnError.server(
+                "Choose either background removal or background change, not both."
+            )
+        }
         var current = personImage
         var lastTaskID = UUID().uuidString
+        let totalTasks = items.count + finishing.enabledTaskCount
 
         for (index, item) in items.enumerated() {
-            await progress(index, items.count, "Preparing \(item.title)")
+            await progress(index, totalTasks, "Preparing \(item.title)")
             let endpoint = item.category.endpoint
-            await progress(index, items.count, "Uploading your photo")
-            let sourceID = try await upload(current, endpoint: endpoint)
-            await progress(index, items.count, "Uploading the found piece")
-            let referenceID = try await upload(referenceImages[index], endpoint: endpoint)
-            await progress(index, items.count, "Starting YouCam")
+            await progress(index, totalTasks, "Uploading your photo")
+            let sourceID = try await upload(current)
+            await progress(index, totalTasks, "Uploading the found piece")
+            let referenceID = try await upload(referenceImages[index])
+            await progress(index, totalTasks, "Starting YouCam")
             let taskID = try await createTask(
                 endpoint: endpoint,
                 category: item.category,
@@ -252,33 +297,140 @@ actor YouCamTryOnService {
             )
             lastTaskID = taskID
             do {
-                await progress(index, items.count, "Creating your try-on")
+                await progress(index, totalTasks, "Creating your try-on")
                 let resultURL = try await poll(endpoint: endpoint, taskID: taskID)
-                await progress(index, items.count, "Downloading the result")
-                let (data, response) = try await session.data(from: resultURL)
-                guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-                    throw YouCamTryOnError.server("The generated image could not be downloaded.")
-                }
-                guard let normalized = await ImageEncoding.normalizedJPEGAsync(from: data) else {
-                    throw YouCamTryOnError.server("YouCam returned an unsupported result image.")
-                }
-                current = normalized
+                await progress(index, totalTasks, "Downloading the result")
+                let rendered = try await downloadProcessedImage(
+                    from: resultURL,
+                    preserveTransparency: false
+                )
+                try Self.validateSingleItemScenePreservation(
+                    source: current,
+                    result: rendered,
+                    category: item.category
+                )
+                current = rendered
             } catch {
                 scheduleRemoteCleanup(endpoint: endpoint, taskID: taskID)
                 throw error
             }
             await deleteFinishedTaskIgnoringCancellation(taskID)
         }
-        await progress(items.count, items.count, "Look ready")
+
+        var completed = items.count
+        if finishing.enhancesPhoto {
+            await progress(completed, totalTasks, "Enhancing detail")
+            let output = try await processPhoto(
+                current,
+                endpoint: "enhance",
+                parameters: ["scale": 1],
+                preserveTransparency: false
+            )
+            current = output.imageData
+            lastTaskID = output.taskID
+            completed += 1
+        }
+        if finishing.improvesLighting {
+            await progress(completed, totalTasks, "Balancing light")
+            let output = try await processPhoto(
+                current,
+                endpoint: "lighting",
+                preserveTransparency: false
+            )
+            current = output.imageData
+            lastTaskID = output.taskID
+            completed += 1
+        }
+        if finishing.changesBackground {
+            await progress(completed, totalTasks, "Changing background")
+            var parameters: [String: Any] = ["type": "prompt"]
+            let prompt = finishing.backgroundPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !prompt.isEmpty { parameters["prompt"] = prompt }
+            let output = try await processPhoto(
+                current,
+                endpoint: "bg-replace",
+                parameters: parameters,
+                preserveTransparency: false
+            )
+            current = output.imageData
+            lastTaskID = output.taskID
+            completed += 1
+        }
+        if finishing.removesBackground {
+            await progress(completed, totalTasks, "Removing background")
+            let output = try await processPhoto(
+                current,
+                endpoint: "sod",
+                preserveTransparency: true
+            )
+            current = output.imageData
+            lastTaskID = output.taskID
+            completed += 1
+        }
+        await progress(totalTasks, totalTasks, "Look ready")
         return (lastTaskID, current)
     }
 
+    private func processPhoto(
+        _ imageData: Data,
+        endpoint: String,
+        parameters: [String: Any] = [:],
+        preserveTransparency: Bool
+    ) async throws -> (taskID: String, imageData: Data) {
+        let sourceID = try await upload(imageData)
+        var body = parameters
+        body["src_file_id"] = sourceID
+        let json = try await requestJSON(
+            path: "/s2s/v2.0/task/\(endpoint)",
+            method: "POST",
+            body: body
+        )
+        guard let taskID = recursiveValue(for: "task_id", in: json) as? String else {
+            throw serverError(from: json)
+        }
+        do {
+            let resultURL = try await poll(endpoint: endpoint, taskID: taskID)
+            let result = try await downloadProcessedImage(
+                from: resultURL,
+                preserveTransparency: preserveTransparency
+            )
+            await deleteFinishedTaskIgnoringCancellation(taskID)
+            return (taskID, result)
+        } catch {
+            scheduleRemoteCleanup(endpoint: endpoint, taskID: taskID)
+            throw error
+        }
+    }
+
+    private func downloadProcessedImage(
+        from url: URL,
+        preserveTransparency: Bool
+    ) async throws -> Data {
+        let (data, response) = try await session.data(from: url)
+        guard let http = response as? HTTPURLResponse,
+              (200..<300).contains(http.statusCode),
+              !data.isEmpty,
+              data.count < 30_000_000,
+              UIImage(data: data) != nil
+        else {
+            throw YouCamTryOnError.server("The generated image could not be downloaded.")
+        }
+        if preserveTransparency, data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
+            return data
+        }
+        guard let normalized = await ImageEncoding.normalizedJPEGAsync(from: data) else {
+            throw YouCamTryOnError.server("YouCam returned an unsupported result image.")
+        }
+        return normalized
+    }
+
     func animate(imageData: Data) async throws -> YouCamVideoResult {
-        try await animate(imageData: imageData, progress: { _ in })
+        try await animate(imageData: imageData, resolution: .p480, progress: { _ in })
     }
 
     func animate(
         imageData: Data,
+        resolution: YouCamVideoResolution = .p480,
         progress: @Sendable (String) async -> Void
     ) async throws -> YouCamVideoResult {
         try Task.checkCancellation()
@@ -287,7 +439,7 @@ actor YouCamTryOnService {
         try Task.checkCancellation()
 
         await progress("Starting YouCam video")
-        let taskID = try await createVideoTask(sourceID: sourceID)
+        let taskID = try await createVideoTask(sourceID: sourceID, resolution: resolution)
 
         do {
             await progress("Creating motion preview")
@@ -307,7 +459,7 @@ actor YouCamTryOnService {
         }
     }
 
-    private func upload(_ sourceData: Data, endpoint: String) async throws -> String {
+    private func upload(_ sourceData: Data) async throws -> String {
         guard let prepared = preparedUpload(from: sourceData) else {
             throw YouCamTryOnError.server("The selected image could not be prepared for try-on.")
         }
@@ -321,7 +473,7 @@ actor YouCamTryOnService {
         else {
             throw YouCamTryOnError.server("Try-on images must be readable, at least 512 pixels per side, and no larger than 4096 pixels on the longest side.")
         }
-        return try await uploadPrepared(prepared, endpoint: endpoint)
+        return try await uploadPrepared(prepared)
     }
 
     private func uploadVideoSource(_ sourceData: Data) async throws -> String {
@@ -343,12 +495,11 @@ actor YouCamTryOnService {
         guard aspectRatio <= 2.5 else {
             throw YouCamTryOnError.server("The image is too wide or tall for YouCam video. Choose a portrait or landscape photo with less empty space.")
         }
-        return try await uploadPrepared(prepared, endpoint: Self.videoEndpoint)
+        return try await uploadPrepared(prepared)
     }
 
     private func uploadPrepared(
-        _ prepared: (data: Data, fileExtension: String, contentType: String),
-        endpoint: String
+        _ prepared: (data: Data, fileExtension: String, contentType: String)
     ) async throws -> String {
         try Task.checkCancellation()
         let data = prepared.data
@@ -360,7 +511,10 @@ actor YouCamTryOnService {
                 "file_size": data.count
             ]]
         ]
-        let json = try await requestJSON(path: "/s2s/v2.0/file/\(endpoint)", method: "POST", body: body)
+        // Perfect Corp's simplified V2 workflow documents one shared file
+        // uploader for clothes, accessories, photo finishing, and video. The
+        // returned file ID is then consumed by the feature-specific task path.
+        let json = try await requestJSON(path: "/s2s/v2.0/file", method: "POST", body: body)
         guard let file = firstDictionary(named: "files", in: json),
               let fileID = file["file_id"] as? String,
               let uploadRequest = firstDictionary(named: "requests", in: file),
@@ -413,6 +567,143 @@ actor YouCamTryOnService {
         return (jpeg, "jpg", "image/jpg")
     }
 
+    /// The provider will faithfully generate from whatever reference it receives, even when the
+    /// Fashionpedia detector mistook bedding for a bag or coat. Reject only strong conflicting
+    /// on-device evidence before spending YouCam units. Ambiguous and small accessories remain
+    /// allowed because the broad system classifier is not a replacement for the garment model.
+    private nonisolated static func validateReferenceImage(
+        _ data: Data,
+        for item: TryOnTrayItem
+    ) throws {
+        guard [.clothes, .bag, .scarf, .shoes, .hat].contains(item.category),
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateThumbnailAtIndex(
+                source,
+                0,
+                [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 768,
+                ] as CFDictionary
+              )
+        else { return }
+
+        let request = VNClassifyImageRequest()
+        let handler = VNImageRequestHandler(cgImage: image, orientation: .up)
+        do {
+            try handler.perform([request])
+        } catch {
+            return
+        }
+        var scores: [String: Double] = [:]
+        for result in (request.results ?? []).prefix(45) {
+            let identifier = result.identifier.lowercased()
+            let confidence = Double(result.confidence)
+            let aliases = Set(
+                [identifier]
+                    + identifier
+                        .split(whereSeparator: { $0 == "," || $0 == ";" })
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    + identifier
+                        .split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                        .map(String.init)
+            )
+            for alias in aliases where !alias.isEmpty {
+                scores[alias] = max(scores[alias] ?? 0, confidence)
+            }
+        }
+        func score(_ labels: Set<String>) -> Double {
+            scores.reduce(0) { current, pair in
+                labels.contains(pair.key) ? max(current, pair.value) : current
+            }
+        }
+        let nonFashion = score([
+            "bedding", "pillow", "bed", "blanket", "comforter", "duvet", "quilt",
+            "furniture", "sofa", "couch", "curtain", "towel", "rug", "carpet",
+        ])
+        let relevant: Double
+        switch item.category {
+        case .bag:
+            relevant = score([
+                "bag", "handbag", "purse", "wallet", "backpack", "back pack",
+                "rucksack", "haversack", "luggage", "suitcase", "duffel", "holdall", "kitbag",
+            ])
+        case .shoes:
+            relevant = score(["shoe", "footwear", "sneaker", "boot", "sandal", "loafer"])
+        case .hat:
+            relevant = score(["hat", "headwear", "cap", "beanie"])
+        case .scarf:
+            relevant = score(["scarf", "clothing", "apparel", "textile"])
+        case .clothes:
+            relevant = score([
+                "clothing", "apparel", "jeans", "pants", "trousers", "shorts", "skirt",
+                "dress", "shirt", "blouse", "t-shirt", "sweater", "cardigan", "jacket",
+                "coat", "vest", "suit", "jersey",
+            ])
+        default:
+            return
+        }
+        guard nonFashion >= 0.22, nonFashion > max(0.08, relevant * 1.35) else { return }
+        throw YouCamTryOnError.server(
+            "\(item.title) looks more like bedding or furniture than a \(item.category.title.lowercased()). It was not uploaded or charged. Retake the piece against a plain background or choose a different crop."
+        )
+    }
+
+    /// Accessory endpoints should add one localized item, not restyle the person or recreate the
+    /// whole setting. A coarse perceptual signature is deliberately insensitive to small local
+    /// changes but rejects the kind of full-scene replacement that can otherwise look like a
+    /// valid single-item result. Clothes are excluded because replacing a full outfit is expected.
+    private nonisolated static func validateSingleItemScenePreservation(
+        source: Data,
+        result: Data,
+        category: TryOnCategory
+    ) throws {
+        guard category != .clothes,
+              let sourceImage = UIImage(data: source)?.cgImage,
+              let resultImage = UIImage(data: result)?.cgImage
+        else { return }
+
+        let sourceRatio = Double(sourceImage.width) / Double(max(1, sourceImage.height))
+        let resultRatio = Double(resultImage.width) / Double(max(1, resultImage.height))
+        guard abs(sourceRatio - resultRatio) <= 0.08 else {
+            throw YouCamTryOnError.server(
+                "YouCam changed the photo framing instead of adding only the selected \(category.title.lowercased()). Stylezam rejected that result. Use a clear front facing photo and try again."
+            )
+        }
+        guard let sourceSignature = sceneSignature(for: sourceImage),
+              let resultSignature = sceneSignature(for: resultImage)
+        else { return }
+        let changedBits = (sourceSignature ^ resultSignature).nonzeroBitCount
+        guard changedBits <= 26 else {
+            throw YouCamTryOnError.server(
+                "YouCam changed too much of the person or scene for a single \(category.title.lowercased()) try on. Stylezam rejected that result instead of saving the wrong outfit. Try a clearer full person photo or another reference image."
+            )
+        }
+    }
+
+    private nonisolated static func sceneSignature(for image: CGImage) -> UInt64? {
+        let width = 8
+        let height = 8
+        var pixels = [UInt8](repeating: 0, count: width * height)
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width,
+            space: CGColorSpaceCreateDeviceGray(),
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        let average = pixels.reduce(0, { $0 + Int($1) }) / pixels.count
+        var signature: UInt64 = 0
+        for (index, pixel) in pixels.enumerated() where Int(pixel) >= average {
+            signature |= UInt64(1) << UInt64(index)
+        }
+        return signature
+    }
+
     private func createTask(
         endpoint: String,
         category: TryOnCategory,
@@ -433,9 +724,12 @@ actor YouCamTryOnService {
         )
     }
 
-    private func createVideoTask(sourceID: String) async throws -> String {
+    private func createVideoTask(
+        sourceID: String,
+        resolution: YouCamVideoResolution
+    ) async throws -> String {
         try await createTaskCapturingAcceptedResponse(
-            .video(endpoint: Self.videoEndpoint, sourceID: sourceID)
+            .video(endpoint: Self.videoEndpoint, sourceID: sourceID, resolution: resolution)
         )
     }
 
@@ -494,6 +788,10 @@ actor YouCamTryOnService {
                 tryOnBody["ref_file_id"] = referenceID
                 if category == .clothes {
                     tryOnBody["garment_category"] = garmentRegion.youCamGarmentCategory
+                    // Cloth V4 otherwise defaults to replacing visible shoes for
+                    // full/lower-body references. A clothing rail item must not
+                    // silently add another product category.
+                    tryOnBody["change_shoes"] = false
                 } else {
                     tryOnBody["gender"] = gender.rawValue
                     if category == .shoes {
@@ -502,10 +800,10 @@ actor YouCamTryOnService {
                 }
             }
             body = tryOnBody
-        case let .video(_, sourceID):
+        case let .video(_, sourceID, resolution):
             body = [
                 "src_file_id": sourceID,
-                "resolution": "480",
+                "resolution": resolution.rawValue,
                 "dst_duration": 5,
                 "prompt": Self.videoPrompt,
                 "negative_prompt": Self.videoNegativePrompt,
@@ -833,7 +1131,7 @@ private extension TryOnGarmentRegion {
 private extension TryOnCategory {
     var endpoint: String {
         switch self {
-        case .clothes: "cloth-v3"
+        case .clothes: "cloth-v4"
         case .bag: "bag"
         case .scarf: "scarf"
         case .shoes: "shoes"
