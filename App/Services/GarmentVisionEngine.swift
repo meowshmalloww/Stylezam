@@ -79,6 +79,29 @@ actor GarmentVisionEngine {
         _ = try model(at: modelURL)
     }
 
+#if DEBUG
+    func debugClassificationEvidence(
+        imageData: Data,
+        boxes: [BoundingBoxDTO]
+    ) -> [[String: Double]] {
+        guard let image = Self.normalizedImage(from: imageData, maximumPixelSize: 5_120) else {
+            return []
+        }
+        return boxes.map { box in
+            guard let crop = Self.crop(image: image, to: box),
+                  let evidence = classificationEvidenceForVerification(for: crop)
+            else { return [:] }
+            return Dictionary(
+                uniqueKeysWithValues: evidence.scores
+                    .filter { $0.value >= 0.01 }
+                    .sorted { $0.value > $1.value }
+                    .prefix(16)
+                    .map { ($0.key, $0.value) }
+            )
+        }
+    }
+#endif
+
     func analyze(
         imageData: Data,
         modelURL: URL?,
@@ -86,7 +109,8 @@ actor GarmentVisionEngine {
         maxItems: Int,
         includeCrops: Bool = true,
         includeDiagnosticMasks: Bool = false,
-        enableAdaptiveDetail: Bool = true
+        enableAdaptiveDetail: Bool = true,
+        verifyAllCandidateFamilies: Bool = true
     ) async throws -> GarmentDetectionBatch {
         let totalStarted = Self.now
         let decodeStarted = Self.now
@@ -215,7 +239,8 @@ actor GarmentVisionEngine {
             detections,
             in: cgImage,
             maxItems: itemLimit,
-            allowForegroundRecovery: true
+            allowForegroundRecovery: true,
+            verifyAllCandidateFamilies: verifyAllCandidateFamilies
         )
         let cropStarted = Self.now
         let candidates = verifiedDetections.map { detection in
@@ -306,7 +331,8 @@ actor GarmentVisionEngine {
             mappedDetections,
             in: sourceImage,
             maxItems: min(12, max(1, maxItems)),
-            allowForegroundRecovery: acceptedFocus == nil
+            allowForegroundRecovery: acceptedFocus == nil,
+            verifyAllCandidateFamilies: false
         )
         let detection = GarmentDetectionBatch(
             method: .coreML,
@@ -390,7 +416,8 @@ actor GarmentVisionEngine {
             maxItems: maxItems,
             includeCrops: false,
             includeDiagnosticMasks: false,
-            enableAdaptiveDetail: true
+            enableAdaptiveDetail: true,
+            verifyAllCandidateFamilies: false
         )
         let candidates = detection.candidates
         let largestArea = candidates
@@ -576,13 +603,16 @@ actor GarmentVisionEngine {
         _ detections: [RawDetection],
         in image: CGImage,
         maxItems: Int,
-        allowForegroundRecovery: Bool
+        allowForegroundRecovery: Bool,
+        verifyAllCandidateFamilies: Bool
     ) async throws -> [RawDetection] {
         guard ProcessInfo.processInfo.thermalState != .critical else { return detections }
 
         var verified: [RawDetection] = []
         for detection in detections.prefix(maxItems) {
-            guard Self.requiresClassificationVerification(detection) else {
+            guard verifyAllCandidateFamilies
+                    || Self.requiresClassificationVerification(detection)
+            else {
                 verified.append(detection)
                 continue
             }
@@ -736,7 +766,9 @@ actor GarmentVisionEngine {
     ]
     private nonisolated static let nonFashionClassifiers: Set<String> = [
         "bedding", "pillow", "bed", "blanket", "comforter", "duvet", "quilt",
-        "furniture", "sofa", "couch", "curtain", "towel", "rug", "carpet",
+        "cushion", "mattress", "bedspread", "sleeping bag", "furniture", "sofa",
+        "couch", "curtain", "shower curtain", "towel", "bath towel", "upholstery",
+        "rug", "carpet", "doormat",
     ]
 
     private nonisolated static func shouldReject(
@@ -758,7 +790,7 @@ actor GarmentVisionEngine {
         } else {
             relevantPositive = evidence.score(for: clothingClassifiers)
         }
-        return negative >= 0.22 && negative > max(0.08, relevantPositive * 1.35)
+        return negative >= 0.18 && negative > max(0.07, relevantPositive * 1.25)
     }
 
     private nonisolated static func refined(
@@ -771,13 +803,16 @@ actor GarmentVisionEngine {
         let shoe = evidence.score(for: shoeClassifiers)
         let clothing = evidence.score(for: clothingClassifiers)
         let label: String
-        let confidence: Double
-        if bag >= 0.18, bag > max(0.08, clothing * 1.25) {
+        var confidence: Double
+        if bag >= 0.10, bag > max(0.06, clothing * 1.15) {
             label = "bag, wallet"
             confidence = Foundation.sqrt(max(0, detection.confidence * bag))
         } else if jeans >= 0.16, jeans > skirt * 1.25 {
             label = "pants"
-            confidence = Foundation.sqrt(max(0, detection.confidence * jeans))
+            confidence = max(
+                Foundation.sqrt(max(0, detection.confidence * jeans)),
+                min(0.92, jeans * 0.98)
+            )
         } else if skirt >= 0.16, skirt > jeans * 1.25 {
             label = "skirt"
             confidence = Foundation.sqrt(max(0, detection.confidence * skirt))
@@ -787,6 +822,15 @@ actor GarmentVisionEngine {
         } else {
             label = detection.label
             confidence = detection.confidence
+        }
+        let relevant = max(clothing, max(bag, max(shoe, evidence.score(for: accessoryClassifiers))))
+        let nonFashion = evidence.score(for: nonFashionClassifiers)
+        if nonFashion >= 0.12, nonFashion > relevant {
+            confidence = min(confidence, 0.55)
+        } else if relevant < 0.05 {
+            // A high Fashionpedia sigmoid without any broad fashion support is not a calibrated
+            // probability. Keep the candidate visible for correction, but force human review.
+            confidence = min(confidence, 0.70)
         }
         guard label != detection.label || abs(confidence - detection.confidence) > 0.01 else {
             return detection

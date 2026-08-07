@@ -38,6 +38,23 @@ enum TryOnCategory: String, Codable, CaseIterable, Sendable {
         }
     }
 
+    /// Exact task route expected from the connected YouCam account catalog.
+    /// This stays internal to Try On and Developer Debug.
+    var youCamEndpoint: String {
+        switch self {
+        case .clothes: "cloth-v4"
+        case .bag: "bag"
+        case .scarf: "scarf"
+        case .shoes: "shoes"
+        case .hat: "hat"
+        case .ring: "2d-vto/ring"
+        case .bracelet: "2d-vto/bracelet"
+        case .earring: "2d-vto/earring"
+        case .watch: "2d-vto/watch"
+        case .necklace: "2d-vto/necklace"
+        }
+    }
+
     static func infer(from label: String) -> TryOnCategory {
         match(from: label) ?? .clothes
     }
@@ -371,6 +388,9 @@ struct SavedGarment: Codable, Identifiable, Hashable, Sendable {
     var patterns: [String]
     var details: [String]
     var visibleText: [String]
+    /// Nil means the item still relies on automatic local detection. A confirmed or rejected
+    /// value records an explicit user correction without discarding the original debug score.
+    var reviewState: GarmentReviewState? = nil
     /// Durable local-only signatures used to avoid saving the same physical piece again.
     var perceptualHash: UInt64? = nil
     var featurePrintData: Data? = nil

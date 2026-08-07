@@ -348,6 +348,58 @@ final class LibraryStore {
         do { try persist() } catch { loadError = error.localizedDescription }
     }
 
+    /// Records a human correction while preserving the detector's original label and score for
+    /// Developer Inspector. Existing search and try-on derivatives are invalidated so an old,
+    /// incorrect category cannot survive after the source item has been corrected or rejected.
+    @discardableResult
+    func applyDetectionCorrection(
+        _ correction: GarmentDetectionCorrection,
+        scanID: UUID,
+        garmentID: String
+    ) throws -> SavedGarment {
+        guard let scanIndex = snapshot.scans.firstIndex(where: { $0.id == scanID }),
+              let itemIndex = snapshot.scans[scanIndex].items.firstIndex(where: {
+                  $0.id == garmentID
+              })
+        else {
+            throw LibraryStoreError.unavailable
+        }
+
+        let previous = snapshot
+        let derivedWardrobe = snapshot.wardrobeItems.filter {
+            $0.sourceScanID == scanID && $0.sourceGarmentID == garmentID
+        }
+        let derivedWardrobeIDs = Set(derivedWardrobe.map(\.id))
+
+        switch correction {
+        case .notFashion:
+            snapshot.scans[scanIndex].items[itemIndex].accepted = false
+            snapshot.scans[scanIndex].items[itemIndex].reviewState = .rejected
+        case let .fashion(category, label):
+            snapshot.scans[scanIndex].items[itemIndex].accepted = true
+            snapshot.scans[scanIndex].items[itemIndex].reviewState = .confirmed
+            snapshot.scans[scanIndex].items[itemIndex].category = category.rawValue
+            snapshot.scans[scanIndex].items[itemIndex].displayName = label
+        }
+
+        snapshot.searches.removeAll { $0.scanID == scanID && $0.garmentID == garmentID }
+        snapshot.chats.removeAll { $0.scanID == scanID && $0.garmentID == garmentID }
+        snapshot.wardrobeItems.removeAll { derivedWardrobeIDs.contains($0.id) }
+        snapshot.tryOnRail.removeAll { derivedWardrobeIDs.contains($0.wardrobeItemID) }
+
+        do {
+            try persist()
+            for item in derivedWardrobe {
+                removeWardrobeFiles(for: item)
+                tryOnMediaCache.removeObject(forKey: item.id as NSUUID)
+            }
+            return snapshot.scans[scanIndex].items[itemIndex]
+        } catch {
+            snapshot = previous
+            throw error
+        }
+    }
+
     func deleteSearch(_ search: SavedProductSearch) {
         snapshot.searches.removeAll { $0.id == search.id }
         do { try persist() } catch { loadError = error.localizedDescription }
@@ -668,7 +720,9 @@ final class LibraryStore {
         activate: Bool = true
     ) throws -> SavedWardrobeItem? {
         guard let scan = snapshot.scans.first(where: { $0.id == scanID }),
-              let garment = scan.items.first(where: { $0.id == garmentID && $0.accepted }),
+              let garment = scan.items.first(where: {
+                  $0.id == garmentID && $0.isPipelineEligible
+              }),
               let cropURL = cropURL(for: garment),
               let data = try? Data(contentsOf: cropURL)
         else { return nil }

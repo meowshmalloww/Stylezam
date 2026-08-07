@@ -17,6 +17,9 @@ struct SearchView: View {
     @State private var searchProgressTask: Task<Void, Never>?
     @State private var message: String?
     @State private var chatContext: StylezamChatContext?
+    @State private var correctionTarget: GarmentCorrectionTarget?
+    @State private var comparisonSelection: [ProductResultDTO] = []
+    @State private var isComparisonPresented = false
     @Namespace private var productTransition
 
     private var scan: SavedScan? {
@@ -25,8 +28,9 @@ struct SearchView: View {
     }
 
     private var selectedGarment: SavedGarment? {
-        guard let selectedGarmentID else { return scan?.items.first }
-        return scan?.items.first { $0.id == selectedGarmentID }
+        let available = scan?.items.filter(\.accepted) ?? []
+        guard let selectedGarmentID else { return available.first }
+        return available.first { $0.id == selectedGarmentID }
     }
 
     var body: some View {
@@ -74,6 +78,18 @@ struct SearchView: View {
                 currentSearch: $currentSearch
             )
         }
+        .sheet(item: $correctionTarget) { target in
+            DetectionCorrectionView(target: target) {
+                currentSearch = nil
+                if selectedGarment == nil {
+                    selectedGarmentID = scan?.items.first(where: \.accepted)?.id
+                }
+            }
+            .environment(model)
+        }
+        .sheet(isPresented: $isComparisonPresented) {
+            ProductComparisonView(products: comparisonSelection)
+        }
         .onChange(of: referenceItem) { _, item in
             guard let item else { return }
             Task { await loadReference(item) }
@@ -83,6 +99,9 @@ struct SearchView: View {
         }
         .onDisappear {
             searchProgressTask?.cancel()
+        }
+        .onChange(of: currentSearch?.id) { _, _ in
+            comparisonSelection.removeAll()
         }
     }
 
@@ -205,12 +224,12 @@ struct SearchView: View {
                 Text("Choose a piece")
                     .font(.title2.weight(.semibold))
                 Spacer()
-                Text("\(scan.items.count) detected")
+                Text("\(scan.items.filter(\.accepted).count) detected")
                     .font(.caption.weight(.medium))
                     .foregroundStyle(.secondary)
             }
 
-            if scan.items.isEmpty {
+            if scan.items.allSatisfy({ !$0.accepted }) {
                 ContentUnavailableView(
                     "No pieces found",
                     systemImage: "viewfinder",
@@ -219,7 +238,7 @@ struct SearchView: View {
             } else {
                 ScrollView(.horizontal) {
                     LazyHStack(spacing: 10) {
-                        ForEach(scan.items) { item in
+                        ForEach(scan.items.filter(\.accepted)) { item in
                             garmentChip(item, scan: scan)
                         }
                     }
@@ -253,16 +272,24 @@ struct SearchView: View {
                 .background(Color(uiColor: .secondarySystemBackground))
                 .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
 
-                Text(item.localLabel)
+                Text(item.title)
                     .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
-                Text(
-                    attempts > 0
-                        ? "\(attempts) search\(attempts == 1 ? "" : "es") used"
-                        : failedAttempts > 0 ? "Retry available" : "Ready"
-                )
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    if item.needsUserReview {
+                        Image(systemName: "questionmark.circle.fill")
+                            .foregroundStyle(.orange)
+                    }
+                    Text(
+                        item.needsUserReview
+                            ? "Confirm type"
+                            : attempts > 0
+                                ? "\(attempts) search\(attempts == 1 ? "" : "es") used"
+                                : failedAttempts > 0 ? "Retry available" : "Ready"
+                    )
+                }
+                .font(.caption2)
+                .foregroundStyle(item.needsUserReview ? Color.orange : Color.secondary)
             }
             .padding(8)
             .background(
@@ -279,12 +306,62 @@ struct SearchView: View {
 
     private func searchAction(_ scan: SavedScan) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if let garment = selectedGarment, garment.needsUserReview {
+                VStack(alignment: .leading, spacing: 10) {
+                    Label("Confirm this detection", systemImage: "questionmark.diamond")
+                        .font(.headline)
+                    Text(GarmentDetectionQualityPolicy.reviewReason(for: garment))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Review detection") {
+                        correctionTarget = GarmentCorrectionTarget(
+                            scanID: scan.id,
+                            garmentID: garment.id
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(StylezamDesign.cobalt)
+                }
+                .padding(15)
+                .background(
+                    Color.orange.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.orange.opacity(0.22), lineWidth: 1)
+                }
+            }
+
+            if let garment = selectedGarment, !garment.needsUserReview {
+                Button {
+                    correctionTarget = GarmentCorrectionTarget(
+                        scanID: scan.id,
+                        garmentID: garment.id
+                    )
+                } label: {
+                    Label("Correct detection", systemImage: "slider.horizontal.3")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+
             Button {
                 guard let garment = selectedGarment else { return }
                 Task { await search(scan: scan, garment: garment) }
             } label: {
                 HStack(spacing: 10) {
-                    Text(isSearching ? "Searching online" : currentSearch == nil ? "Search visual matches" : "Show saved results")
+                    Text(
+                        selectedGarment?.needsUserReview == true
+                            ? "Confirm before searching"
+                            : isSearching
+                                ? "Searching online"
+                                : currentSearch == nil
+                                    ? "Search visual matches"
+                                    : "Show saved results"
+                    )
                     Spacer()
                     if isSearching {
                         ProgressView().tint(.white)
@@ -299,17 +376,18 @@ struct SearchView: View {
             }
             .stylezamGlassButton(prominent: true)
             .tint(StylezamDesign.cobalt)
-            .disabled(selectedGarment == nil || isSearching)
+            .disabled(
+                selectedGarment == nil
+                    || selectedGarment?.isPipelineEligible != true
+                    || isSearching
+            )
 
             HStack(spacing: 6) {
-                Image(systemName: "network")
+                Image(systemName: "checkmark.shield")
                 Text(
-                    currentSearch?.providerSummary
-                        ?? model.activeImageSearchProvider?.title
-                        ?? "No visual provider ready"
+                    currentSearch.map { "\($0.results.count) live results saved" }
+                        ?? "One private search when you tap · up to \(model.settings.productResultLimit) results"
                 )
-                Text("·")
-                Text("up to \(model.settings.productResultLimit) products")
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -337,8 +415,8 @@ struct SearchView: View {
                 }
 
                 HStack(spacing: 6) {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
-                    Text(search.providerSummary)
+                    Image(systemName: "checkmark.shield")
+                    Text("One live shopping search")
                     Text("·")
                     Text(duration(search.durationMilliseconds))
                 }
@@ -359,12 +437,37 @@ struct SearchView: View {
                 spacing: 14
             ) {
                 ForEach(search.results) { product in
-                    NavigationLink(value: product) {
-                        SearchProductCard(product: product)
+                    ZStack(alignment: .topTrailing) {
+                        NavigationLink(value: product) {
+                            SearchProductCard(product: product)
+                        }
+                        .buttonStyle(.plain)
+                        .matchedTransitionSource(id: product.id, in: productTransition)
+
+                        Button {
+                            toggleComparison(product)
+                        } label: {
+                            Image(systemName: isCompared(product) ? "checkmark.circle.fill" : "plus.circle.fill")
+                                .font(.title3.weight(.semibold))
+                                .symbolRenderingMode(.palette)
+                                .foregroundStyle(
+                                    isCompared(product) ? .white : StylezamDesign.cobalt,
+                                    isCompared(product) ? StylezamDesign.cobalt : .white
+                                )
+                                .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                                .frame(width: 42, height: 42)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            isCompared(product) ? "Remove from comparison" : "Add to comparison"
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .matchedTransitionSource(id: product.id, in: productTransition)
                 }
+            }
+
+            if !comparisonSelection.isEmpty {
+                comparisonTray
             }
 
             Label(searchDisclosure(search), systemImage: "info.circle")
@@ -374,14 +477,82 @@ struct SearchView: View {
         }
     }
 
+    private var comparisonTray: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Compare products")
+                        .font(.headline)
+                    Text(
+                        comparisonSelection.count < 2
+                            ? "Choose one more product"
+                            : "\(comparisonSelection.count) selected · maximum 3"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Clear") { comparisonSelection.removeAll() }
+                    .font(.caption.weight(.semibold))
+            }
+
+            HStack(spacing: 8) {
+                ForEach(comparisonSelection) { product in
+                    ProductImage(url: product.imageURL)
+                        .frame(width: 48, height: 54)
+                        .padding(3)
+                        .background(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+                Spacer(minLength: 6)
+                Button {
+                    isComparisonPresented = true
+                } label: {
+                    Label("Compare", systemImage: "rectangle.split.3x1")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 16)
+                        .frame(height: 44)
+                }
+                .stylezamGlassButton(prominent: true)
+                .tint(StylezamDesign.cobalt)
+                .disabled(comparisonSelection.count < 2)
+            }
+        }
+        .padding(15)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(StylezamDesign.hairline, lineWidth: 0.75)
+        }
+    }
+
+    private func isCompared(_ product: ProductResultDTO) -> Bool {
+        comparisonSelection.contains(where: { $0.id == product.id })
+    }
+
+    private func toggleComparison(_ product: ProductResultDTO) {
+        if let index = comparisonSelection.firstIndex(where: { $0.id == product.id }) {
+            comparisonSelection.remove(at: index)
+            UISelectionFeedbackGenerator().selectionChanged()
+            return
+        }
+        guard comparisonSelection.count < 3 else {
+            message = "Compare up to three products at a time."
+            UINotificationFeedbackGenerator().notificationOccurred(.warning)
+            return
+        }
+        comparisonSelection.append(product)
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+
     private func searchDisclosure(_ search: SavedProductSearch) -> String {
         switch search.aiSearchIntent {
         case .similar:
             "AI prepared visible shopping terms and one live request returned these alternatives."
         case .cheaper:
-            "Prices are current observations from the routed shopping provider, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
+            "Prices are current observations, not tracked history. Comparable priced results are ordered lower first; verify the merchant’s final price and shipping."
         case nil:
-            "One visual-provider request returned these products. Similar means visually related—not proof of an exact SKU."
+            "One live image search returned these products. Similar means visually related—not proof of an exact SKU."
         }
     }
 
@@ -515,7 +686,7 @@ struct SearchView: View {
         )
         guard let saved else { return }
         scanID = saved.id
-        selectedGarmentID = saved.items.first?.id
+        selectedGarmentID = saved.items.first(where: \.accepted)?.id
         currentSearch = nil
         model.activeScanID = nil
         if saved.items.isEmpty { message = "No distinct fashion pieces were detected." }

@@ -1140,7 +1140,7 @@ private struct SearchHistoryCard: View {
                         .foregroundStyle(.primary)
                         .lineLimit(2)
                     HStack(spacing: 4) {
-                        Text(search.providerSummary).lineLimit(1)
+                        Text("Live shopping search").lineLimit(1)
                         Text("·")
                         Text(StylezamRelativeTime.string(since: search.createdAt))
                     }
@@ -1246,7 +1246,7 @@ private struct SearchArchiveDetail: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     HStack {
-                        Text(search.providerSummary)
+                        Text("Live shopping results")
                         Spacer()
                         Text(search.createdAt.formatted(date: .abbreviated, time: .shortened))
                     }
@@ -1322,6 +1322,7 @@ private struct ScanDetailView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let scanID: UUID
+    @State private var correctionTarget: GarmentCorrectionTarget?
 
     private var scan: SavedScan? {
         model.library.scans.first { $0.id == scanID }
@@ -1426,10 +1427,14 @@ private struct ScanDetailView: View {
                 }
             }
         }
+        .sheet(item: $correctionTarget) { target in
+            DetectionCorrectionView(target: target)
+                .environment(model)
+        }
     }
 
     private func visibleItems(_ scan: SavedScan) -> [SavedGarment] {
-        scan.items.filter { scan.labelState == .enriched ? $0.accepted : true }
+        scan.items.filter(\.accepted)
     }
 
     @ViewBuilder
@@ -1481,16 +1486,20 @@ private struct ScanDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
-                    } else {
-                        Text("On-device confidence \(item.localConfidence.formatted(.percent.precision(.fractionLength(0))))")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
                     }
+
+                    Label(
+                        item.userFacingDetectionStatus,
+                        systemImage: item.needsUserReview
+                            ? "questionmark.circle.fill"
+                            : "checkmark.circle"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(item.needsUserReview ? Color.orange : Color.secondary)
 
                     if let savedSearch {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(savedSearch.providerSummary)
-                                .lineLimit(1)
+                            Text("Live shopping results")
                             Text(searchPriceSummary(savedSearch))
                         }
                         .font(.caption)
@@ -1498,6 +1507,33 @@ private struct ScanDetailView: View {
                     }
                 }
                 Spacer(minLength: 0)
+            }
+
+            if item.needsUserReview {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text(GarmentDetectionQualityPolicy.reviewReason(for: item))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        correctionTarget = GarmentCorrectionTarget(
+                            scanID: scan.id,
+                            garmentID: item.id
+                        )
+                    } label: {
+                        Label("Review detection", systemImage: "questionmark.circle")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 46)
+                    }
+                    .stylezamGlassButton(prominent: true)
+                    .tint(StylezamDesign.cobalt)
+                }
+                .padding(14)
+                .background(
+                    Color.orange.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous)
+                )
             }
 
             VStack(spacing: 8) {
@@ -1519,6 +1555,7 @@ private struct ScanDetailView: View {
                 }
                 .stylezamGlassButton(prominent: true)
                 .tint(StylezamDesign.cobalt)
+                .disabled(!item.isPipelineEligible)
 
                 Button {
                     dismiss()
@@ -1533,6 +1570,20 @@ private struct ScanDetailView: View {
                     .frame(height: 48)
                 }
                 .stylezamGlassButton()
+                .disabled(!item.isPipelineEligible)
+
+                Button {
+                    correctionTarget = GarmentCorrectionTarget(
+                        scanID: scan.id,
+                        garmentID: item.id
+                    )
+                } label: {
+                    Label("Correct detection", systemImage: "slider.horizontal.3")
+                        .font(.caption.weight(.semibold))
+                        .frame(height: 34)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
             }
         }
         .padding(14)

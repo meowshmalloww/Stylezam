@@ -299,7 +299,7 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "Only when you search",
                 icon: "network",
-                detail: "Stylezam sends only the selected garment crop to the provider you configured after you tap Find. The Qwen route sends the crop to Fireworks; Serper receives generated text keywords, not the photo."
+                detail: "Stylezam sends only the selected garment crop after you tap Find. When you ask AI to refine a search, the shopping service receives generated text keywords rather than the original photo."
             )
             privacySection(
                 title: "Only when you create a try-on",
@@ -550,6 +550,11 @@ private struct DeveloperSettingsView: View {
                     status: YouCamCredentialStore.isConfigured ? "Ready" : "Not configured",
                     isReady: YouCamCredentialStore.isConfigured
                 )
+                if YouCamCredentialStore.isConfigured {
+                    NavigationLink("Verify category entitlements") {
+                        YouCamEntitlementDebugView()
+                    }
+                }
             } header: {
                 Text("Virtual try-on")
             } footer: {
@@ -680,6 +685,95 @@ private struct DeveloperSettingsView: View {
                         ? StylezamDesign.cobalt
                         : .secondary
                 )
+        }
+    }
+}
+
+private struct YouCamEntitlementDebugView: View {
+    @State private var report: YouCamEntitlementReport?
+    @State private var isChecking = false
+    @State private var errorMessage: String?
+    private let service = YouCamTryOnService()
+
+    var body: some View {
+        List {
+            Section {
+                if let report {
+                    ForEach(report.features) { feature in
+                        HStack(spacing: 12) {
+                            Image(systemName: feature.category.symbol)
+                                .foregroundStyle(
+                                    feature.isEntitled ? StylezamDesign.cobalt : Color.orange
+                                )
+                                .frame(width: 26)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.category.title)
+                                Text(feature.endpoint)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(feature.isEntitled ? "Ready" : "Missing")
+                                    .font(.caption.weight(.semibold))
+                                if let cost = feature.unitCost {
+                                    Text("\(cost.formatted()) units")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                } else if isChecking {
+                    HStack {
+                        ProgressView()
+                        Text("Reading account catalog")
+                    }
+                } else {
+                    ContentUnavailableView(
+                        "Not checked yet",
+                        systemImage: "checkmark.shield",
+                        description: Text("Verify the connected account before testing Try On.")
+                    )
+                }
+            } header: {
+                Text("Supported Try On categories")
+            } footer: {
+                Text("This reads YouCam's account feature catalog. It does not upload media, create a generation task, or consume a result unit.")
+            }
+
+            Section {
+                Button(isChecking ? "Checking…" : "Run entitlement check") {
+                    Task { await verify() }
+                }
+                .disabled(isChecking)
+            }
+        }
+        .navigationTitle("YouCam Entitlements")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { await verify() }
+        .alert(
+            "Entitlement check failed",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "Try again.")
+        }
+    }
+
+    @MainActor
+    private func verify() async {
+        guard !isChecking else { return }
+        isChecking = true
+        defer { isChecking = false }
+        do {
+            report = try await service.entitlementReport()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }

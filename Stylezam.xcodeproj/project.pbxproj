@@ -16,6 +16,7 @@
 		1D9CE91AAAB9A3B84CA961D3 /* StylezamCaptureActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */; };
 		216DECAA98AACC5DDC61F5E4 /* StylezamControlDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D457582E4F89E76DAED199 /* StylezamControlDestination.swift */; };
 		2BBBE1B499085A6574A93665 /* AccountViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E0AA9C044F0AAD484F07F8 /* AccountViews.swift */; };
+		2C0BC9F29771DB2AD3522D89 /* DetectionQualityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB8B7E742B2485BB6C2CE9D /* DetectionQualityTests.swift */; };
 		2D76956930B9C8E59FB2F0E9 /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = A54C5B6E9778693EEC5A9248 /* FirebaseAnalyticsCore */; };
 		2EA02C4805935EB808DCD7FD /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 16CAA1D950DE5F43465B14C5 /* GoogleSignIn */; };
 		2EA6B6CC49D45AC8BF38EE6A /* StylezamMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */; };
@@ -39,7 +40,10 @@
 		616181D89E9A424AE1140568 /* PersistentTryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */; };
 		646BB8DB71EE6EC1139CC510 /* SearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D502690A307F9CB0DEBB3755 /* SearchModels.swift */; };
 		66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */; };
+		66A2F4550BE3CAE37FE07D02 /* ProductComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */; };
 		68A8B3891A1D11AFC46D5B58 /* StylezamCaptureLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */; };
+		6CAA05C1C429C2ED438F90AB /* GarmentDetectionQuality.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */; };
+		6D04556DF5B9D31F831F446C /* DetectionCorrectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492A4B493D55E34D4E5BCFE9 /* DetectionCorrectionView.swift */; };
 		6E487DF493CFE206E884087D /* StylezamCaptureActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */; };
 		755B5F562D260411BAD1C773 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
 		7F28690E56B4A0EEC46F968A /* TryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */; };
@@ -157,10 +161,12 @@
 		32FFF5ED05C00039B172D585 /* StylezamDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamDesign.swift; sourceTree = "<group>"; };
 		3508C5A578324E82F996A38B /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
 		3AEE3FA2E562C606ACEABDAB /* ProductSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductSearchService.swift; sourceTree = "<group>"; };
+		3DB8B7E742B2485BB6C2CE9D /* DetectionQualityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionQualityTests.swift; sourceTree = "<group>"; };
 		41E0AA9C044F0AAD484F07F8 /* AccountViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountViews.swift; sourceTree = "<group>"; };
 		431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = StylezamWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		44C7E1E93D4550F6DA2528A4 /* StylezamMotion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamMotion.swift; sourceTree = "<group>"; };
 		48962ED198B3B07771116D6B /* LaunchExperienceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchExperienceView.swift; sourceTree = "<group>"; };
+		492A4B493D55E34D4E5BCFE9 /* DetectionCorrectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DetectionCorrectionView.swift; sourceTree = "<group>"; };
 		496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
 		4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		4F790B57A92BDB9737A707E7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
@@ -183,6 +189,7 @@
 		9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamApp.swift; sourceTree = "<group>"; };
 		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
 		A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
+		A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDetectionQuality.swift; sourceTree = "<group>"; };
 		A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
 		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
@@ -202,6 +209,7 @@
 		E6F89F6DCF7700FA3D3E4477 /* jacket.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = jacket.jpg; sourceTree = "<group>"; };
 		E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		EA76A6D38A5A5DA27D9473E5 /* garment-segmentation.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "garment-segmentation.json"; sourceTree = "<group>"; };
+		EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductComparisonView.swift; sourceTree = "<group>"; };
 		EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 		EF3733E7C459231377964274 /* AccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSession.swift; sourceTree = "<group>"; };
 		EFBD443A9A4D5685272D5E5F /* StylezamControlUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StylezamControlUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -327,6 +335,7 @@
 			isa = PBXGroup;
 			children = (
 				C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */,
+				EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */,
 				7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */,
 				AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */,
 			);
@@ -377,6 +386,7 @@
 		755E13DCD528FB4F986FDDF5 /* StylezamTests */ = {
 			isa = PBXGroup;
 			children = (
+				3DB8B7E742B2485BB6C2CE9D /* DetectionQualityTests.swift */,
 				1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */,
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
 				A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */,
@@ -436,6 +446,7 @@
 			children = (
 				D86DEC967CA5715C957D401E /* AccountModels.swift */,
 				3508C5A578324E82F996A38B /* AppModels.swift */,
+				A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */,
 				D502690A307F9CB0DEBB3755 /* SearchModels.swift */,
 				90A3492CF917004962F6DACD /* VisionAndProductModels.swift */,
 			);
@@ -505,6 +516,7 @@
 				EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */,
 				0D7CD24096454F2142A32276 /* CameraSessionController.swift */,
 				9A940D99785B136691E06C4A /* CaptureSheet.swift */,
+				492A4B493D55E34D4E5BCFE9 /* DetectionCorrectionView.swift */,
 			);
 			path = Capture;
 			sourceTree = "<group>";
@@ -740,6 +752,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				2C0BC9F29771DB2AD3522D89 /* DetectionQualityTests.swift in Sources */,
 				396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */,
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
 				D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */,
@@ -787,7 +800,9 @@
 				375DF52023B702EBA4328FE7 /* CaptureActivityManager.swift in Sources */,
 				F51B05AD4E214493C1128C0A /* CaptureSheet.swift in Sources */,
 				9805CE7058ECC70DF2B197AC /* CredentialStore.swift in Sources */,
+				6D04556DF5B9D31F831F446C /* DetectionCorrectionView.swift in Sources */,
 				E1CEFAA15C79553A29F31DCE /* FirstRunExperienceView.swift in Sources */,
+				6CAA05C1C429C2ED438F90AB /* GarmentDetectionQuality.swift in Sources */,
 				9ECB0AE5CB9A8B8441B60C85 /* GarmentDuplicateGuard.swift in Sources */,
 				8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */,
 				0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */,
@@ -801,6 +816,7 @@
 				A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */,
 				FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */,
 				616181D89E9A424AE1140568 /* PersistentTryOnView.swift in Sources */,
+				66A2F4550BE3CAE37FE07D02 /* ProductComparisonView.swift in Sources */,
 				CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */,
 				CFCB3240B946F18BA5BF2AE0 /* ProductSearchService.swift in Sources */,
 				C2B59CBD104AE719647B40DD /* RootView.swift in Sources */,

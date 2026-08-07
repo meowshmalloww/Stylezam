@@ -3,6 +3,7 @@ import Observation
 import OSLog
 import UIKit
 import WidgetKit
+import Darwin
 
 @MainActor
 @Observable
@@ -91,6 +92,7 @@ final class AppModel {
         }
 #if DEBUG
         await runDeviceVisionSmokeTestIfRequested()
+        await runDeviceQualityBenchmarkIfRequested()
 #endif
         handleExternalCaptureRequest()
         handlePendingScanNotification()
@@ -152,6 +154,16 @@ final class AppModel {
 
     func addGarmentToTryOn(scanID: UUID, garmentID: String) {
         do {
+            if let garment = library.scans
+                .first(where: { $0.id == scanID })?
+                .items.first(where: { $0.id == garmentID }),
+               !garment.isPipelineEligible
+            {
+                lastError = garment.reviewState == .rejected
+                    ? "This crop was marked as not fashion."
+                    : "Confirm what this piece is before adding it to Try On."
+                return
+            }
             guard let item = try library.addDetectedGarmentToTryOnRail(
                 scanID: scanID,
                 garmentID: garmentID
@@ -169,6 +181,19 @@ final class AppModel {
         }
     }
 
+    func correctDetection(
+        scanID: UUID,
+        garmentID: String,
+        correction: GarmentDetectionCorrection
+    ) throws {
+        _ = try library.applyDetectionCorrection(
+            correction,
+            scanID: scanID,
+            garmentID: garmentID
+        )
+        lastError = nil
+    }
+
     func resolvedTryOnGender(
         for photo: SavedTryOnPersonPhoto,
         imageData: Data,
@@ -178,7 +203,7 @@ final class AppModel {
         if let cached = photo.inferredGender, cached.isProviderValue { return cached }
         guard let key = try credentials.credential(for: .fireworks), !key.isEmpty else {
             throw ProductSearchError.provider(
-                "Automatic presentation needs Fireworks AI. Add its key in Developer Debug, or choose Male or Female."
+                "Automatic presentation is not available in this build. Choose Male or Female to continue."
             )
         }
         let usageID = try searchUsage.reserveAuxiliary(
@@ -818,28 +843,30 @@ final class AppModel {
         case .privateAIText:
             fireworksKey = try credentials.credential(for: .fireworks)
             guard fireworksKey?.isEmpty == false else {
-                throw ProductSearchError.missingCredential(SearchCredentialKind.fireworks.title)
+                throw ProductSearchError.provider(
+                    "AI shopping is not available right now. Try the regular image search instead."
+                )
             }
             guard let selected = activeKeywordSearchProvider else {
                 throw ProductSearchError.provider(
-                    "No keyword-shopping route is ready. Add a Serper, SearchAPI.io, SerpApi, or Bright Data credential in Developer Debug."
+                    "AI shopping is not available right now. The app developer needs to finish the shopping-search connection."
                 )
             }
             keywordProvider = selected
             keywordKey = try credentials.credential(for: selected.credential)
             guard keywordKey?.isEmpty == false else {
-                throw ProductSearchError.missingCredential(selected.title)
+                throw ProductSearchError.provider("Online shopping search is temporarily unavailable.")
             }
             providers = ["fireworks", selected.rawValue]
         case .directImage:
             guard let selected = activeImageSearchProvider else {
                 throw ProductSearchError.provider(
-                    "No visual-search route is ready. This private build needs a Lykdat or Google Cloud Vision key, or another provider key plus a public HTTPS crop URL."
+                    "Image search is not available right now. The app developer needs to finish the private search connection."
                 )
             }
             directKey = try credentials.credential(for: selected.credential)
             guard directKey?.isEmpty == false else {
-                throw ProductSearchError.missingCredential(selected.title)
+                throw ProductSearchError.provider("Image search is temporarily unavailable.")
             }
             if !selected.acceptsPrivateImageData {
                 let rawURL = settings.publicImageURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1112,6 +1139,11 @@ final class AppModel {
         else {
             throw ProductSearchError.provider("The selected garment crop is unavailable on this iPhone.")
         }
+        guard item.isPipelineEligible else {
+            throw ProductSearchError.provider(
+                "Confirm this detection before searching. This prevents household objects and uncertain fabric from becoming shopping results."
+            )
+        }
         return GarmentSearchContext(
             scanID: scanID,
             garmentID: garmentID,
@@ -1129,7 +1161,7 @@ final class AppModel {
     ) -> (promoted: Int, failed: Int) {
         var promoted = 0
         var failures = 0
-        for garment in scan.items where garment.accepted {
+        for garment in scan.items where garment.isPipelineEligible {
             do {
                 guard let item = try library.addDetectedGarmentToTryOnRail(
                     scanID: scan.id,
@@ -1443,6 +1475,61 @@ final class AppModel {
 
 #if DEBUG
 private extension AppModel {
+    struct DeviceQualityBenchmarkManifest: Decodable {
+        let repetitions: Int
+        let cases: [DeviceQualityBenchmarkCase]
+    }
+
+    struct DeviceQualityBenchmarkCase: Decodable {
+        let id: String
+        let filename: String
+        let expected: String
+    }
+
+    struct DeviceQualityBenchmarkRun: Encodable {
+        let repetition: Int
+        let elapsedMilliseconds: Double
+        let allLabels: [String]
+        let allConfidences: [Double]
+        let eligibleLabels: [String]
+        let classificationEvidence: [[String: Double]]
+        let categoryMatched: Bool
+        let passedExpectedResult: Bool
+        let thermalState: String
+        let memoryFootprintBytes: UInt64?
+        let pipeline: GarmentPipelineMetrics?
+    }
+
+    struct DeviceQualityBenchmarkCaseReport: Encodable {
+        let id: String
+        let expected: String
+        let inputBytes: Int
+        let runs: [DeviceQualityBenchmarkRun]
+        let categoryAccurate: Bool
+        let accurate: Bool
+        let repeatStable: Bool
+        let withinTenSecondCap: Bool
+    }
+
+    struct DeviceQualityBenchmarkReport: Encodable {
+        let createdAt: Date
+        let deviceModel: String
+        let systemVersion: String
+        let modelID: String
+        let modelVersion: String
+        let repetitions: Int
+        let thermalStateAtStart: String
+        let thermalStateAtEnd: String
+        let memoryFootprintAtStartBytes: UInt64?
+        let memoryFootprintAtEndBytes: UInt64?
+        let accuracyPassed: Int
+        let accuracyTotal: Int
+        let categoryAccuracyPassed: Int
+        let repeatStabilityPassed: Int
+        let latencyPassed: Int
+        let cases: [DeviceQualityBenchmarkCaseReport]
+    }
+
     struct DeviceVisionItemReport: Encodable {
         let categoryID: Int?
         let label: String
@@ -1615,6 +1702,215 @@ private extension AppModel {
                 options: .atomic
             )
         }
+    }
+
+    func runDeviceQualityBenchmarkIfRequested() async {
+        guard let requestedPath = ProcessInfo.processInfo.environment[
+            "STYLEZAM_DEVICE_BENCHMARK_MANIFEST"
+        ], !requestedPath.isEmpty, !requestedPath.contains("..") else { return }
+        let documents = FileManager.default.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        )[0]
+        let manifestURL = documents.appending(path: requestedPath)
+        let inputDirectory = manifestURL.deletingLastPathComponent()
+        let outputDirectory = documents.appending(
+            path: "StylezamQualityBenchmark",
+            directoryHint: .isDirectory
+        )
+
+        do {
+            let manifest = try JSONDecoder().decode(
+                DeviceQualityBenchmarkManifest.self,
+                from: Data(contentsOf: manifestURL)
+            )
+            guard let modelURL = modelPack.activeModelURL,
+                  let modelManifest = modelPack.manifest
+            else {
+                throw ModelPackError.unavailable(
+                    modelPack.lastError ?? ModelPackError.missingModel.localizedDescription
+                )
+            }
+
+            let repetitions = min(5, max(2, manifest.repetitions))
+            let thermalAtStart = Self.thermalStateName(ProcessInfo.processInfo.thermalState)
+            let memoryAtStart = Self.processMemoryFootprint()
+            var caseReports: [DeviceQualityBenchmarkCaseReport] = []
+
+            for benchmarkCase in manifest.cases.prefix(24) {
+                try Task.checkCancellation()
+                let filename = URL(fileURLWithPath: benchmarkCase.filename).lastPathComponent
+                let imageData = try Data(contentsOf: inputDirectory.appending(path: filename))
+                var runs: [DeviceQualityBenchmarkRun] = []
+
+                for repetition in 1...repetitions {
+                    try Task.checkCancellation()
+                    let startedAt = ProcessInfo.processInfo.systemUptime
+                    let detection = try await visionEngine.analyze(
+                        imageData: imageData,
+                        modelURL: modelURL,
+                        manifest: modelManifest,
+                        maxItems: settings.maxDetectedItems
+                    )
+                    let elapsed = (ProcessInfo.processInfo.systemUptime - startedAt) * 1_000
+                    let eligible = detection.candidates.filter {
+                        !GarmentDetectionQualityPolicy.needsReview(
+                            label: $0.localLabel,
+                            confidence: $0.confidence
+                        )
+                    }
+                    let evidence = await visionEngine.debugClassificationEvidence(
+                        imageData: imageData,
+                        boxes: detection.candidates.map(\.box)
+                    )
+                    runs.append(
+                        DeviceQualityBenchmarkRun(
+                            repetition: repetition,
+                            elapsedMilliseconds: elapsed,
+                            allLabels: detection.candidates.map(\.localLabel),
+                            allConfidences: detection.candidates.map(\.confidence),
+                            eligibleLabels: eligible.map(\.localLabel),
+                            classificationEvidence: evidence,
+                            categoryMatched: Self.matchesExpected(
+                                benchmarkCase.expected,
+                                candidates: detection.candidates
+                            ),
+                            passedExpectedResult: Self.matchesExpected(
+                                benchmarkCase.expected,
+                                candidates: eligible
+                            ),
+                            thermalState: Self.thermalStateName(
+                                ProcessInfo.processInfo.thermalState
+                            ),
+                            memoryFootprintBytes: Self.processMemoryFootprint(),
+                            pipeline: detection.metrics
+                        )
+                    )
+                }
+
+                let primaryLabels = runs.map { Self.canonicalPrimaryLabel($0.eligibleLabels) }
+                caseReports.append(
+                    DeviceQualityBenchmarkCaseReport(
+                        id: benchmarkCase.id,
+                        expected: benchmarkCase.expected,
+                        inputBytes: imageData.count,
+                        runs: runs,
+                        categoryAccurate: runs.allSatisfy(\.categoryMatched),
+                        accurate: runs.allSatisfy(\.passedExpectedResult),
+                        repeatStable: Set(primaryLabels).count == 1,
+                        withinTenSecondCap: runs.allSatisfy { $0.elapsedMilliseconds <= 10_000 }
+                    )
+                )
+            }
+
+            let report = DeviceQualityBenchmarkReport(
+                createdAt: .now,
+                deviceModel: UIDevice.current.model,
+                systemVersion: UIDevice.current.systemVersion,
+                modelID: modelManifest.modelID,
+                modelVersion: modelManifest.version,
+                repetitions: repetitions,
+                thermalStateAtStart: thermalAtStart,
+                thermalStateAtEnd: Self.thermalStateName(ProcessInfo.processInfo.thermalState),
+                memoryFootprintAtStartBytes: memoryAtStart,
+                memoryFootprintAtEndBytes: Self.processMemoryFootprint(),
+                accuracyPassed: caseReports.filter(\.accurate).count,
+                accuracyTotal: caseReports.count,
+                categoryAccuracyPassed: caseReports.filter(\.categoryAccurate).count,
+                repeatStabilityPassed: caseReports.filter(\.repeatStable).count,
+                latencyPassed: caseReports.filter(\.withinTenSecondCap).count,
+                cases: caseReports
+            )
+            try? FileManager.default.removeItem(at: outputDirectory)
+            try FileManager.default.createDirectory(
+                at: outputDirectory,
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+            let reportURL = outputDirectory.appending(path: "report.json")
+            try encoder.encode(report).write(to: reportURL, options: .atomic)
+            for benchmarkCase in manifest.cases.prefix(24) {
+                let filename = URL(fileURLWithPath: benchmarkCase.filename).lastPathComponent
+                try? FileManager.default.removeItem(
+                    at: inputDirectory.appending(path: filename)
+                )
+            }
+            try? FileManager.default.removeItem(at: manifestURL)
+            print("STYLEZAM_DEVICE_QUALITY_REPORT \(reportURL.path)")
+        } catch {
+            let message = "STYLEZAM_DEVICE_QUALITY_ERROR \(error.localizedDescription)"
+            print(message)
+            try? Data(message.utf8).write(
+                to: documents.appending(path: "StylezamQualityBenchmark-error.txt"),
+                options: .atomic
+            )
+        }
+    }
+
+    nonisolated static func matchesExpected(
+        _ expected: String,
+        candidates: [GarmentCandidate]
+    ) -> Bool {
+        let expected = expected.lowercased()
+        if ["none", "not-fashion", "not_fashion"].contains(expected) {
+            return candidates.isEmpty
+        }
+        return candidates.contains { candidate in
+            let label = candidate.localLabel.lowercased()
+            switch expected {
+            case "bag":
+                return ["bag", "wallet", "purse", "backpack"].contains(where: label.contains)
+            case "pants":
+                return ["pants", "trouser", "jeans", "shorts"].contains(where: label.contains)
+            case "jacket":
+                return ["jacket", "coat", "cape"].contains(where: label.contains)
+            case "skirt":
+                return label.contains("skirt")
+            case "shoes":
+                return ["shoe", "boot", "sneaker", "sandal"].contains(where: label.contains)
+            default:
+                return label.contains(expected)
+            }
+        }
+    }
+
+    nonisolated static func canonicalPrimaryLabel(_ labels: [String]) -> String {
+        labels.first?
+            .lowercased()
+            .components(separatedBy: ",")
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? "none"
+    }
+
+    nonisolated static func thermalStateName(_ state: ProcessInfo.ThermalState) -> String {
+        switch state {
+        case .nominal: "nominal"
+        case .fair: "fair"
+        case .serious: "serious"
+        case .critical: "critical"
+        @unknown default: "unknown"
+        }
+    }
+
+    nonisolated static func processMemoryFootprint() -> UInt64? {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size
+        )
+        let result = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(
+                    mach_task_self_,
+                    task_flavor_t(TASK_VM_INFO),
+                    $0,
+                    &count
+                )
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        return info.phys_footprint
     }
 
     nonisolated static func alphaCounts(_ data: Data) -> AlphaCounts? {

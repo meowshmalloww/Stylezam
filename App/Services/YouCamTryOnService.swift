@@ -110,6 +110,28 @@ struct YouCamFinishingOptions: Sendable, Equatable {
     static let none = YouCamFinishingOptions()
 }
 
+struct YouCamFeatureEntitlement: Identifiable, Sendable {
+    let category: TryOnCategory
+    let endpoint: String
+    let description: String?
+    let unitCost: Double?
+    let unit: String?
+    let isEntitled: Bool
+
+    var id: String { category.rawValue }
+}
+
+struct YouCamEntitlementReport: Sendable {
+    let checkedAt: Date
+    let features: [YouCamFeatureEntitlement]
+
+    var missingCategories: [TryOnCategory] {
+        features.filter { !$0.isEntitled }.map(\.category)
+    }
+
+    var supportsEveryStylezamCategory: Bool { missingCategories.isEmpty }
+}
+
 private enum YouCamTaskCreationRequest: Sendable {
     case tryOn(
         endpoint: String,
@@ -234,10 +256,60 @@ actor YouCamTryOnService {
     }
 
     func validateConnection() async throws {
-        _ = try await requestJSON(
-            path: "/s2s/v2.0/credit/feature-cost",
-            method: "GET"
-        )
+        let report = try await entitlementReport()
+        guard report.supportsEveryStylezamCategory else {
+            let names = report.missingCategories.map(\.title).joined(separator: ", ")
+            throw YouCamTryOnError.server(
+                "This YouCam account is connected but is not entitled for: \(names)."
+            )
+        }
+    }
+
+    /// Reads the account's paginated feature catalog. This verifies entitlement without
+    /// uploading an image, creating a task, or consuming a generated-result unit.
+    func entitlementReport() async throws -> YouCamEntitlementReport {
+        var token: String?
+        var entitled: [String: (description: String?, amount: Double?, unit: String?)] = [:]
+
+        repeat {
+            let queryItems = token.map { [URLQueryItem(name: "starting_token", value: $0)] } ?? []
+            let json = try await requestJSON(
+                path: "/s2s/v2.0/credit/feature-cost",
+                method: "GET",
+                queryItems: queryItems
+            )
+            guard let root = json as? [String: Any],
+                  let result = root["result"] as? [String: Any]
+            else { throw YouCamTryOnError.invalidResponse }
+
+            for sku in result["skus"] as? [[String: Any]] ?? [] {
+                guard let rawURL = sku["run_task_url"] as? String,
+                      let url = URL(string: rawURL)
+                else { continue }
+                let endpoint = url.path
+                    .replacingOccurrences(of: "/s2s/v2.0/task/", with: "")
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                entitled[endpoint] = (
+                    sku["description"] as? String,
+                    (sku["amount"] as? NSNumber)?.doubleValue,
+                    sku["unit"] as? String
+                )
+            }
+            token = result["next_token"] as? String
+        } while token?.isEmpty == false
+
+        let features = TryOnCategory.allCases.map { category in
+            let feature = entitled[category.youCamEndpoint]
+            return YouCamFeatureEntitlement(
+                category: category,
+                endpoint: category.youCamEndpoint,
+                description: feature?.description,
+                unitCost: feature?.amount,
+                unit: feature?.unit,
+                isEntitled: feature != nil
+            )
+        }
+        return YouCamEntitlementReport(checkedAt: Date(), features: features)
     }
 
     func render(
@@ -281,7 +353,7 @@ actor YouCamTryOnService {
 
         for (index, item) in items.enumerated() {
             await progress(index, totalTasks, "Preparing \(item.title)")
-            let endpoint = item.category.endpoint
+            let endpoint = item.category.youCamEndpoint
             await progress(index, totalTasks, "Uploading your photo")
             let sourceID = try await upload(current)
             await progress(index, totalTasks, "Uploading the found piece")
@@ -979,12 +1051,23 @@ actor YouCamTryOnService {
         return Data(data.dropFirst(4).prefix(4)) == Data("ftyp".utf8)
     }
 
-    private func requestJSON(path: String, method: String, body: [String: Any]? = nil) async throws -> Any {
+    private func requestJSON(
+        path: String,
+        method: String,
+        queryItems: [URLQueryItem] = [],
+        body: [String: Any]? = nil
+    ) async throws -> Any {
         try Task.checkCancellation()
         guard let key = Self.apiKey, !key.isEmpty, !key.contains("$(") else {
             throw YouCamTryOnError.missingAPIKey
         }
-        var request = URLRequest(url: baseURL.appending(path: path))
+        let endpointURL = baseURL.appending(path: path)
+        guard var components = URLComponents(url: endpointURL, resolvingAgainstBaseURL: false) else {
+            throw YouCamTryOnError.invalidResponse
+        }
+        if !queryItems.isEmpty { components.queryItems = queryItems }
+        guard let url = components.url else { throw YouCamTryOnError.invalidResponse }
+        var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1129,21 +1212,6 @@ private extension TryOnGarmentRegion {
 }
 
 private extension TryOnCategory {
-    var endpoint: String {
-        switch self {
-        case .clothes: "cloth-v4"
-        case .bag: "bag"
-        case .scarf: "scarf"
-        case .shoes: "shoes"
-        case .hat: "hat"
-        case .ring: "2d-vto/ring"
-        case .bracelet: "2d-vto/bracelet"
-        case .earring: "2d-vto/earring"
-        case .watch: "2d-vto/watch"
-        case .necklace: "2d-vto/necklace"
-        }
-    }
-
     var isJewelry: Bool {
         switch self {
         case .ring, .bracelet, .earring, .watch, .necklace: true

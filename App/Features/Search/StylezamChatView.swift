@@ -653,7 +653,7 @@ private struct ChatProductCard: View {
                     .padding(8)
                     .background(.white)
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                Text("\(product.confidencePercent)%")
+                Text(product.matchSummaryLabel)
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 8)

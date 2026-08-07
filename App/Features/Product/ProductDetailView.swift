@@ -139,7 +139,7 @@ struct ProductDetailView: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Label("Retrieved by \(product.provider)", systemImage: "network")
+            Label("Live source evidence", systemImage: "checkmark.shield")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
         }
