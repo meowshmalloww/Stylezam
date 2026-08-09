@@ -35,6 +35,7 @@ struct TryOnView: View {
     @State private var confirmsPhotoDeletion = false
     @State private var isRailExpanded = true
     @State private var railTab: PersistentTryOnRailTab = .pieces
+    @State private var fitCheckProduct: ProductResultDTO?
 
     @State private var isRendering = false
     @State private var status = ""
@@ -94,6 +95,9 @@ struct TryOnView: View {
             syncPersonSelection(preferActive: true)
             applyAutomaticPhotoContextIfNeeded()
             await checkConnection()
+        }
+        .sheet(item: $fitCheckProduct) { product in
+            ProductFitSheet(product: product)
         }
         .onChange(of: personPickerItem) { _, item in
             guard let item else { return }
@@ -674,9 +678,20 @@ struct TryOnView: View {
             }
 
             if let product = item.sourceProduct {
-                Link(destination: product.productURL) {
-                    Label(product.price?.formatted ?? "Shop", systemImage: "arrow.up.right")
-                        .font(.caption2.weight(.semibold))
+                HStack(spacing: 10) {
+                    Link(destination: product.productURL) {
+                        Label(product.price?.formatted ?? "Shop", systemImage: "arrow.up.right")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    Button {
+                        fitCheckProduct = product
+                    } label: {
+                        Label("Fit", systemImage: "ruler")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(StylezamDesign.cobalt)
+                    .accessibilityLabel("Check how \(item.title) fits your measurements")
                 }
             }
         }
@@ -719,27 +734,43 @@ struct TryOnView: View {
 
                 ForEach(shoppable) { item in
                     if let product = item.sourceProduct {
-                        Link(destination: product.productURL) {
-                            HStack(spacing: 10) {
-                                DataImage(data: item.imageData)
-                                    .frame(width: 42, height: 50)
-                                    .clipped()
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(item.title)
-                                        .font(.subheadline.weight(.semibold))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(1)
-                                    Text(
-                                        [product.merchant, product.price?.formatted]
-                                            .compactMap { $0 }
-                                            .joined(separator: " · ")
-                                    )
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            Link(destination: product.productURL) {
+                                HStack(spacing: 10) {
+                                    DataImage(data: item.imageData)
+                                        .frame(width: 42, height: 50)
+                                        .clipped()
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.title)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Text(
+                                            [product.merchant, product.price?.formatted]
+                                                .compactMap { $0 }
+                                                .joined(separator: " · ")
+                                        )
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "arrow.up.right")
                                 }
-                                Spacer()
-                                Image(systemName: "arrow.up.right")
                             }
+                            Button {
+                                fitCheckProduct = product
+                            } label: {
+                                Image(systemName: "ruler")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(StylezamDesign.cobalt)
+                                    .frame(width: 34, height: 34)
+                                    .background(
+                                        StylezamDesign.cobalt.opacity(0.09),
+                                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Check how \(item.title) fits your measurements")
                         }
                     }
                 }

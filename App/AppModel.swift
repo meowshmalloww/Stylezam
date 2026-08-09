@@ -16,6 +16,7 @@ final class AppModel {
     let searchUsage: SearchUsageStore
     let account: AccountSession
     let subscriptions: SubscriptionStore
+    let fitProfile: FitProfileStore
 
     var selectedTab: AppTab = .home
     var isCapturePresented = false
@@ -27,12 +28,14 @@ final class AppModel {
     var pendingGarmentSearch: PendingGarmentSearch?
     var isTryOnPresented = false
     var liveScreenNotice: String?
+    var sizeChartStates: [String: SizeChartState] = [:]
 
     @ObservationIgnored private let captureActivityManager = CaptureActivityManager()
     @ObservationIgnored private let visionEngine = GarmentVisionEngine()
     @ObservationIgnored private let duplicateGuard = GarmentDuplicateGuard()
     @ObservationIgnored private let notifications = NotificationService()
     @ObservationIgnored private let productSearchService = ProductSearchService()
+    @ObservationIgnored private let sizeChartService = SizeChartService()
     @ObservationIgnored private let liveScreenLogger = Logger(
         subsystem: "com.stylezam.app",
         category: "LiveScreenAutoCapture"
@@ -61,7 +64,8 @@ final class AppModel {
         credentials: CredentialStore = CredentialStore(),
         searchUsage: SearchUsageStore = SearchUsageStore(),
         account: AccountSession = AccountSession(),
-        subscriptions: SubscriptionStore = SubscriptionStore()
+        subscriptions: SubscriptionStore = SubscriptionStore(),
+        fitProfile: FitProfileStore = FitProfileStore()
     ) {
         self.settings = settings
         self.library = library
@@ -71,6 +75,7 @@ final class AppModel {
         self.searchUsage = searchUsage
         self.account = account
         self.subscriptions = subscriptions
+        self.fitProfile = fitProfile
     }
 
     var activePlan: AccountPlan {
@@ -248,6 +253,81 @@ final class AppModel {
                 diagnostic: error.localizedDescription
             )
             throw error
+        }
+    }
+
+    /// Loads the per-size measurement chart for a product by reading its
+    /// merchant page. Results (including confirmed misses) are cached on
+    /// device, so repeat checks cost nothing.
+    func loadSizeChart(for product: ProductResultDTO, force: Bool = false) async {
+        if !force, let state = sizeChartStates[product.id], state != .loading {
+            if case .failed = state {} else { return }
+        }
+        if sizeChartStates[product.id] == .loading { return }
+
+        if !force, let cached = await sizeChartService.cachedOutcome(for: product) {
+            switch cached {
+            case let .chart(chart): sizeChartStates[product.id] = .loaded(chart)
+            case let .notPublished(reason): sizeChartStates[product.id] = .notPublished(reason)
+            }
+            return
+        }
+
+        guard let key = try? credentials.credential(for: .fireworks), !key.isEmpty else {
+            sizeChartStates[product.id] = .failed(
+                "Size extraction needs the Stylezam AI credential, which is missing in this build."
+            )
+            return
+        }
+
+        sizeChartStates[product.id] = .loading
+        let usageID: UUID
+        do {
+            usageID = try searchUsage.reserveAuxiliary(
+                kind: .sizeChart,
+                garmentKey: "size-chart:\(product.id)",
+                provider: "fireworks",
+                monthlyLimit: 100_000,
+                fireworksBudgetUSD: settings.fireworksMonthlyBudgetUSD
+            )
+        } catch {
+            sizeChartStates[product.id] = .failed(error.localizedDescription)
+            return
+        }
+
+        let startedAt = Date()
+        do {
+            let (outcome, response) = try await sizeChartService.extractSizeChart(
+                for: product,
+                apiKey: key,
+                modelID: settings.fireworksModelID
+            )
+            switch outcome {
+            case let .chart(chart):
+                sizeChartStates[product.id] = .loaded(chart)
+            case let .notPublished(reason):
+                sizeChartStates[product.id] = .notPublished(reason)
+            }
+            searchUsage.complete(
+                usageID,
+                resultCount: {
+                    if case let .chart(chart) = outcome { return chart.sizes.count }
+                    return 0
+                }(),
+                latencyMilliseconds: Date().timeIntervalSince(startedAt) * 1_000,
+                estimatedCostUSD: fireworksCost(
+                    inputTokens: response.inputTokens,
+                    outputTokens: response.outputTokens
+                ),
+                diagnostic: response.diagnostic
+            )
+        } catch {
+            sizeChartStates[product.id] = .failed(error.localizedDescription)
+            searchUsage.fail(
+                usageID,
+                latencyMilliseconds: Date().timeIntervalSince(startedAt) * 1_000,
+                diagnostic: error.localizedDescription
+            )
         }
     }
 

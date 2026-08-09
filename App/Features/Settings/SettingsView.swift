@@ -72,6 +72,18 @@ struct SettingsView: View {
                         detail: "On-device vision, local storage, and deletion"
                     )
                 }
+
+                NavigationLink {
+                    FitProfileSettingsView()
+                } label: {
+                    SettingsLinkLabel(
+                        icon: "ruler",
+                        title: "Fit profile",
+                        detail: model.fitProfile.measurements.hasAnyValue
+                            ? "Measurements saved · powers size recommendations"
+                            : "Add body measurements for size recommendations"
+                    )
+                }
             }
 
             if developerToolsAvailable {
