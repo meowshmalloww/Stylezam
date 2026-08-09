@@ -12,9 +12,11 @@
 		0DB1EB29EDA0AADAAAAB5906 /* StylezamControlUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13CB7E4C165132539BE264F9 /* StylezamControlUITests.swift */; };
 		0DDC7152E9F69B07F6BA1134 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */; };
 		0E8A399772A2525A40B6D806 /* OnDeviceSpeechInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = 191B25973AFF803839245236 /* OnDeviceSpeechInput.swift */; };
+		0ED85391E4DBD85B67DF21A0 /* FitProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5197A2D03D0151B0E2CC0ADE /* FitProfileStore.swift */; };
 		0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0323FB49E9A47D9209839A59 /* Assets.xcassets */; };
 		197425BF0FA96D593BC17093 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3508C5A578324E82F996A38B /* AppModels.swift */; };
 		1D9CE91AAAB9A3B84CA961D3 /* StylezamCaptureActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */; };
+		1F0CCE6253D08959C491C3F4 /* SizeChartService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 857A06ACAAB3626C1796F70C /* SizeChartService.swift */; };
 		216DECAA98AACC5DDC61F5E4 /* StylezamControlDestination.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9D457582E4F89E76DAED199 /* StylezamControlDestination.swift */; };
 		2BBBE1B499085A6574A93665 /* AccountViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41E0AA9C044F0AAD484F07F8 /* AccountViews.swift */; };
 		2C0BC9F29771DB2AD3522D89 /* DetectionQualityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3DB8B7E742B2485BB6C2CE9D /* DetectionQualityTests.swift */; };
@@ -41,6 +43,7 @@
 		612527C8D504AACECBB047A0 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186586B04572ED4CBAC07684 /* AppModel.swift */; };
 		616181D89E9A424AE1140568 /* PersistentTryOnView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */; };
 		646BB8DB71EE6EC1139CC510 /* SearchModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D502690A307F9CB0DEBB3755 /* SearchModels.swift */; };
+		64907C822EBAD13D1C6661B8 /* FitModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED7B58542885AA60AB2B6FB7 /* FitModels.swift */; };
 		66229E4EDBE2E9EB63046368 /* ImageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */; };
 		66A2F4550BE3CAE37FE07D02 /* ProductComparisonView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */; };
 		68A8B3891A1D11AFC46D5B58 /* StylezamCaptureLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A9777323301C657786D16DB /* StylezamCaptureLiveActivity.swift */; };
@@ -65,10 +68,12 @@
 		A3D616A149CC5838F5E8708D /* ModelPackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */; };
 		A5352F1DD870CE7709C40963 /* StylezamWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 431C9709D4584CDF8CB1401D /* StylezamWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A5D92B0ED2EB1517B4B6EDD1 /* CameraPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */; };
+		A8D1A6F235449C396BCE2568 /* FitEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B62AF7C9F9DCEB463545B654 /* FitEngineTests.swift */; };
 		AA7F0C31451C4B802854BFC2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 2D218B380E2F95B01735CA1B /* PrivacyInfo.xcprivacy */; };
 		B2E843A9A85E21403CA081F1 /* AccountModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = D86DEC967CA5715C957D401E /* AccountModels.swift */; };
 		B9B5CBAF9671DF404412C6D1 /* ScreenCaptureAvailability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */; };
 		BE433491522CE13D20518260 /* LiveScreenAutoCaptureCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03A452935B31CD065B1BFBC9 /* LiveScreenAutoCaptureCoordinator.swift */; };
+		BECDD25D6AAD0083398AA713 /* FitEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11A568B009534F57C47B2D01 /* FitEngine.swift */; };
 		BFF866CDE74727A3FDD57E3A /* SearchStylezamImageIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */; };
 		C231B38854630C54DF79E113 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D6149F74411CB2250C2927B /* SearchView.swift */; };
 		C256FE0FF794855A62D13D64 /* StylezamCaptureControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */; };
@@ -77,7 +82,6 @@
 		CA6ACDE361167FDC95D0A057 /* ProductDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */; };
 		CE689F73168B7873FC653C97 /* TryOnWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */; };
 		CFCB3240B946F18BA5BF2AE0 /* ProductSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AEE3FA2E562C606ACEABDAB /* ProductSearchService.swift */; };
-		D03988F7D15C1DC5E6DC76DA /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */; };
 		D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */; };
 		D8D2B25724BAD0AD071BE888 /* AppGroup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 817BAAA57D938EFD107A98EA /* AppGroup.swift */; };
 		E1CEFAA15C79553A29F31DCE /* FirstRunExperienceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08EADD108A8B6C096FF911EF /* FirstRunExperienceView.swift */; };
@@ -91,6 +95,7 @@
 		F66424935FD442BB7E0BF232 /* SubscriptionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48EF17BB3D942FB10368EEBC /* SubscriptionStore.swift */; };
 		F8BAB78D74054BC17861C934 /* VisionDebugView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70AC81BE3A88E7297739342 /* VisionDebugView.swift */; };
 		FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */; };
+		FB37E6D7AB139A17992CEEB9 /* FitBreakdownView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A6BC8B411969A369AB40A18F /* FitBreakdownView.swift */; };
 		FE7073815E347BAA386910C0 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */; };
 		FF0D195106C6753D5AA272C4 /* LibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CD56358BDF26FC853C97071 /* LibraryView.swift */; };
 /* End PBXBuildFile section */
@@ -151,6 +156,7 @@
 		0D7CD24096454F2142A32276 /* CameraSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraSessionController.swift; sourceTree = "<group>"; };
 		104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamShortcuts.swift; sourceTree = "<group>"; };
 		10BF4A39D245BD15B9EE5E31 /* StylezamCaptureActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureActivityAttributes.swift; sourceTree = "<group>"; };
+		11A568B009534F57C47B2D01 /* FitEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitEngine.swift; sourceTree = "<group>"; };
 		11D7B431AD3D7BEA40E09136 /* YouCamTryOnService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouCamTryOnService.swift; sourceTree = "<group>"; };
 		11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentVisionEngine.swift; sourceTree = "<group>"; };
 		13CB7E4C165132539BE264F9 /* StylezamControlUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamControlUITests.swift; sourceTree = "<group>"; };
@@ -178,6 +184,7 @@
 		496D7ACAEBCBD463AFC56C7A /* CameraPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPicker.swift; sourceTree = "<group>"; };
 		4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		4F790B57A92BDB9737A707E7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
+		5197A2D03D0151B0E2CC0ADE /* FitProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitProfileStore.swift; sourceTree = "<group>"; };
 		5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenCaptureManager.swift; sourceTree = "<group>"; };
 		5A974E2CDFE3EF1C8C13377D /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		5CD56358BDF26FC853C97071 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -192,18 +199,20 @@
 		817BAAA57D938EFD107A98EA /* AppGroup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGroup.swift; sourceTree = "<group>"; };
 		835689C7AE4EF20860FAA2FF /* ModelPackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelPackManager.swift; sourceTree = "<group>"; };
 		84EE8789C94B80E03AC250BA /* SearchStylezamImageIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchStylezamImageIntent.swift; sourceTree = "<group>"; };
+		857A06ACAAB3626C1796F70C /* SizeChartService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SizeChartService.swift; sourceTree = "<group>"; };
 		8776C97BF5AD46E746581301 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		90A3492CF917004962F6DACD /* VisionAndProductModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionAndProductModels.swift; sourceTree = "<group>"; };
 		9237AF408EAE9B4EBE87F8E9 /* StylezamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamApp.swift; sourceTree = "<group>"; };
 		9A940D99785B136691E06C4A /* CaptureSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureSheet.swift; sourceTree = "<group>"; };
-		A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
 		A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GarmentDetectionQuality.swift; sourceTree = "<group>"; };
 		A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsStoreTests.swift; sourceTree = "<group>"; };
+		A6BC8B411969A369AB40A18F /* FitBreakdownView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitBreakdownView.swift; sourceTree = "<group>"; };
 		A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		ABBAD59CC2916FA9DFB6F0FE /* WardrobeRetrievalService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WardrobeRetrievalService.swift; sourceTree = "<group>"; };
 		AC437D83EB2BBDBA0F39E1FB /* TryOnView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnView.swift; sourceTree = "<group>"; };
 		B178AF989CC01F0D8FB8C6E1 /* ImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageViews.swift; sourceTree = "<group>"; };
 		B2B49B1DEAC1043DED6138C1 /* StylezamCaptureControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamCaptureControl.swift; sourceTree = "<group>"; };
+		B62AF7C9F9DCEB463545B654 /* FitEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitEngineTests.swift; sourceTree = "<group>"; };
 		B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StylezamAppDelegate.swift; sourceTree = "<group>"; };
 		BDA430F4B7EAA4B66F24C408 /* SearchUsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchUsageStore.swift; sourceTree = "<group>"; };
 		C19D1132056E5B01A68DADF9 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -220,6 +229,7 @@
 		E7752E9B3E6F9C685A4E03D1 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
 		EA76A6D38A5A5DA27D9473E5 /* garment-segmentation.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "garment-segmentation.json"; sourceTree = "<group>"; };
 		EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductComparisonView.swift; sourceTree = "<group>"; };
+		ED7B58542885AA60AB2B6FB7 /* FitModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitModels.swift; sourceTree = "<group>"; };
 		EECFE30F7FE6A8C3F0B17830 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 		EF3733E7C459231377964274 /* AccountSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountSession.swift; sourceTree = "<group>"; };
 		EFBD443A9A4D5685272D5E5F /* StylezamControlUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = StylezamControlUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -309,6 +319,8 @@
 				EF3733E7C459231377964274 /* AccountSession.swift */,
 				810938F0D56327572F4CCF7B /* CaptureActivityManager.swift */,
 				8776C97BF5AD46E746581301 /* CredentialStore.swift */,
+				11A568B009534F57C47B2D01 /* FitEngine.swift */,
+				5197A2D03D0151B0E2CC0ADE /* FitProfileStore.swift */,
 				2960A5F79FC3888E504FD39A /* GarmentDuplicateGuard.swift */,
 				11FC9C93631D2D0D161922AA /* GarmentVisionEngine.swift */,
 				4F790B57A92BDB9737A707E7 /* LibraryStore.swift */,
@@ -321,6 +333,7 @@
 				7585FB455DC227A7685179BA /* ScreenCaptureAvailability.swift */,
 				BDA430F4B7EAA4B66F24C408 /* SearchUsageStore.swift */,
 				C1E73A8F4B5024374B7E51D5 /* SettingsStore.swift */,
+				857A06ACAAB3626C1796F70C /* SizeChartService.swift */,
 				B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */,
 				104415E48030BF458B1EBA6C /* StylezamShortcuts.swift */,
 				48EF17BB3D942FB10368EEBC /* SubscriptionStore.swift */,
@@ -348,6 +361,7 @@
 		58073B8CA50632B1C233FF91 /* Product */ = {
 			isa = PBXGroup;
 			children = (
+				A6BC8B411969A369AB40A18F /* FitBreakdownView.swift */,
 				C24742D38F7C13592F2114E5 /* PersistentTryOnView.swift */,
 				EA8D7518E936AB81220BA9B1 /* ProductComparisonView.swift */,
 				7A69C4A0B84CE46718C4EC7C /* ProductDetailView.swift */,
@@ -391,7 +405,6 @@
 			children = (
 				66C9076C1CD55CAED48ECEF2 /* Models */,
 				0323FB49E9A47D9209839A59 /* Assets.xcassets */,
-				A08412D70F95EF0652C42C40 /* GoogleService-Info.plist */,
 				A9FC9B7947D2A6F8CB017169 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
@@ -401,6 +414,7 @@
 			isa = PBXGroup;
 			children = (
 				3DB8B7E742B2485BB6C2CE9D /* DetectionQualityTests.swift */,
+				B62AF7C9F9DCEB463545B654 /* FitEngineTests.swift */,
 				1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */,
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
 				A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */,
@@ -461,6 +475,7 @@
 			children = (
 				D86DEC967CA5715C957D401E /* AccountModels.swift */,
 				3508C5A578324E82F996A38B /* AppModels.swift */,
+				ED7B58542885AA60AB2B6FB7 /* FitModels.swift */,
 				A17EF52D41641F9A813453BB /* GarmentDetectionQuality.swift */,
 				D502690A307F9CB0DEBB3755 /* SearchModels.swift */,
 				90A3492CF917004962F6DACD /* VisionAndProductModels.swift */,
@@ -729,7 +744,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				0EFCC6EAC05F60F990A42BC1 /* Assets.xcassets in Resources */,
-				D03988F7D15C1DC5E6DC76DA /* GoogleService-Info.plist in Resources */,
 				40751728C11BDC69C24F858F /* PrivacyInfo.xcprivacy in Resources */,
 				40EF33336865700EB2439199 /* StylezamGarmentSegmentation.mlpackage in Resources */,
 				0BB798823EBEA25C4274BB81 /* garment-segmentation.json in Resources */,
@@ -768,6 +782,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				2C0BC9F29771DB2AD3522D89 /* DetectionQualityTests.swift in Sources */,
+				A8D1A6F235449C396BCE2568 /* FitEngineTests.swift in Sources */,
 				396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */,
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
 				D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */,
@@ -818,6 +833,10 @@
 				9805CE7058ECC70DF2B197AC /* CredentialStore.swift in Sources */,
 				6D04556DF5B9D31F831F446C /* DetectionCorrectionView.swift in Sources */,
 				E1CEFAA15C79553A29F31DCE /* FirstRunExperienceView.swift in Sources */,
+				FB37E6D7AB139A17992CEEB9 /* FitBreakdownView.swift in Sources */,
+				BECDD25D6AAD0083398AA713 /* FitEngine.swift in Sources */,
+				64907C822EBAD13D1C6661B8 /* FitModels.swift in Sources */,
+				0ED85391E4DBD85B67DF21A0 /* FitProfileStore.swift in Sources */,
 				6CAA05C1C429C2ED438F90AB /* GarmentDetectionQuality.swift in Sources */,
 				9ECB0AE5CB9A8B8441B60C85 /* GarmentDuplicateGuard.swift in Sources */,
 				8B2BA3C4A145508C13914968 /* GarmentVisionEngine.swift in Sources */,
@@ -844,6 +863,7 @@
 				C231B38854630C54DF79E113 /* SearchView.swift in Sources */,
 				FA1588788561A3B356F64509 /* SettingsStore.swift in Sources */,
 				0B7C3C2E439D3B2EFE88B17D /* SettingsView.swift in Sources */,
+				1F0CCE6253D08959C491C3F4 /* SizeChartService.swift in Sources */,
 				87DEC009E961C10B67638107 /* SpeechLevelMeter.swift in Sources */,
 				C366E4AF7E9683D6DFA38F8F /* StylezamApp.swift in Sources */,
 				465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */,

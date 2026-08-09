@@ -280,6 +280,7 @@ enum SearchUsageKind: String, Codable, Sendable {
     case assistant
     case providerTest
     case tryOnInference
+    case sizeChart
 }
 
 enum SearchUsageStatus: String, Codable, Sendable {

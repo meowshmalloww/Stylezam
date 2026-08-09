@@ -24,6 +24,9 @@ struct ProductDetailView: View {
                     evidence
                         .motionReveal(delay: 0.06)
 
+                    ProductFitSection(product: product)
+                        .motionReveal(delay: 0.08)
+
                     if !product.offers.isEmpty {
                         offers
                             .motionReveal(delay: 0.11)
@@ -31,7 +34,7 @@ struct ProductDetailView: View {
 
                     EditorialRule()
 
-                    Text("Prices and availability are observations from configured sources. Confirm the product, seller, shipping, and returns on the merchant page. Virtual previews visualize appearance and do not predict size or fit.")
+                    Text("Prices and availability are observations from configured sources. Confirm the product, seller, shipping, and returns on the merchant page. Virtual previews visualize appearance only; use Fit & measurements for size guidance and confirm the final size with the merchant.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
