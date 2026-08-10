@@ -86,8 +86,8 @@ The visual path sends one request for a selected garment to the next eligible vi
 1. Attach a Cloud Billing account to the Google Cloud project. Google requires billing to be enabled before Vision runs, even though its pricing tier lists the first 1,000 units per month as free.
 2. Enable **Cloud Vision API** in the Google Cloud project that owns the key.
 3. In **APIs & Services → Credentials**, restrict the key's API target to **Cloud Vision API** and its application restriction to the iOS bundle ID `com.stylezam.app`. Stylezam sends that bundle ID in `X-Ios-Bundle-Identifier`.
-4. Add `STYLEZAM_GOOGLE_VISION_API_KEY` to the ignored `.env`, reinstall/launch the Debug build, then choose **Google Cloud Vision Web Detection** under Developer Debug → Product search.
-5. Confirm Search Usage & Diagnostics reports `Google Vision` after each explicit search.
+4. Add `STYLEZAM_GOOGLE_VISION_API_KEY` to the ignored `.env`, then reinstall and launch the Debug build.
+5. Start an explicit visual product search and confirm Search Usage & Diagnostics increments **Product search**. Provider identity and routing order are intentionally hidden from that screen.
 
 Each request contains one image and only one `WEB_DETECTION` feature, making the Stylezam action one Vision feature unit. The local monthly setting defaults to 1,000, can be lowered, and cannot be raised past 1,000. A separate counter reserves the unit before networking and is not cleared with diagnostics. This is a device-side safety boundary: key reuse, another client, reinstalling the app, or deleting app data is outside it, so Google Cloud restrictions and monitoring remain required. Web Detection returns pages and matching or visually similar images; it does not promise shopping listings or prices.
 
@@ -152,7 +152,7 @@ On the connected iPhone, verify:
 - repeated Live captures are suppressed;
 - scan deletion removes source and crop files;
 - one selected garment produces one persisted product-search attempt by default;
-- Search diagnostics records the actual provider-call count, latency, outcome, and result count;
+- Search diagnostics records dispatched-call count, latency, outcome, and result count without exposing provider identity or routing order;
 - Google Vision stops locally at the configured limit and never allows a value above 1,000;
 - Stylezam AI remembers prior turns for the selected piece, generates usable follow-up prompts, and clears only the selected conversation from its menu;
 - Find similar and Find cheaper each make one Fireworks request followed by one request to the next eligible rotating keyword-shopping provider;

@@ -126,6 +126,33 @@ so alpha statistics alone are not a mask-quality test. The second photo also
 demonstrates a real limitation: a low-confidence 0.3720 duplicate belt survives
 the current same-class suppression rule.
 
+### Non-fashion calibration and performance regression
+
+On August 9, 2026, the signed Xcode 27 build ran a fixed ten-case, two-repeat
+corpus through the production still pipeline on the same iPhone 15 Pro Max with
+iOS 27.0. The corpus deliberately includes a real pillow, two bedding views,
+three bags, jeans, a jacket scene, a complex dress scene, and a very small shoe
+crop. It tests the user-reported false-positive conditions rather than only
+curated fashion photos.
+
+| Check | Result |
+|---|---:|
+| Pipeline-eligible expected result | 8 / 10 |
+| Expected category present | 8 / 10 |
+| Repeat stability | 10 / 10 |
+| Cases below the 10-second cap | 10 / 10 |
+| Mean end-to-end latency | 445.65 ms |
+| Worst end-to-end latency | 623.55 ms |
+| Peak resident memory | 190.4 MiB |
+| Memory-pressure warnings | 0 |
+| Thermal state, start to end | Nominal → Nominal |
+
+The pillow and both bedding cases produced no eligible garments. All three real
+bag cases produced an eligible `bag, wallet` result on both repetitions. The two
+retained failures are not hidden: the complex dress fixture was split into other
+visible outfit categories, and the 277×510 shoe crop produced no detection.
+Those cases remain useful regression inputs for future calibration.
+
 A second physical-device session profiled the staged Live Screen watcher. Once
 an unchanged screen had been handled, a 21.14-second Time Profiler trace recorded
 only two 1 ms running samples for Stylezam and the device remained at the

@@ -5,15 +5,80 @@ import XCTest
 final class FitEngineTests: XCTestCase {
     private func chart(
         basis: GarmentSizeChart.Basis = .garment,
+        measurementForm: GarmentSizeChart.MeasurementForm? = nil,
         sizes: [GarmentSizeSpec]
     ) -> GarmentSizeChart {
         GarmentSizeChart(
             productID: "test-product",
             sourceURL: URL(string: "https://example.com/product")!,
             basis: basis,
+            measurementForm: measurementForm,
             sizes: sizes,
             sourceNote: nil,
             fetchedAt: .now
+        )
+    }
+
+    func testChartRecordsFlatWidthEvidence() {
+        let chart = chart(
+            measurementForm: .flatWidth,
+            sizes: [GarmentSizeSpec(label: "M", measurements: [.chest: 104])]
+        )
+
+        XCTAssertTrue(chart.measurementExplanation.contains("flat garment widths"))
+    }
+
+    func testFlatChestWidthIsNormalizedToCircumference() {
+        let normalized = SizeChartService.normalizedMeasurement(
+            20.5,
+            dimension: .chest,
+            unit: "in",
+            basis: .garment,
+            form: .flatWidth
+        )
+
+        XCTAssertEqual(normalized ?? 0, 104.14, accuracy: 0.001)
+    }
+
+    func testFlatSleeveIsNotDoubled() {
+        let normalized = SizeChartService.normalizedMeasurement(
+            25,
+            dimension: .sleeve,
+            unit: "in",
+            basis: .garment,
+            form: .flatWidth
+        )
+
+        XCTAssertEqual(normalized ?? 0, 63.5, accuracy: 0.001)
+    }
+
+    func testImplausibleExtractedMeasurementIsRejected() {
+        XCTAssertNil(
+            SizeChartService.normalizedMeasurement(
+                999,
+                dimension: .waist,
+                unit: "cm",
+                basis: .body,
+                form: .circumference
+            )
+        )
+    }
+
+    func testExtractedMeasurementsAcceptLiteralValuesAndRangeMidpoints() {
+        XCTAssertTrue(
+            SizeChartService.measurementsAreGrounded(
+                [82, 104],
+                in: "Waist 82 cm · Chest 102–106 cm"
+            )
+        )
+    }
+
+    func testExtractedMeasurementsRejectInventedPlausibleValues() {
+        XCTAssertFalse(
+            SizeChartService.measurementsAreGrounded(
+                [83],
+                in: "Waist 82 cm · Chest 102–106 cm"
+            )
         )
     }
 

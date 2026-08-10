@@ -3,6 +3,8 @@
 *.egg-info/
 .build/
 .tools/
+node_modules/
+.wrangler/
 Config/Secrets.xcconfig
 Config/Firebase.local.xcconfig
 Config/*.local.xcconfig

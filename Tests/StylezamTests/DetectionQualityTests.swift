@@ -9,6 +9,28 @@ final class DetectionQualityTests: XCTestCase {
         XCTAssertTrue(garment.needsUserReview)
         XCTAssertFalse(garment.isPipelineEligible)
         XCTAssertEqual(garment.userFacingDetectionStatus, "Needs confirmation")
+        XCTAssertEqual(
+            GarmentDetectionQualityPolicy.liveLabel(
+                label: garment.localLabel,
+                confidence: garment.localConfidence
+            ),
+            "Possible Bag"
+        )
+    }
+
+    func testCalibratedHighRiskBoundaryRequiresStrongEvidence() {
+        XCTAssertTrue(
+            GarmentDetectionQualityPolicy.needsReview(
+                label: "jacket",
+                confidence: 0.819
+            )
+        )
+        XCTAssertFalse(
+            GarmentDetectionQualityPolicy.needsReview(
+                label: "jacket",
+                confidence: 0.82
+            )
+        )
     }
 
     func testExplicitCorrectionOverridesUncertainDetectorScore() {

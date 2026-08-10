@@ -366,17 +366,25 @@ final class AppModel {
                 )
             }
 
-            let rawDetection = try await visionEngine.analyze(
-                imageData: imageData,
-                modelURL: modelURL,
-                manifest: manifest,
-                maxItems: settings.maxDetectedItems,
-                // Camera preview frames remain a single lightweight pass. Every accepted
-                // still—including a stable Live Screen frame—uses bounded detail
-                // tiles, with Low Power Mode, the thermal state, and the 9-second
-                // processing budget deciding how many passes are safe.
-                enableAdaptiveDetail: true
-            )
+            let detectionTrace = StylezamPerformanceTrace.begin("StillDetection")
+            let rawDetection: GarmentDetectionBatch
+            do {
+                rawDetection = try await visionEngine.analyze(
+                    imageData: imageData,
+                    modelURL: modelURL,
+                    manifest: manifest,
+                    maxItems: settings.maxDetectedItems,
+                    // Camera preview frames remain a single lightweight pass. Every accepted
+                    // still—including a stable Live Screen frame—uses bounded detail
+                    // tiles, with Low Power Mode, the thermal state, and the 9-second
+                    // processing budget deciding how many passes are safe.
+                    enableAdaptiveDetail: true
+                )
+                StylezamPerformanceTrace.end("StillDetection", id: detectionTrace)
+            } catch {
+                StylezamPerformanceTrace.end("StillDetection", id: detectionTrace)
+                throw error
+            }
             let detection: GarmentDetectionBatch
             var visualFingerprints: [String: GarmentVisualFingerprint] = [:]
             if mode == .live || mode == .screen {
@@ -482,6 +490,8 @@ final class AppModel {
               !isAnalyzingCapture
         else { return nil }
         do {
+            let trace = StylezamPerformanceTrace.begin("LiveDetection")
+            defer { StylezamPerformanceTrace.end("LiveDetection", id: trace) }
             let preview = try await visionEngine.preview(
                 imageData: imageData,
                 modelURL: modelURL,

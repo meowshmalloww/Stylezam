@@ -55,6 +55,12 @@ final class SearchUsageStore {
         }.count
     }
 
+    func requestCount(kind: SearchUsageKind) -> Int {
+        currentMonthRecords
+            .filter { $0.kind == kind }
+            .reduce(0) { $0 + $1.requestCount }
+    }
+
     func attempts(for garmentKey: String) -> Int {
         snapshot.records.filter {
             $0.kind == .productSearch

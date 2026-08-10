@@ -67,7 +67,7 @@ enum YouCamTryOnError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingAPIKey:
-            "Enter a YouCam API key in the Try On connection panel, or configure STYLEZAM_YOUCAM_API_KEY for this Debug build."
+            "YouCam is not provisioned in this build. Ask the developer to configure STYLEZAM_YOUCAM_API_KEY or the credential gateway."
         case .invalidResponse:
             "YouCam returned an unreadable response."
         case let .server(message):
@@ -250,6 +250,7 @@ actor YouCamTryOnService {
     private let baseURL = URL(string: "https://yce-api-01.makeupar.com")!
     private let session: URLSession
     private var scheduledCleanupTaskIDs: Set<String> = []
+    private var entitlementCache: (report: YouCamEntitlementReport, expiresAt: Date)?
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -257,17 +258,20 @@ actor YouCamTryOnService {
 
     func validateConnection() async throws {
         let report = try await entitlementReport()
-        guard report.supportsEveryStylezamCategory else {
-            let names = report.missingCategories.map(\.title).joined(separator: ", ")
-            throw YouCamTryOnError.server(
-                "This YouCam account is connected but is not entitled for: \(names)."
-            )
+        guard report.features.contains(where: \.isEntitled) else {
+            throw YouCamTryOnError.server("This YouCam account is connected but no supported Stylezam try-on task is entitled.")
         }
     }
 
     /// Reads the account's paginated feature catalog. This verifies entitlement without
     /// uploading an image, creating a task, or consuming a generated-result unit.
-    func entitlementReport() async throws -> YouCamEntitlementReport {
+    func entitlementReport(forceRefresh: Bool = false) async throws -> YouCamEntitlementReport {
+        if !forceRefresh,
+           let entitlementCache,
+           entitlementCache.expiresAt > Date()
+        {
+            return entitlementCache.report
+        }
         var token: String?
         var entitled: [String: (description: String?, amount: Double?, unit: String?)] = [:]
 
@@ -309,7 +313,9 @@ actor YouCamTryOnService {
                 isEntitled: feature != nil
             )
         }
-        return YouCamEntitlementReport(checkedAt: Date(), features: features)
+        let report = YouCamEntitlementReport(checkedAt: Date(), features: features)
+        entitlementCache = (report, Date().addingTimeInterval(15 * 60))
+        return report
     }
 
     func render(
@@ -320,6 +326,16 @@ actor YouCamTryOnService {
         progress: @Sendable (Int, Int, String) async -> Void
     ) async throws -> (jobID: String, imageData: Data) {
         guard !items.isEmpty else { throw YouCamTryOnError.server("Select at least one item.") }
+        let entitlement = try await entitlementReport()
+        let missing = Set(items.map(\.category)).filter { category in
+            !entitlement.features.contains { $0.category == category && $0.isEntitled }
+        }
+        guard missing.isEmpty else {
+            let names = missing.map(\.title).sorted().joined(separator: ", ")
+            throw YouCamTryOnError.server(
+                "This build's YouCam account is not entitled for the selected task: \(names)."
+            )
+        }
         let requiresGender = items.contains {
             [.bag, .scarf, .shoes, .hat].contains($0.category)
         }
@@ -953,8 +969,10 @@ actor YouCamTryOnService {
     }
 
     private func taskIsTerminal(_ json: Any) -> Bool {
-        let status = (recursiveValue(for: "task_status", in: json) as? String)?.lowercased()
-        if status == "success" || status == "error" { return true }
+        let status = (recursiveValue(for: "task_status", in: json) as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        if status == "success" || Self.failureStatuses.contains(status ?? "") { return true }
         return status == nil && recursiveValue(for: "url", in: json) != nil
     }
 
@@ -979,14 +997,17 @@ actor YouCamTryOnService {
         for _ in 0..<60 {
             try Task.checkCancellation()
             let json = try await requestJSON(path: "/s2s/v2.0/task/\(endpoint)/\(taskID)", method: "GET")
-            let status = recursiveValue(for: "task_status", in: json) as? String
-            if status == "success" {
-                guard let rawURL = recursiveValue(for: "url", in: json) as? String,
-                      let url = URL(string: rawURL)
+            let status = (recursiveValue(for: "task_status", in: json) as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let rawURL = recursiveValue(for: "url", in: json) as? String
+            if status == "success" || (status == nil && rawURL != nil) {
+                guard let rawURL,
+                      let url = URL(string: rawURL), url.scheme == "https"
                 else { throw YouCamTryOnError.invalidResponse }
                 return url
             }
-            if status == "error" { throw serverError(from: json) }
+            if Self.failureStatuses.contains(status ?? "") { throw serverError(from: json) }
             try await Task.sleep(for: .seconds(3))
         }
         throw YouCamTryOnError.timedOut
@@ -999,14 +1020,16 @@ actor YouCamTryOnService {
                 path: "/s2s/v2.0/task/\(Self.videoEndpoint)/\(taskID)",
                 method: "GET"
             )
-            let status = (recursiveValue(for: "task_status", in: json) as? String)?.lowercased()
+            let status = (recursiveValue(for: "task_status", in: json) as? String)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
             let rawURL = recursiveValue(for: "url", in: json) as? String
 
-            if status == "error" {
+            if Self.failureStatuses.contains(status ?? "") {
                 throw serverError(from: json)
             }
             if status == "success" || (status == nil && rawURL != nil) {
-                guard let rawURL, let url = URL(string: rawURL) else {
+                guard let rawURL, let url = URL(string: rawURL), url.scheme == "https" else {
                     throw YouCamTryOnError.invalidResponse
                 }
                 return url
@@ -1072,24 +1095,45 @@ actor YouCamTryOnService {
         request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
-        let (data, response) = try await session.data(for: request)
-        try Task.checkCancellation()
-        let json: Any
-        if data.isEmpty {
-            json = [String: Any]()
-        } else if let decoded = try? JSONSerialization.jsonObject(with: data) {
-            json = decoded
-        } else {
-            json = ["message": String(data: data, encoding: .utf8) ?? "YouCam returned an unreadable response."]
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw YouCamTryOnError.invalidResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
+        let maximumAttempts = method == "GET" ? 3 : 1
+        for attempt in 0..<maximumAttempts {
+            let (data, response) = try await session.data(for: request)
+            try Task.checkCancellation()
+            let json: Any
+            if data.isEmpty {
+                json = [String: Any]()
+            } else if let decoded = try? JSONSerialization.jsonObject(with: data) {
+                json = decoded
+            } else {
+                json = ["message": String(data: data, encoding: .utf8) ?? "YouCam returned an unreadable response."]
+            }
+            guard let http = response as? HTTPURLResponse else {
+                throw YouCamTryOnError.invalidResponse
+            }
+            if (200..<300).contains(http.statusCode) { return json }
+
+            let isTransient = http.statusCode == 429 || (500...599).contains(http.statusCode)
+            if isTransient, attempt + 1 < maximumAttempts {
+                try await Task.sleep(for: retryDelay(response: http, attempt: attempt))
+                continue
+            }
             throw serverError(from: json, statusCode: http.statusCode)
         }
-        return json
+        throw YouCamTryOnError.invalidResponse
     }
+
+    private func retryDelay(response: HTTPURLResponse, attempt: Int) -> Duration {
+        if let raw = response.value(forHTTPHeaderField: "Retry-After"),
+           let seconds = Double(raw)
+        {
+            return .milliseconds(Int(min(8, max(1, seconds)) * 1_000))
+        }
+        return .seconds(min(6, 2 << attempt))
+    }
+
+    private static let failureStatuses: Set<String> = [
+        "error", "failed", "failure", "cancelled", "canceled",
+    ]
 
     private static var apiKey: String? {
         if let value = YouCamCredentialStore.apiKey, !value.isEmpty { return value }
@@ -1135,9 +1179,9 @@ actor YouCamTryOnService {
             || diagnostic.contains("permission denied")
             || diagnostic.contains("forbidden")
         {
-            friendly = "This YouCam API key is not enabled for the requested feature. Enable it for the account or use a key with the required access."
+            friendly = "This build's YouCam account is not entitled to the requested feature. The developer must enable that task for the account."
         } else if statusCode == 401 {
-            friendly = "YouCam rejected this API key. Reconnect YouCam with a valid key and try again."
+            friendly = "YouCam rejected this build's credential. The developer must update the configured credential."
         } else {
             switch code?.lowercased() {
             case "error_invalid_src", "error_no_face", "photo_detection_fail", "photo_check_invalid":

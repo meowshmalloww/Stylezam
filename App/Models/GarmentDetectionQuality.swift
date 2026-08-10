@@ -49,6 +49,18 @@ enum GarmentDetectionQualityPolicy {
         }
     }
 
+    static func liveLabel(label: String, confidence: Double) -> String {
+        let cleaned = label
+            .split(separator: ",")
+            .first
+            .map(String.init)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .capitalized ?? "Fashion item"
+        return needsReview(label: label, confidence: confidence)
+            ? "Possible \(cleaned)"
+            : cleaned
+    }
+
     static func reviewReason(for garment: SavedGarment) -> String {
         let category = garment.localLabel
             .replacingOccurrences(of: ",", with: " or")

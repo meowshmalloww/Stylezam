@@ -24,6 +24,7 @@ struct CaptureSheet: View {
     @State private var suppressedLiveContentFingerprint: LiveScreenContentFingerprint?
     @State private var liveInferenceGate = LiveContentInferenceGate()
     @State private var zoomGestureAnchor: CGFloat?
+    @State private var thermalState = ProcessInfo.processInfo.thermalState
 
     var body: some View {
         ZStack {
@@ -86,6 +87,13 @@ struct CaptureSheet: View {
         }
         .onChange(of: model.modelPack.isInstalled) { _, _ in
             updateLiveFrames()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(
+                for: ProcessInfo.thermalStateDidChangeNotification
+            )
+        ) { _ in
+            thermalState = ProcessInfo.processInfo.thermalState
         }
         .onDisappear {
             previewTask?.cancel()
@@ -374,6 +382,20 @@ struct CaptureSheet: View {
     }
 
     private var liveGuidanceCopy: (symbol: String, title: String, detail: String) {
+        if thermalState == .critical {
+            return (
+                "thermometer.high",
+                "Live scan is cooling down",
+                "The camera stays available. Detection resumes automatically when the iPhone cools."
+            )
+        }
+        if thermalState == .serious {
+            return (
+                "thermometer.medium",
+                "Live scan is reducing activity",
+                "Detection continues at a slower cadence to lower heat."
+            )
+        }
         if !model.settings.liveAutoCaptureEnabled {
             return ("hand.tap", "Manual Live scan", "Boxes update live. Tap the shutter when the view looks right.")
         }
@@ -681,7 +703,12 @@ private struct GarmentGuideOverlay: View {
                         .stroke(.white.opacity(0.9), lineWidth: 1.5)
                         .frame(width: rect.width, height: rect.height)
                         .position(x: rect.midX, y: rect.midY)
-                    Text(candidate.localLabel)
+                    Text(
+                        GarmentDetectionQualityPolicy.liveLabel(
+                            label: candidate.localLabel,
+                            confidence: candidate.confidence
+                        )
+                    )
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.black)
                         .padding(.horizontal, 7)

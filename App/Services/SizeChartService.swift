@@ -26,6 +26,7 @@ actor SizeChartService {
 
         let found: Bool
         let basis: String
+        let measurementForm: String
         let unit: String
         let sizes: [Size]
         let note: String?
@@ -111,19 +112,52 @@ actor SizeChartService {
             return (.notPublished(reason), response)
         }
 
-        let toCm: (Double?) -> Double? = { value in
-            guard let value, value > 0 else { return nil }
-            return payload.unit == "in" ? value * 2.54 : value
+        let basis = GarmentSizeChart.Basis(rawValue: payload.basis) ?? .unknown
+        let measurementForm = GarmentSizeChart.MeasurementForm(
+            rawValue: payload.measurementForm
+        ) ?? .unknown
+        let extractedValues = payload.sizes.flatMap { size in
+            [
+                size.chest, size.waist, size.hips, size.shoulders,
+                size.length, size.sleeve, size.inseam,
+            ].compactMap { $0 }
         }
-        let sizes: [GarmentSizeSpec] = payload.sizes.compactMap { size in
+        guard Self.measurementsAreGrounded(extractedValues, in: condensed) else {
+            return (
+                .notPublished("Stylezam could not verify every extracted measurement against the merchant's published chart."),
+                response
+            )
+        }
+        let sizes: [GarmentSizeSpec] = payload.sizes.prefix(20).compactMap { size in
             var measurements: [GarmentDimension: Double] = [:]
-            measurements[.chest] = toCm(size.chest)
-            measurements[.waist] = toCm(size.waist)
-            measurements[.hips] = toCm(size.hips)
-            measurements[.shoulders] = toCm(size.shoulders)
-            measurements[.length] = toCm(size.length)
-            measurements[.sleeve] = toCm(size.sleeve)
-            measurements[.inseam] = toCm(size.inseam)
+            measurements[.chest] = Self.normalizedMeasurement(
+                size.chest, dimension: .chest, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.waist] = Self.normalizedMeasurement(
+                size.waist, dimension: .waist, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.hips] = Self.normalizedMeasurement(
+                size.hips, dimension: .hips, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.shoulders] = Self.normalizedMeasurement(
+                size.shoulders, dimension: .shoulders, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.length] = Self.normalizedMeasurement(
+                size.length, dimension: .length, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.sleeve] = Self.normalizedMeasurement(
+                size.sleeve, dimension: .sleeve, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
+            measurements[.inseam] = Self.normalizedMeasurement(
+                size.inseam, dimension: .inseam, unit: payload.unit,
+                basis: basis, form: measurementForm
+            )
             let label = size.label.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !label.isEmpty, !measurements.isEmpty else { return nil }
             return GarmentSizeSpec(label: label, measurements: measurements)
@@ -137,13 +171,84 @@ actor SizeChartService {
         let chart = GarmentSizeChart(
             productID: product.id,
             sourceURL: product.productURL,
-            basis: GarmentSizeChart.Basis(rawValue: payload.basis) ?? .unknown,
+            basis: basis,
+            measurementForm: measurementForm,
             sizes: sizes,
             sourceNote: payload.note,
             fetchedAt: .now
         )
         store(productID: product.id, chart: chart, missReason: nil)
         return (.chart(chart), response)
+    }
+
+    nonisolated static func normalizedMeasurement(
+        _ rawValue: Double?,
+        dimension: GarmentDimension,
+        unit: String,
+        basis: GarmentSizeChart.Basis,
+        form: GarmentSizeChart.MeasurementForm
+    ) -> Double? {
+        guard let rawValue, rawValue > 0, rawValue.isFinite else { return nil }
+        var centimeters = unit == "in" ? rawValue * 2.54 : rawValue
+        if basis == .garment,
+           form == .flatWidth,
+           dimension == .chest || dimension == .waist || dimension == .hips
+        {
+            centimeters *= 2
+        }
+        let plausibleRange: ClosedRange<Double>
+        switch dimension {
+        case .chest, .waist, .hips: plausibleRange = 35...260
+        case .shoulders: plausibleRange = 15...100
+        case .length, .sleeve, .inseam: plausibleRange = 8...220
+        }
+        return plausibleRange.contains(centimeters) ? centimeters : nil
+    }
+
+    nonisolated static func measurementsAreGrounded(
+        _ values: [Double],
+        in source: String
+    ) -> Bool {
+        let literalPattern = #"(?<![\p{L}\p{N}_])\d+(?:\.\d+)?"#
+        let rangePattern = #"(\d+(?:\.\d+)?)\s*[-–—]\s*(\d+(?:\.\d+)?)"#
+        let literals = numericMatches(pattern: literalPattern, in: source, capture: 0)
+        var permitted = Set(literals.map(quantized))
+        guard let rangeExpression = try? NSRegularExpression(pattern: rangePattern) else {
+            return false
+        }
+        let sourceRange = NSRange(source.startIndex..<source.endIndex, in: source)
+        for match in rangeExpression.matches(in: source, range: sourceRange) {
+            guard let lower = numericCapture(match, index: 1, source: source),
+                  let upper = numericCapture(match, index: 2, source: source)
+            else { continue }
+            permitted.insert(quantized((lower + upper) / 2))
+        }
+        return values.allSatisfy { permitted.contains(quantized($0)) }
+    }
+
+    private nonisolated static func numericMatches(
+        pattern: String,
+        in source: String,
+        capture: Int
+    ) -> [Double] {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return [] }
+        let sourceRange = NSRange(source.startIndex..<source.endIndex, in: source)
+        return expression.matches(in: source, range: sourceRange).compactMap {
+            numericCapture($0, index: capture, source: source)
+        }
+    }
+
+    private nonisolated static func numericCapture(
+        _ match: NSTextCheckingResult,
+        index: Int,
+        source: String
+    ) -> Double? {
+        guard let range = Range(match.range(at: index), in: source) else { return nil }
+        return Double(source[range])
+    }
+
+    private nonisolated static func quantized(_ value: Double) -> Int64 {
+        Int64((value * 1_000_000).rounded())
     }
 
     // MARK: - Page fetch
@@ -260,7 +365,9 @@ actor SizeChartService {
         text = text.replacingOccurrences(of: "<[^>]+>", with: " ", options: .regularExpression)
         let entities: [String: String] = [
             "&nbsp;": " ", "&amp;": "&", "&quot;": "\"", "&#39;": "'",
-            "&lt;": "<", "&gt;": ">", "&frac12;": ".5", "&frac14;": ".25", "&frac34;": ".75",
+            "&lt;": "<", "&gt;": ">", "&ndash;": "–", "&mdash;": "—",
+            "&#8211;": "–", "&#8212;": "—", "&frac12;": ".5",
+            "&frac14;": ".25", "&frac34;": ".75",
         ]
         for (entity, replacement) in entities {
             text = text.replacingOccurrences(of: entity, with: replacement)
@@ -280,13 +387,15 @@ actor SizeChartService {
     ) async throws -> (ExtractionPayload, SearchProviderResponse) {
         let prompt = """
         Below is condensed text from a merchant product page for: \(product.title) (merchant: \(product.merchant)).
-        Extract the size chart if one is published: the numeric dimensions of every offered size.
+        Extract the single size chart most relevant to this product if one is published.
         Rules:
         - Only report numbers that literally appear in the text. Never estimate or invent a value.
         - If a value is a range (e.g. 96-100), report the midpoint.
         - basis is "garment" when the numbers describe the garment measured flat, "body" when they describe the body each size fits, "unknown" when unstated.
+        - measurementForm is "flat_width" only when garment chest/bust, waist, or hips are measured straight across one side (for example pit-to-pit or half chest); "circumference" for around-the-body/full-circumference numbers; otherwise "unknown".
         - unit is "cm" or "in" matching the numbers you report; convert nothing.
         - Use null for any dimension a size does not list. Map bust to chest and hip to hips.
+        - Return at most 20 contiguous offered size rows from that one chart. Do not combine men's, women's, kids', regional, or product-category charts.
         - If the page shows no per-size measurements, return found=false, an empty sizes array, and a one-sentence note saying what the page offers instead (e.g. only S/M/L labels).
 
         PAGE TEXT:
@@ -296,7 +405,7 @@ actor SizeChartService {
             "model": modelID,
             "reasoning_effort": "none",
             "temperature": 0,
-            "max_tokens": 1_400,
+            "max_tokens": 5_000,
             "response_format": sizeChartResponseFormat(),
             "messages": [[
                 "role": "user",
@@ -323,6 +432,7 @@ actor SizeChartService {
         }
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = root["choices"] as? [[String: Any]],
+              choices.first?["finish_reason"] as? String != "length",
               let message = choices.first?["message"] as? [String: Any],
               let content = message["content"] as? String,
               let payloadData = jsonData(fromPossiblyFenced: content),
@@ -367,10 +477,13 @@ actor SizeChartService {
                     "properties": [
                         "found": ["type": "boolean"],
                         "basis": ["type": "string", "enum": ["garment", "body", "unknown"]] as [String: Any],
+                        "measurementForm": [
+                            "type": "string",
+                            "enum": ["circumference", "flat_width", "unknown"],
+                        ] as [String: Any],
                         "unit": ["type": "string", "enum": ["cm", "in"]] as [String: Any],
                         "sizes": [
                             "type": "array",
-                            "maxItems": 14,
                             "items": [
                                 "type": "object",
                                 "properties": [
@@ -394,7 +507,7 @@ actor SizeChartService {
                             "anyOf": [["type": "string"], ["type": "null"]],
                         ],
                     ] as [String: Any],
-                    "required": ["found", "basis", "unit", "sizes", "note"],
+                    "required": ["found", "basis", "measurementForm", "unit", "sizes", "note"],
                     "additionalProperties": false,
                 ] as [String: Any],
             ] as [String: Any],

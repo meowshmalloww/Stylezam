@@ -409,9 +409,15 @@ extension CameraSessionDriver: AVCaptureVideoDataOutputSampleBufferDelegate {
             switch ProcessInfo.processInfo.thermalState {
             case .nominal: interval = ProcessInfo.processInfo.isLowPowerModeEnabled ? 1.15 : 0.82
             case .fair: interval = 1.2
-            case .serious, .critical:
-                // Keep the camera and manual shutter available while pausing
-                // background ML work so an already-warm phone can recover.
+            case .serious:
+                // Keep Live useful under sustained use without feeding the
+                // detector continuously. The compact preview and long cadence
+                // let the device cool while still allowing the UI to recover
+                // from what would otherwise look like a permanently stopped scan.
+                interval = 2.8
+            case .critical:
+                // Manual capture remains available. The UI observes the thermal
+                // notification and explains this temporary safety pause.
                 return false
             @unknown default: interval = 1.2
             }

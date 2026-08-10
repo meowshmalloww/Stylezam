@@ -136,16 +136,59 @@ struct GarmentSizeChart: Codable, Hashable, Sendable {
         }
     }
 
+    /// How circumference-like garment values are published. A merchant may
+    /// list a full chest/waist/hip circumference or a flat, one-side width.
+    /// Keeping this separate from `basis` prevents a 52 cm pit-to-pit value
+    /// from being compared directly with a 96 cm body chest.
+    enum MeasurementForm: String, Codable, Hashable, Sendable {
+        case circumference
+        case flatWidth = "flat_width"
+        case unknown
+    }
+
     let productID: String
     let sourceURL: URL
     let basis: Basis
+    let measurementForm: MeasurementForm?
     let sizes: [GarmentSizeSpec]
     let sourceNote: String?
     let fetchedAt: Date
 
+    init(
+        productID: String,
+        sourceURL: URL,
+        basis: Basis,
+        measurementForm: MeasurementForm? = nil,
+        sizes: [GarmentSizeSpec],
+        sourceNote: String?,
+        fetchedAt: Date
+    ) {
+        self.productID = productID
+        self.sourceURL = sourceURL
+        self.basis = basis
+        self.measurementForm = measurementForm
+        self.sizes = sizes
+        self.sourceNote = sourceNote
+        self.fetchedAt = fetchedAt
+    }
+
     var dimensionsPresent: [GarmentDimension] {
         GarmentDimension.allCases.filter { dimension in
             sizes.contains { $0.measurements[dimension] != nil }
+        }
+    }
+
+
+    var measurementExplanation: String {
+        switch (basis, measurementForm ?? .unknown) {
+        case (.garment, .flatWidth):
+            "The merchant publishes flat garment widths. Stylezam converts chest, waist, and hip widths to circumference before comparing them with your body."
+        case (.garment, .circumference):
+            "The merchant publishes full garment circumferences."
+        case (.body, _):
+            "The merchant publishes body measurements each size is intended to fit."
+        default:
+            "The merchant did not clearly state how the measurements were taken, so treat this recommendation as guidance."
         }
     }
 }

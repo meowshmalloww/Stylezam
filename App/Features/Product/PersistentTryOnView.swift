@@ -45,7 +45,6 @@ struct TryOnView: View {
     @State private var gender: TryOnGender = .automatic
     @State private var acceptsUpload = false
 
-    @State private var credential = ""
     @State private var hasCredential = YouCamCredentialStore.isConfigured
     @State private var isCheckingConnection = false
     @State private var isConnectionVerified = false
@@ -1030,27 +1029,13 @@ struct TryOnView: View {
             )
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                EditorialSectionHeader(title: "Connect YouCam", detail: "Prototype credential")
-                SecureField("YouCam API key", text: $credential)
-                    .textContentType(.password)
-                    .padding(12)
-                    .background(
-                        Color(uiColor: .secondarySystemBackground),
-                        in: RoundedRectangle(cornerRadius: 12)
-                    )
-                Button("Save securely on this device") {
-                    do {
-                        try YouCamCredentialStore.save(credential)
-                        credential = ""
-                        hasCredential = true
-                        Task { await checkConnection() }
-                    } catch {
-                        errorMessage = error.localizedDescription
-                    }
-                }
-                .stylezamGlassButton()
-                .disabled(credential.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Text("For production, Stylezam should call a server that holds this credential. A mobile app bundle cannot keep a shared bearer token secret.")
+                EditorialSectionHeader(title: "YouCam unavailable", detail: "Build configuration")
+                Label(
+                    "This build was not provisioned with the virtual try-on service.",
+                    systemImage: "key.slash"
+                )
+                .font(.subheadline)
+                Text("Service credentials are managed by the developer build or credential gateway. Stylezam never asks a user to enter a provider key.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1117,7 +1102,7 @@ struct TryOnView: View {
         if let missingReference = selectedItemsMissingYouCamReference.first {
             return "Add a worn-garment photo for \(missingReference.title)"
         }
-        if !hasCredential { return "Connect the YouCam API key below" }
+        if !hasCredential { return "YouCam is not configured in this build" }
         if isCheckingConnection { return "Checking the YouCam connection" }
         if !isConnectionVerified { return "Retry the YouCam connection" }
         if !acceptsUpload { return "Allow this upload to continue" }

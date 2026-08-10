@@ -766,9 +766,10 @@ actor GarmentVisionEngine {
     ]
     private nonisolated static let nonFashionClassifiers: Set<String> = [
         "bedding", "pillow", "bed", "blanket", "comforter", "duvet", "quilt",
-        "cushion", "mattress", "bedspread", "sleeping bag", "furniture", "sofa",
+        "cushion", "throw pillow", "bolster", "mattress", "bedspread", "bedclothes",
+        "bedsheet", "bed sheet", "linen", "linens", "sleeping bag", "furniture", "sofa",
         "couch", "curtain", "shower curtain", "towel", "bath towel", "upholstery",
-        "rug", "carpet", "doormat",
+        "rug", "carpet", "doormat", "tablecloth", "placemat",
     ]
 
     private nonisolated static func shouldReject(
@@ -806,7 +807,21 @@ actor GarmentVisionEngine {
         var confidence: Double
         if bag >= 0.10, bag > max(0.06, clothing * 1.15) {
             label = "bag, wallet"
-            confidence = Foundation.sqrt(max(0, detection.confidence * bag))
+            let geometricSupport = Foundation.sqrt(max(0, detection.confidence * bag))
+            let nonFashion = evidence.score(for: nonFashionClassifiers)
+            if nonFashion < max(0.12, bag * 1.15) {
+                // Calibrated on the physical false-positive corpus: a true bag
+                // can receive a modest broad-classifier score while RF-DETR is
+                // strong. When both signals agree and bedding evidence does not
+                // dominate, lift the fused score above the human-review gate.
+                // Raw RF-DETR confidence alone can never take this path.
+                confidence = max(
+                    geometricSupport,
+                    min(0.92, 0.45 + 0.70 * detection.confidence + 0.80 * bag)
+                )
+            } else {
+                confidence = geometricSupport
+            }
         } else if jeans >= 0.16, jeans > skirt * 1.25 {
             label = "pants"
             confidence = max(

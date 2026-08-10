@@ -68,7 +68,7 @@ flowchart LR
     Finish --> Library
 ```
 
-The detector always receives its fixed 384 × 384 tensor, as required by the model. Stylezam does not reduce a 4K photo to a single 384 px result: still images use one global pass plus bounded overlapping detail tiles, merge detections in source coordinates, and crop from an orientation-corrected source up to 5120 px. Live modes use smaller sampled frames, discard late work, require stable evidence, and pause automatic inference under serious thermal pressure.
+The detector always receives its fixed 384 × 384 tensor, as required by the model. Stylezam does not reduce a 4K photo to a single 384 px result: still images use one global pass plus bounded overlapping detail tiles, merge detections in source coordinates, and crop from an orientation-corrected source up to 5120 px. Live modes use smaller sampled frames, discard late work, require stable evidence, reduce cadence under serious thermal pressure, and pause only at critical pressure.
 
 ### Search routing
 
@@ -76,7 +76,7 @@ The detector always receives its fixed 384 × 384 tensor, as required by the mod
 - **Public HTTPS image URL required:** SearchAPI.io Lens, SerpApi Lens, and Bright Data Lens. Stylezam does not silently publish a private crop to make these providers eligible.
 - **Text shopping query:** Serper, SearchAPI.io, SerpApi, or Bright Data. These routes do not require a public image URL.
 
-Only one provider is called for one search. Eligible providers rotate after a completed attempt and wrap back to the first provider. Failed attempts remain retryable; successful garment searches are cached by default to protect monthly allowances. Developer Debug exposes readiness, request history, limits, and the next route without exposing credentials.
+Only one provider is called for one search. Eligible providers rotate after a completed attempt and wrap back to the first provider. Failed attempts remain retryable; successful garment searches are cached by default to protect monthly allowances. Developer Debug exposes action-level service health, request history, and limits without showing credentials, provider names, or routing order.
 
 Match percentages appear only when a provider supplies a score or when Stylezam can reproduce an exact query-to-title overlap score. Rank-only visual results remain qualitative; the app does not invent similarity precision, prices, or products.
 
@@ -137,7 +137,7 @@ xcodebuild -project Stylezam.xcodeproj \
   test
 ```
 
-The repository check verifies the model manifest and hashes, regenerates the Xcode project, builds every target, and confirms the compiled app contains the model. The test suite also verifies detection correction, duplicate handling, bounded Library retrieval, try-on state, performance safeguards, and the system sharing picker.
+The repository check verifies the model manifest and hashes, regenerates the Xcode project, builds every target, and confirms the compiled app contains the model. The test suite also verifies detection correction, duplicate handling, bounded Library retrieval, try-on state, performance safeguards, and the system sharing picker. Real-page size-chart results are recorded in [Fit validation](./docs/FIT_VALIDATION.md), and physical-device vision and performance results are recorded in [Vision validation](./docs/VISION_VALIDATION.md).
 
 ## Repository map
 
@@ -148,6 +148,7 @@ Extensions/Share/       image and text Share extension
 Extensions/Widgets/     Control Center controls, Live Activity, and Dynamic Island
 Shared/                 App Group, App Intents, and activity attributes
 Config/                 model taxonomy and build configuration
+Gateway/                optional stateless production credential broker scaffold
 docs/                   setup, architecture, privacy, benchmark, and validation notes
 scripts/                project generation, device installation, and verification
 ```

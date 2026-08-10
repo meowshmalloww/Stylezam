@@ -1061,7 +1061,7 @@ actor ProductSearchService {
                 {
                     let normalized = message.lowercased()
                     if normalized.contains("billing") {
-                        hint = "Cloud Billing must be enabled on the key's Google Cloud project before Vision will run. The app will still stop locally before unit 1,001."
+                        hint = "This visual-match provider requires Cloud Billing on its Google Cloud project. Local garment scanning, cropping, Library, and Try On are unaffected. No Google request will be sent after Stylezam reaches its local 1,000-unit limit."
                     } else if normalized.contains("has not been used") || normalized.contains("is disabled") {
                         hint = "Enable Cloud Vision API on the key's Google Cloud project, then wait for the setting to propagate."
                     } else {
@@ -1069,7 +1069,7 @@ actor ProductSearchService {
                     }
                 } else {
                     switch response.statusCode {
-                    case 401, 403: hint = "Check the saved credential and account access."
+                    case 401, 403: hint = "The developer-managed credential or account access needs attention."
                     case 402: hint = "The provider requires billing or has exhausted its allowance."
                     case 429: hint = "The provider rate or monthly limit was reached."
                     default: hint = "The provider returned HTTP \(response.statusCode)."
@@ -1208,8 +1208,6 @@ actor ProductSearchService {
                         "suggestions": [
                             "type": "array",
                             "items": ["type": "string"],
-                            "minItems": 3,
-                            "maxItems": 3,
                         ] as [String: Any],
                         "category": [
                             "anyOf": [
@@ -1243,8 +1241,6 @@ actor ProductSearchService {
                         "suggested_questions": [
                             "type": "array",
                             "items": ["type": "string"],
-                            "minItems": 2,
-                            "maxItems": 3,
                         ] as [String: Any],
                     ] as [String: Any],
                     "required": ["answer", "suggested_questions"],

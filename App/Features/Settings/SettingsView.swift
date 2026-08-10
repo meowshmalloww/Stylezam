@@ -94,7 +94,7 @@ struct SettingsView: View {
                         SettingsLinkLabel(
                             icon: "hammer",
                             title: "Developer Debug",
-                            detail: "Verified role · vision, provider readiness, quotas, and request logs"
+                            detail: "Verified role · vision, service health, quotas, and request logs"
                         )
                     }
 
@@ -321,7 +321,7 @@ private struct PrivacySettingsView: View {
             privacySection(
                 title: "Service credentials",
                 icon: "key",
-                detail: "Search keys are developer-managed. This private build imports them from an ignored environment file into the device-only Keychain. A YouCam key can also be saved directly to this iPhone for prototype testing; credentials are never written to Library media or JSON."
+                detail: "Provider credentials are developer-managed. This private hackathon build imports development values from an ignored environment file into the device-only Keychain. Users are never asked to enter provider keys, and credentials are never written to Library media or JSON."
             )
 
             Section {
@@ -482,28 +482,11 @@ private struct DeveloperSettingsView: View {
             }
 
             Section {
-                Picker("Visual rotation starts with", selection: $settings.imageSearchProvider) {
-                    ForEach(ImageSearchProvider.allCases) { provider in
-                        Text(provider.title).tag(provider)
-                    }
-                }
+                LabeledContent("Visual product search", value: searchRuntimeStatus)
                 LabeledContent(
-                    "Routing",
-                    value: "One provider per search"
+                    "AI shopping",
+                    value: model.eligibleKeywordSearchProviders.isEmpty ? "Unavailable" : "Ready"
                 )
-                LabeledContent("Eligible providers") {
-                    Text(model.eligibleImageSearchProviders.count, format: .number)
-                        .monospacedDigit()
-                }
-                LabeledContent(
-                    "Next visual provider",
-                    value: model.activeImageSearchProvider?.title ?? "None ready"
-                )
-                LabeledContent(
-                    "Next keyword provider",
-                    value: model.activeKeywordSearchProvider?.title ?? "None ready"
-                )
-
                 Stepper(
                     "Successful searches per piece: \(settings.productSearchesPerPiece)",
                     value: $settings.productSearchesPerPiece,
@@ -521,38 +504,7 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Product search")
             } footer: {
-                Text("Each visual search calls exactly one ready provider, then advances to the next route. AI shopping uses Fireworks once for keywords and exactly one rotating text-shopping provider. Failed routes are recorded and the following search advances.")
-            }
-
-            Section {
-                imageProviderReadinessRow(.lykdat)
-                imageProviderReadinessRow(.googleVision)
-            } header: {
-                Text("Image search · private crops")
-            } footer: {
-                Text("These routes accept garment image bytes directly, so the crop does not need to be published on the web.")
-            }
-
-            Section {
-                imageProviderReadinessRow(.searchAPI)
-                imageProviderReadinessRow(.serpAPI)
-                imageProviderReadinessRow(.brightData)
-            } header: {
-                Text("Google Lens routes · link required")
-            } footer: {
-                Text("These APIs ask for an HTTPS image link. Stylezam deliberately does not upload private iPhone crops just to create that link, so configured credentials stay on standby unless you supply a public test-image URL.")
-            }
-
-            Section {
-                providerReadinessRow(kind: .fireworks, detail: "Understands the piece and conversation")
-                keywordProviderReadinessRow(.serper)
-                keywordProviderReadinessRow(.searchAPI)
-                keywordProviderReadinessRow(.serpAPI)
-                keywordProviderReadinessRow(.brightData)
-            } header: {
-                Text("AI and keyword shopping")
-            } footer: {
-                Text("Fireworks writes one focused shopping query. The next ready provider performs one Google Shopping request and can return several products. Keyword search does not need a public crop link.")
+                Text("Provider selection and credential details are intentionally hidden from this debug surface. Stylezam performs one configured search for each explicit action and applies the saved safety limits.")
             }
 
             Section {
@@ -570,10 +522,26 @@ private struct DeveloperSettingsView: View {
             } header: {
                 Text("Virtual try-on")
             } footer: {
-                Text("Credentials stay in this iPhone's Keychain. This private build imports development values from the ignored .env launch environment.")
+                Text("This private build imports developer-managed credentials from the ignored .env launch environment. Users cannot enter provider keys in the app.")
             }
 
             Section {
+                NavigationLink {
+                    PerformanceDiagnosticsView()
+                } label: {
+                    Label {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Device Performance")
+                            Text("Thermals, hangs, memory, launches, and local latency traces")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } icon: {
+                        Image(systemName: "gauge.with.dots.needle.50percent")
+                            .foregroundStyle(StylezamDesign.cobalt)
+                    }
+                }
+
                 NavigationLink {
                     SearchDiagnosticsView()
                 } label: {
@@ -599,7 +567,7 @@ private struct DeveloperSettingsView: View {
                 runtimeRow(title: "Product retrieval", value: searchRuntimeStatus)
                 runtimeRow(
                     title: "Virtual try-on",
-                    value: YouCamCredentialStore.isConfigured ? "YouCam configured" : "Needs YouCam key"
+                    value: YouCamCredentialStore.isConfigured ? "Ready" : "Not provisioned"
                 )
             }
         }
@@ -608,59 +576,7 @@ private struct DeveloperSettingsView: View {
     }
 
     private var searchRuntimeStatus: String {
-        let count = model.eligibleImageSearchProviders.count
-        return count > 0 ? "\(count) route\(count == 1 ? "" : "s") ready" : "No route ready"
-    }
-
-    private func providerReadinessRow(kind: SearchCredentialKind, detail: String) -> some View {
-        readinessRow(
-            title: kind.title,
-            detail: detail,
-            status: model.credentials.hasCredential(kind) ? "Ready" : "Not configured",
-            isReady: model.credentials.hasCredential(kind)
-        )
-    }
-
-    private func imageProviderReadinessRow(_ provider: ImageSearchProvider) -> some View {
-        let hasKey = model.credentials.hasCredential(provider.credential)
-        let isEligible = model.eligibleImageSearchProviders.contains(provider)
-        let status: String
-        if !hasKey {
-            status = "Not configured"
-        } else if provider == .brightData,
-                  model.settings.brightDataZone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        {
-            status = "Needs SERP zone"
-        } else if !provider.acceptsPrivateImageData && !isEligible {
-            status = "Standby · needs link"
-        } else {
-            status = "Ready"
-        }
-        return readinessRow(
-            title: provider.title,
-            detail: provider.acceptsPrivateImageData ? "Private crop bytes" : "Public image link",
-            status: status,
-            isReady: isEligible
-        )
-    }
-
-    private func keywordProviderReadinessRow(_ provider: KeywordSearchProvider) -> some View {
-        let hasKey = model.credentials.hasCredential(provider.credential)
-        let isEligible = model.eligibleKeywordSearchProviders.contains(provider)
-        let status: String
-        if !hasKey {
-            status = "Not configured"
-        } else if provider.requiresZone && !isEligible {
-            status = "Needs SERP zone"
-        } else {
-            status = "Ready"
-        }
-        return readinessRow(
-            title: provider.title,
-            detail: provider.requiresZone ? "Text query · SERP zone" : "Text shopping query",
-            status: status,
-            isReady: isEligible
-        )
+        model.eligibleImageSearchProviders.isEmpty ? "Unavailable" : "Ready"
     }
 
     private func readinessRow(
@@ -693,11 +609,52 @@ private struct DeveloperSettingsView: View {
             Text(value)
                 .font(.caption.weight(.medium))
                 .foregroundStyle(
-                    value == "Ready" || value == "On device" || value.contains("route")
+                    value == "Ready" || value == "On device"
                         ? StylezamDesign.cobalt
                         : .secondary
                 )
         }
+    }
+}
+
+private struct PerformanceDiagnosticsView: View {
+    @State private var snapshot: StylezamPerformanceDiagnostics.Snapshot?
+
+    var body: some View {
+        List {
+            Section("Current device") {
+                LabeledContent("Thermal state", value: snapshot?.thermalState ?? "Reading")
+                LabeledContent(
+                    "Low Power Mode",
+                    value: snapshot?.lowPowerMode == true ? "On" : "Off"
+                )
+            }
+
+            Section {
+                LabeledContent("MetricKit payloads") {
+                    Text(snapshot?.payloadCount ?? 0, format: .number)
+                        .monospacedDigit()
+                }
+                if let date = snapshot?.newestPayloadDate {
+                    LabeledContent("Newest payload") {
+                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                    }
+                }
+            } header: {
+                Text("Device reports")
+            } footer: {
+                Text("iOS delivers MetricKit reports on its own schedule. They contain performance and diagnostic measurements, never garment or person images. Instruments can read Stylezam's StillDetection and LiveDetection signposts for immediate latency profiling.")
+            }
+
+            Section {
+                Button("Refresh") {
+                    Task { snapshot = await StylezamPerformanceDiagnostics.shared.snapshot() }
+                }
+            }
+        }
+        .navigationTitle("Device Performance")
+        .navigationBarTitleDisplayMode(.inline)
+        .task { snapshot = await StylezamPerformanceDiagnostics.shared.snapshot() }
     }
 }
 
@@ -783,7 +740,7 @@ private struct YouCamEntitlementDebugView: View {
         isChecking = true
         defer { isChecking = false }
         do {
-            report = try await service.entitlementReport()
+            report = try await service.entitlementReport(forceRefresh: true)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -862,24 +819,18 @@ private struct SearchDiagnosticsView: View {
     var body: some View {
         List {
             Section {
-                diagnosticCount("Fireworks", provider: "fireworks")
-                diagnosticCount("Serper", provider: "serper")
-                diagnosticCount("SearchAPI.io", provider: "searchapi")
-                diagnosticCount("SerpApi", provider: "serpapi")
-                diagnosticCount("Bright Data", provider: "brightdata")
+                diagnosticCount("Product search", kind: .productSearch)
+                diagnosticCount("Stylezam AI", kind: .assistant)
+                diagnosticCount("Fit chart lookup", kind: .sizeChart)
+                diagnosticCount("Try-on preparation", kind: .tryOnInference)
                 LabeledContent("Estimated Fireworks spend") {
                     Text(model.searchUsage.estimatedFireworksSpend, format: .currency(code: "USD"))
                         .monospacedDigit()
                 }
             } header: {
-                Text("AI & keyword search")
+                Text("Service activity")
             } footer: {
-                Text("SearchAPI.io, SerpApi, and Bright Data counters include both keyword-shopping and visual Lens calls. Each record below shows the exact route used.")
-            }
-
-            Section("Private image routes") {
-                diagnosticCount("Lykdat", provider: "lykdat")
-                diagnosticCount("Google Vision", provider: "googlevision")
+                Text("Counts are grouped by user action. Provider names, routing order, and credentials are intentionally not shown here.")
             }
 
             Section("Latest dispatched calls") {
@@ -889,7 +840,7 @@ private struct SearchDiagnosticsView: View {
                     ForEach(model.searchUsage.snapshot.records.reversed().prefix(40)) { record in
                         VStack(alignment: .leading, spacing: 5) {
                             HStack(alignment: .firstTextBaseline) {
-                                Text(record.providers.joined(separator: " + "))
+                                Text(activityTitle(record.kind))
                                     .font(.subheadline.weight(.semibold))
                                 Spacer()
                                 Text(record.status.rawValue.capitalized)
@@ -916,12 +867,6 @@ private struct SearchDiagnosticsView: View {
                                     .font(.caption2.monospacedDigit())
                                     .foregroundStyle(.secondary)
                             }
-                            if let diagnostic = record.diagnostic {
-                                Text(diagnostic)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(3)
-                            }
                         }
                         .padding(.vertical, 3)
                     }
@@ -941,10 +886,20 @@ private struct SearchDiagnosticsView: View {
         }
     }
 
-    private func diagnosticCount(_ title: String, provider: String) -> some View {
+    private func diagnosticCount(_ title: String, kind: SearchUsageKind) -> some View {
         LabeledContent(title) {
-            Text(model.searchUsage.requestCount(provider: provider), format: .number)
+            Text(model.searchUsage.requestCount(kind: kind), format: .number)
                 .monospacedDigit()
+        }
+    }
+
+    private func activityTitle(_ kind: SearchUsageKind) -> String {
+        switch kind {
+        case .productSearch: "Product search"
+        case .assistant: "Stylezam AI"
+        case .providerTest: "Connection check"
+        case .tryOnInference: "Try-on preparation"
+        case .sizeChart: "Fit chart lookup"
         }
     }
 }

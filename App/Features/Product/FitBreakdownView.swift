@@ -183,7 +183,7 @@ struct ProductFitSection: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Stylezam recommends size \(size)")
                     .font(.subheadline.weight(.semibold))
-                Text("\(assessment.confidencePercent)% fit confidence from your measurements")
+                Text("\(assessment.confidencePercent)% measurement match")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -246,7 +246,7 @@ struct ProductFitSection: View {
                                     .font(.subheadline.weight(.semibold))
                             }
                             if let assessment, assessment.verdict != nil {
-                                Text("\(assessment.confidencePercent)%")
+                                Text("\(assessment.confidencePercent)% match")
                                     .font(.caption2.weight(.medium))
                                     .opacity(0.8)
                             }
@@ -401,7 +401,7 @@ struct ProductFitSection: View {
 
     private func chartFooter(_ chart: GarmentSizeChart) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(chart.basis.explanation)
+            Text(chart.measurementExplanation)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
