@@ -691,7 +691,7 @@ struct LibraryView: View {
 
     private var filteredWardrobeItems: [SavedWardrobeItem] {
         let matches = model.library.wardrobeItems.filter { item in
-            categoryFilter.contains(item.category)
+            categoryFilter.contains(item.category, title: item.title)
                 && matchesQuery(wardrobeSearchTerms(item))
         }
         return ordered(matches, date: \SavedWardrobeItem.savedAt) { $0.title }
@@ -699,7 +699,10 @@ struct LibraryView: View {
 
     private var filteredProducts: [SavedProduct] {
         let matches = model.library.products.filter { saved in
-            categoryFilter.contains(productCategory(saved.product))
+            categoryFilter.contains(
+                productCategory(saved.product),
+                title: "\(saved.product.category ?? "") \(saved.product.title)"
+            )
                 && matchesQuery(productSearchTerms(saved.product))
         }
         return ordered(matches, date: \SavedProduct.savedAt) { $0.product.title }
@@ -734,31 +737,43 @@ struct LibraryView: View {
                 TryOnCategory.infer(
                     category: item.category,
                     title: "\(item.title) \(item.localLabel)"
-                )
+                ),
+                title: "\(item.title) \(item.localLabel)"
             )
         }
     }
 
     private func searchMatchesCategory(_ search: SavedProductSearch) -> Bool {
         guard categoryFilter != .all else { return true }
-        if search.results.contains(where: { categoryFilter.contains(productCategory($0)) }) {
+        if search.results.contains(where: {
+            categoryFilter.contains(
+                productCategory($0),
+                title: "\($0.category ?? "") \($0.title)"
+            )
+        }) {
             return true
         }
         return categoryFilter.contains(
             TryOnCategory.infer(
                 category: search.results.first?.category,
                 title: search.generatedQuery ?? search.generatedSuggestions.joined(separator: " ")
-            )
+            ),
+            title: search.generatedQuery ?? search.generatedSuggestions.joined(separator: " ")
         )
     }
 
     private func tryOnMatchesCategory(_ tryOn: SavedTryOn) -> Bool {
         guard categoryFilter != .all else { return true }
-        if tryOn.items.contains(where: { categoryFilter.contains($0.category) }) {
+        if tryOn.items.contains(where: {
+            categoryFilter.contains($0.category, title: "\($0.title) \($0.garmentRegion.title)")
+        }) {
             return true
         }
         guard let product = tryOn.product else { return false }
-        return categoryFilter.contains(productCategory(product))
+        return categoryFilter.contains(
+            productCategory(product),
+            title: "\(product.category ?? "") \(product.title)"
+        )
     }
 
     private func scanSearchTerms(_ scan: SavedScan) -> [String] {
@@ -856,6 +871,10 @@ struct LibraryView: View {
 private enum LibraryCategoryFilter: String, CaseIterable, Identifiable {
     case all
     case clothes
+    case tops
+    case outerwear
+    case bottoms
+    case onePieces
     case bags
     case shoes
     case accessories
@@ -863,9 +882,13 @@ private enum LibraryCategoryFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
-        switch self {
+        return switch self {
         case .all: "All"
-        case .clothes: "Clothes"
+        case .clothes: "All clothes"
+        case .tops: "Tops"
+        case .outerwear: "Outerwear"
+        case .bottoms: "Bottoms"
+        case .onePieces: "Dresses"
         case .bags: "Bags"
         case .shoes: "Shoes"
         case .accessories: "Accessories"
@@ -876,18 +899,46 @@ private enum LibraryCategoryFilter: String, CaseIterable, Identifiable {
         switch self {
         case .all: "square.grid.2x2"
         case .clothes: "tshirt"
+        case .tops: "tshirt.fill"
+        case .outerwear: "jacket"
+        case .bottoms: "figure.walk"
+        case .onePieces: "figure.dress.line.vertical.figure"
         case .bags: "handbag"
         case .shoes: "shoe"
         case .accessories: "sparkles"
         }
     }
 
-    func contains(_ category: TryOnCategory) -> Bool {
-        switch self {
+    func contains(_ category: TryOnCategory, title: String = "") -> Bool {
+        let words = Set(
+            title.lowercased()
+                .components(separatedBy: CharacterSet.alphanumerics.inverted)
+                .filter { !$0.isEmpty }
+        )
+        func hasAny(_ values: Set<String>) -> Bool { !words.isDisjoint(with: values) }
+
+        return switch self {
         case .all:
             true
         case .clothes:
             category == .clothes
+        case .tops:
+            category == .clothes && hasAny([
+                "shirt", "blouse", "top", "tee", "tshirt", "sweater", "sweatshirt",
+                "hoodie", "cardigan", "vest", "jersey",
+            ])
+        case .outerwear:
+            category == .clothes && hasAny([
+                "jacket", "blazer", "coat", "parka", "cape", "overcoat", "windbreaker",
+            ])
+        case .bottoms:
+            category == .clothes && hasAny([
+                "pants", "trousers", "jeans", "shorts", "skirt", "leggings", "tights",
+            ])
+        case .onePieces:
+            category == .clothes && hasAny([
+                "dress", "gown", "jumpsuit", "romper", "bodysuit", "outfit",
+            ])
         case .bags:
             category == .bag
         case .shoes:

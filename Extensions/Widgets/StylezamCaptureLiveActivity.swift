@@ -43,11 +43,15 @@ struct StylezamCaptureLiveActivity: Widget {
                         .foregroundStyle(tint(for: context.state.visualState))
                         .contentTransition(.symbolEffect(.replace))
                         .symbolEffect(.bounce, value: context.state.sequence ?? 0)
+                        .frame(width: 28, height: 28)
                 }
                 DynamicIslandExpandedRegion(.center) {
                     Text(context.state.phase)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 168)
                 }
                 DynamicIslandExpandedRegion(.trailing) {
                     if context.state.itemCount > 0 {
@@ -55,6 +59,7 @@ struct StylezamCaptureLiveActivity: Widget {
                             .font(.title2.bold().monospacedDigit())
                             .foregroundStyle(cobalt)
                             .contentTransition(.numericText())
+                            .frame(minWidth: 28, alignment: .trailing)
                     }
                 }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -62,15 +67,17 @@ struct StylezamCaptureLiveActivity: Widget {
                         Circle()
                             .fill(tint(for: context.state.visualState))
                             .frame(width: 6, height: 6)
-                        Text(context.attributes.source)
+                        Text(shortSource(context.attributes.source))
                             .lineLimit(1)
-                        Spacer(minLength: 8)
+                        Text("·")
                         Text(stageCaption(for: context.state.visualState))
                             .contentTransition(.interpolate)
                             .lineLimit(1)
                     }
                     .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
+                    .minimumScaleFactor(0.78)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 }
             } compactLeading: {
                 Image(systemName: symbol(for: context.state.visualState))
@@ -95,7 +102,7 @@ struct StylezamCaptureLiveActivity: Widget {
             }
             .widgetURL(URL(string: "stylezam://library"))
             .keylineTint(cobalt)
-            .contentMargins(.horizontal, 10, for: .expanded)
+            .contentMargins(.horizontal, 16, for: .expanded)
         }
     }
 
@@ -127,5 +134,9 @@ struct StylezamCaptureLiveActivity: Widget {
         case .saved: "In Library"
         case .failed: "Needs attention"
         }
+    }
+
+    private func shortSource(_ source: String) -> String {
+        source.localizedCaseInsensitiveContains("display") ? "Screen" : source
     }
 }

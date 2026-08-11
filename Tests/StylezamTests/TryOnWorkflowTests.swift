@@ -1,8 +1,106 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import Stylezam
 
 final class TryOnWorkflowTests: XCTestCase {
+    func testYouCamPayloadRoutesExactCategoryAndOuterwear() {
+        XCTAssertEqual(TryOnCategory.hat.youCamEndpoint, "hat")
+        XCTAssertEqual(TryOnCategory.bag.youCamEndpoint, "bag")
+        XCTAssertEqual(TryOnCategory.clothes.youCamEndpoint, "cloth-v4")
+
+        let hat = YouCamTryOnService.tryOnTaskBody(
+            category: .hat,
+            garmentRegion: .accessory,
+            sourceID: "person",
+            referenceID: "hat-reference",
+            gender: .male
+        )
+        XCTAssertEqual(hat["src_file_id"] as? String, "person")
+        XCTAssertEqual(hat["ref_file_id"] as? String, "hat-reference")
+        XCTAssertEqual(hat["gender"] as? String, "male")
+        XCTAssertNil(hat["garment_category"])
+        XCTAssertNil(hat["change_shoes"])
+
+        let jacket = YouCamTryOnService.tryOnTaskBody(
+            category: .clothes,
+            garmentRegion: .outerwear,
+            sourceID: "person",
+            referenceID: "jacket-reference",
+            gender: .female
+        )
+        XCTAssertEqual(jacket["garment_category"] as? String, "outer")
+        XCTAssertEqual(jacket["change_shoes"] as? Bool, false)
+        XCTAssertNil(jacket["gender"])
+
+        XCTAssertEqual(
+            TryOnGarmentRegion.infer(category: .clothes, title: "White T-shirt or top"),
+            .upperBody
+        )
+    }
+
+    func testFinishingOptionsMapToExactEntitledEndpoints() {
+        let options = YouCamFinishingOptions(
+            removesBackground: true,
+            changesBackground: false,
+            backgroundPrompt: "",
+            improvesLighting: true,
+            enhancesPhoto: true
+        )
+        XCTAssertEqual(options.enabledTaskCount, 3)
+        XCTAssertEqual(
+            Set(options.enabledTasks.map { $0.endpoint }),
+            Set(["enhance", "lighting", "sod"])
+        )
+    }
+
+    func testTryOnSceneGuardAcceptsLocalizedHatAndRejectsStyledScene() throws {
+        let source = try XCTUnwrap(testImageData(background: .lightGray))
+        let localizedHat = try XCTUnwrap(
+            testImageData(
+                background: .lightGray,
+                editColor: .black,
+                editRect: CGRect(x: 90, y: 14, width: 180, height: 92)
+            )
+        )
+        XCTAssertNoThrow(
+            try YouCamTryOnService.validateSingleItemScenePreservation(
+                source: source,
+                result: localizedHat,
+                category: .hat,
+                garmentRegion: .accessory
+            )
+        )
+
+        let styledScene = try XCTUnwrap(testImageData(background: .systemBlue))
+        XCTAssertThrowsError(
+            try YouCamTryOnService.validateSingleItemScenePreservation(
+                source: source,
+                result: styledScene,
+                category: .hat,
+                garmentRegion: .accessory
+            )
+        )
+    }
+
+    func testBackgroundRemovalRequiresActualTransparentPixels() throws {
+        let opaque = try XCTUnwrap(testImageData(background: .white))
+        XCTAssertFalse(YouCamTryOnService.hasUsefulTransparency(opaque))
+
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        let transparent = UIGraphicsImageRenderer(
+            size: CGSize(width: 360, height: 480),
+            format: format
+        ).image { context in
+            context.cgContext.clear(CGRect(x: 0, y: 0, width: 360, height: 480))
+            UIColor.black.setFill()
+            context.fill(CGRect(x: 110, y: 55, width: 140, height: 390))
+        }.pngData()
+        XCTAssertTrue(YouCamTryOnService.hasUsefulTransparency(try XCTUnwrap(transparent)))
+    }
+
     func testSpecificAccessoryInferenceAndPhotoContextCompatibility() {
         XCTAssertEqual(
             TryOnCategory.infer(from: "Women's apparel pearl chain necklace"),
@@ -37,6 +135,27 @@ final class TryOnWorkflowTests: XCTestCase {
             TryOnPhotoContext.faceAndNeck.categories,
             TryOnPhotoContext.faceAndNeck.renderCategories
         )
+    }
+
+    private func testImageData(
+        background: UIColor,
+        editColor: UIColor? = nil,
+        editRect: CGRect? = nil
+    ) -> Data? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(
+            size: CGSize(width: 360, height: 480),
+            format: format
+        ).image { context in
+            background.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 360, height: 480))
+            if let editColor, let editRect {
+                editColor.setFill()
+                context.fill(editRect)
+            }
+        }.pngData()
     }
 
     @MainActor

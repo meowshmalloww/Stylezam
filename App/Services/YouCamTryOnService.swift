@@ -107,6 +107,17 @@ struct YouCamFinishingOptions: Sendable, Equatable {
             .count
     }
 
+    /// Exact feature-catalog endpoints used by the optional finishing pipeline. Keeping this
+    /// beside the switches prevents the UI task count and provider routing from drifting apart.
+    var enabledTasks: [(endpoint: String, title: String)] {
+        var tasks: [(String, String)] = []
+        if enhancesPhoto { tasks.append(("enhance", "detail enhancement")) }
+        if improvesLighting { tasks.append(("lighting", "lighting")) }
+        if changesBackground { tasks.append(("bg-replace", "background change")) }
+        if removesBackground { tasks.append(("sod", "background removal")) }
+        return tasks
+    }
+
     static let none = YouCamFinishingOptions()
 }
 
@@ -124,6 +135,7 @@ struct YouCamFeatureEntitlement: Identifiable, Sendable {
 struct YouCamEntitlementReport: Sendable {
     let checkedAt: Date
     let features: [YouCamFeatureEntitlement]
+    let entitledEndpoints: Set<String>
 
     var missingCategories: [TryOnCategory] {
         features.filter { !$0.isEntitled }.map(\.category)
@@ -313,7 +325,11 @@ actor YouCamTryOnService {
                 isEntitled: feature != nil
             )
         }
-        let report = YouCamEntitlementReport(checkedAt: Date(), features: features)
+        let report = YouCamEntitlementReport(
+            checkedAt: Date(),
+            features: features,
+            entitledEndpoints: Set(entitled.keys)
+        )
         entitlementCache = (report, Date().addingTimeInterval(15 * 60))
         return report
     }
@@ -326,6 +342,11 @@ actor YouCamTryOnService {
         progress: @Sendable (Int, Int, String) async -> Void
     ) async throws -> (jobID: String, imageData: Data) {
         guard !items.isEmpty else { throw YouCamTryOnError.server("Select at least one item.") }
+        guard !(finishing.removesBackground && finishing.changesBackground) else {
+            throw YouCamTryOnError.server(
+                "Choose either background removal or background change, not both."
+            )
+        }
         let entitlement = try await entitlementReport()
         let missing = Set(items.map(\.category)).filter { category in
             !entitlement.features.contains { $0.category == category && $0.isEntitled }
@@ -334,6 +355,15 @@ actor YouCamTryOnService {
             let names = missing.map(\.title).sorted().joined(separator: ", ")
             throw YouCamTryOnError.server(
                 "This build's YouCam account is not entitled for the selected task: \(names)."
+            )
+        }
+        let missingFinishes = finishing.enabledTasks.filter {
+            !entitlement.entitledEndpoints.contains($0.endpoint)
+        }
+        guard missingFinishes.isEmpty else {
+            let names = missingFinishes.map(\.title).joined(separator: ", ")
+            throw YouCamTryOnError.server(
+                "This YouCam account is not entitled for \(names). Turn that finish off or enable its Perfect Corp task before trying again. Nothing was uploaded."
             )
         }
         let requiresGender = items.contains {
@@ -357,11 +387,6 @@ actor YouCamTryOnService {
         }
         for (item, referenceImage) in zip(items, referenceImages) {
             try Self.validateReferenceImage(referenceImage, for: item)
-        }
-        guard !(finishing.removesBackground && finishing.changesBackground) else {
-            throw YouCamTryOnError.server(
-                "Choose either background removal or background change, not both."
-            )
         }
         var current = personImage
         var lastTaskID = UUID().uuidString
@@ -395,7 +420,8 @@ actor YouCamTryOnService {
                 try Self.validateSingleItemScenePreservation(
                     source: current,
                     result: rendered,
-                    category: item.category
+                    category: item.category,
+                    garmentRegion: item.region
                 )
                 current = rendered
             } catch {
@@ -503,8 +529,16 @@ actor YouCamTryOnService {
         else {
             throw YouCamTryOnError.server("The generated image could not be downloaded.")
         }
-        if preserveTransparency, data.starts(with: [0x89, 0x50, 0x4E, 0x47]) {
-            return data
+        if preserveTransparency {
+            guard let image = UIImage(data: data),
+                  let png = image.pngData(),
+                  Self.hasUsefulTransparency(png)
+            else {
+                throw YouCamTryOnError.server(
+                    "YouCam finished background removal but returned an opaque image. Stylezam rejected it instead of showing the old background. Try the removal again or keep the original background."
+                )
+            }
+            return png
         }
         guard let normalized = await ImageEncoding.normalizedJPEGAsync(from: data) else {
             throw YouCamTryOnError.server("YouCam returned an unsupported result image.")
@@ -731,25 +765,31 @@ actor YouCamTryOnService {
         default:
             return
         }
-        guard nonFashion >= 0.22, nonFashion > max(0.08, relevant * 1.35) else { return }
+        guard nonFashion >= 0.16, nonFashion > max(0.07, relevant * 1.18) else { return }
         throw YouCamTryOnError.server(
             "\(item.title) looks more like bedding or furniture than a \(item.category.title.lowercased()). It was not uploaded or charged. Retake the piece against a plain background or choose a different crop."
         )
     }
 
-    /// Accessory endpoints should add one localized item, not restyle the person or recreate the
-    /// whole setting. A coarse perceptual signature is deliberately insensitive to small local
-    /// changes but rejects the kind of full-scene replacement that can otherwise look like a
-    /// valid single-item result. Clothes are excluded because replacing a full outfit is expected.
-    private nonisolated static func validateSingleItemScenePreservation(
+    /// A completed task is not automatically a valid try-on. Perfect Corp's generative bag,
+    /// scarf, shoes, and hat tasks may create a styled outfit and background, while Stylezam's
+    /// contract is to apply only the selected piece. Compare protected pixels outside the
+    /// category's legitimate edit area and reject a full-scene rewrite before it reaches Library.
+    /// Clothes V4 is checked too so an upper-body edit cannot silently replace the background,
+    /// face, trousers, or shoes.
+    nonisolated static func validateSingleItemScenePreservation(
         source: Data,
         result: Data,
-        category: TryOnCategory
+        category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion
     ) throws {
-        guard category != .clothes,
-              let sourceImage = UIImage(data: source)?.cgImage,
-              let resultImage = UIImage(data: result)?.cgImage
-        else { return }
+        guard let sourceImage = normalizedSceneImage(from: source),
+              let resultImage = normalizedSceneImage(from: result)
+        else {
+            throw YouCamTryOnError.server(
+                "Stylezam could not verify that YouCam preserved your original photo, so the result was rejected instead of being saved."
+            )
+        }
 
         let sourceRatio = Double(sourceImage.width) / Double(max(1, sourceImage.height))
         let resultRatio = Double(resultImage.width) / Double(max(1, resultImage.height))
@@ -758,15 +798,212 @@ actor YouCamTryOnService {
                 "YouCam changed the photo framing instead of adding only the selected \(category.title.lowercased()). Stylezam rejected that result. Use a clear front facing photo and try again."
             )
         }
+        let faceRects = detectedFaceRects(in: sourceImage)
+        let allowedChanges = allowedChangeRects(
+            category: category,
+            garmentRegion: garmentRegion
+        )
         guard let sourceSignature = sceneSignature(for: sourceImage),
-              let resultSignature = sceneSignature(for: resultImage)
-        else { return }
-        let changedBits = (sourceSignature ^ resultSignature).nonzeroBitCount
-        guard changedBits <= 26 else {
+              let resultSignature = sceneSignature(for: resultImage),
+              let protectedDifference = alignedSceneDifference(
+                  source: sourceImage,
+                  result: resultImage,
+                  excludedAreas: allowedChanges,
+                  alwaysIncludedAreas: faceRects,
+                  minimumSamples: 180
+              )
+        else {
             throw YouCamTryOnError.server(
-                "YouCam changed too much of the person or scene for a single \(category.title.lowercased()) try on. Stylezam rejected that result instead of saving the wrong outfit. Try a clearer full person photo or another reference image."
+                "Stylezam could not complete its person and scene integrity check, so the try-on result was not saved."
             )
         }
+        let faceDifference = faceRects.isEmpty
+            ? nil
+            : alignedSceneDifference(
+                source: sourceImage,
+                result: resultImage,
+                includedAreas: faceRects,
+                minimumSamples: 18
+            )
+        let changedBits = (sourceSignature ^ resultSignature).nonzeroBitCount
+        let styledCategory = [.bag, .scarf, .shoes, .hat].contains(category)
+        let maximumDifference = styledCategory ? 0.17 : (category == .clothes ? 0.22 : 0.18)
+        let maximumChangedBits = category == .clothes ? 31 : 26
+        let faceWasRewritten = faceDifference.map { $0 > 0.16 } ?? false
+        guard changedBits <= maximumChangedBits,
+              protectedDifference <= maximumDifference,
+              !faceWasRewritten
+        else {
+            let detail = styledCategory
+                ? "Perfect Corp returned a styled scene instead of preserving your original photo."
+                : "YouCam changed the person, background, or an unselected part of the outfit."
+            throw YouCamTryOnError.server(
+                "\(detail) Stylezam rejected that result instead of saving the wrong \(category.title.lowercased()). Try a clear front-facing photo and a tightly cropped product image."
+            )
+        }
+    }
+
+    private struct SceneRaster {
+        let width: Int
+        let height: Int
+        let pixels: [UInt8]
+    }
+
+    /// Applies EXIF orientation while downsampling. Camera JPEGs often store their orientation
+    /// as metadata; comparing their raw CGImage against YouCam's upright output causes false
+    /// scene-change failures and wastes memory on multi-megapixel photos.
+    private nonisolated static func normalizedSceneImage(from data: Data) -> CGImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 1_024,
+            kCGImageSourceShouldCacheImmediately: false,
+        ]
+        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    }
+
+    /// Vision observations use a lower-left origin; the scene raster uses top-left coordinates.
+    /// The face itself is never a legal edit area, even for hat, scarf, or full-body tasks.
+    private nonisolated static func detectedFaceRects(in image: CGImage) -> [CGRect] {
+        let request = VNDetectFaceRectanglesRequest()
+        let handler = VNImageRequestHandler(cgImage: image, orientation: .up, options: [:])
+        guard (try? handler.perform([request])) != nil else { return [] }
+        return (request.results ?? []).compactMap { observation in
+            let box = observation.boundingBox
+            let converted = CGRect(
+                x: box.minX,
+                y: 1 - box.maxY,
+                width: box.width,
+                height: box.height
+            ).intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+            return converted.isNull || converted.isEmpty ? nil : converted
+        }
+    }
+
+    private nonisolated static func rgbaRaster(
+        for image: CGImage,
+        width: Int,
+        height: Int
+    ) -> SceneRaster? {
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let bitmapInfo = CGBitmapInfo.byteOrder32Big.rawValue
+            | CGImageAlphaInfo.premultipliedLast.rawValue
+        guard let context = CGContext(
+            data: &pixels,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: bitmapInfo
+        ) else { return nil }
+        context.interpolationQuality = .medium
+        context.translateBy(x: 0, y: CGFloat(height))
+        context.scaleBy(x: 1, y: -1)
+        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+        return SceneRaster(width: width, height: height, pixels: pixels)
+    }
+
+    private nonisolated static func alignedSceneDifference(
+        source: CGImage,
+        result: CGImage,
+        includedAreas: [CGRect]? = nil,
+        excludedAreas: [CGRect] = [],
+        alwaysIncludedAreas: [CGRect] = [],
+        minimumSamples: Int
+    ) -> Double? {
+        guard let sourceRaster = rgbaRaster(for: source, width: 48, height: 64),
+              let resultRaster = rgbaRaster(for: result, width: 48, height: 64)
+        else { return nil }
+
+        func difference(offsetX: Int, offsetY: Int) -> Double? {
+            var total = 0.0
+            var samples = 0
+            for y in 0..<sourceRaster.height {
+                for x in 0..<sourceRaster.width {
+                    let normalized = CGPoint(
+                        x: (Double(x) + 0.5) / Double(sourceRaster.width),
+                        y: (Double(y) + 0.5) / Double(sourceRaster.height)
+                    )
+                    let explicitlyIncluded = alwaysIncludedAreas.contains {
+                        $0.contains(normalized)
+                    }
+                    let inRequestedArea = includedAreas?.contains {
+                        $0.contains(normalized)
+                    } ?? true
+                    let excluded = excludedAreas.contains { $0.contains(normalized) }
+                    guard inRequestedArea, explicitlyIncluded || !excluded else { continue }
+                    let resultX = x + offsetX
+                    let resultY = y + offsetY
+                    guard resultX >= 0, resultX < resultRaster.width,
+                          resultY >= 0, resultY < resultRaster.height
+                    else { continue }
+                    let sourceIndex = (y * sourceRaster.width + x) * 4
+                    let resultIndex = (resultY * resultRaster.width + resultX) * 4
+                    for channel in 0..<3 {
+                        total += abs(
+                            Double(sourceRaster.pixels[sourceIndex + channel])
+                                - Double(resultRaster.pixels[resultIndex + channel])
+                        ) / 255
+                        samples += 1
+                    }
+                }
+            }
+            guard samples >= minimumSamples else { return nil }
+            return total / Double(samples)
+        }
+
+        return (-1...1).flatMap { y in
+            (-1...1).compactMap { x in difference(offsetX: x, offsetY: y) }
+        }.min()
+    }
+
+    private nonisolated static func allowedChangeRects(
+        category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion
+    ) -> [CGRect] {
+        switch category {
+        case .clothes:
+            switch garmentRegion {
+            case .upperBody:
+                [CGRect(x: 0.16, y: 0.23, width: 0.68, height: 0.52)]
+            case .outerwear:
+                [CGRect(x: 0.10, y: 0.20, width: 0.80, height: 0.64)]
+            case .lowerBody:
+                [CGRect(x: 0.10, y: 0.44, width: 0.80, height: 0.55)]
+            case .fullBody:
+                [CGRect(x: 0.08, y: 0.16, width: 0.84, height: 0.83)]
+            case .footwear:
+                [CGRect(x: 0.08, y: 0.70, width: 0.84, height: 0.29)]
+            case .accessory, .unknown:
+                [CGRect(x: 0.10, y: 0.20, width: 0.80, height: 0.76)]
+            }
+        case .hat:
+            [CGRect(x: 0.18, y: 0, width: 0.64, height: 0.40)]
+        case .scarf, .necklace:
+            [CGRect(x: 0.18, y: 0.12, width: 0.64, height: 0.48)]
+        case .bag:
+            [CGRect(x: 0.06, y: 0.28, width: 0.88, height: 0.70)]
+        case .shoes:
+            [CGRect(x: 0.06, y: 0.68, width: 0.88, height: 0.31)]
+        case .ring, .bracelet, .watch:
+            [CGRect(x: 0.08, y: 0.08, width: 0.84, height: 0.84)]
+        case .earring:
+            [CGRect(x: 0.12, y: 0.04, width: 0.76, height: 0.62)]
+        }
+    }
+
+    nonisolated static func hasUsefulTransparency(_ data: Data) -> Bool {
+        guard let image = UIImage(data: data)?.cgImage,
+              let raster = rgbaRaster(for: image, width: 32, height: 32)
+        else { return false }
+        let alphas = stride(from: 3, to: raster.pixels.count, by: 4).map {
+            raster.pixels[$0]
+        }
+        let clear = alphas.filter { $0 <= 32 }.count
+        let translucent = alphas.filter { $0 < 248 }.count
+        return clear >= 8 && translucent >= 20
     }
 
     private nonisolated static func sceneSignature(for image: CGImage) -> UInt64? {
@@ -863,31 +1100,13 @@ actor YouCamTryOnService {
 
         switch creationRequest {
         case let .tryOn(_, category, garmentRegion, sourceID, referenceID, gender):
-            var tryOnBody: [String: Any] = ["src_file_id": sourceID]
-            if category.isJewelry {
-                tryOnBody["ref_file_ids"] = [referenceID]
-                tryOnBody["source_info"] = ["name": sourceID]
-                var objectInfo: [String: Any] = ["name": referenceID]
-                if let parameters = category.youCamObjectParameters {
-                    objectInfo["parameter"] = parameters
-                }
-                tryOnBody["object_infos"] = [objectInfo]
-            } else {
-                tryOnBody["ref_file_id"] = referenceID
-                if category == .clothes {
-                    tryOnBody["garment_category"] = garmentRegion.youCamGarmentCategory
-                    // Cloth V4 otherwise defaults to replacing visible shoes for
-                    // full/lower-body references. A clothing rail item must not
-                    // silently add another product category.
-                    tryOnBody["change_shoes"] = false
-                } else {
-                    tryOnBody["gender"] = gender.rawValue
-                    if category == .shoes {
-                        tryOnBody["style"] = "random"
-                    }
-                }
-            }
-            body = tryOnBody
+            body = Self.tryOnTaskBody(
+                category: category,
+                garmentRegion: garmentRegion,
+                sourceID: sourceID,
+                referenceID: referenceID,
+                gender: gender
+            )
         case let .video(_, sourceID, resolution):
             body = [
                 "src_file_id": sourceID,
@@ -908,6 +1127,45 @@ actor YouCamTryOnService {
             throw serverError(from: json)
         }
         return taskID
+    }
+
+    /// A single source of truth for the documented payload of every entitled YouCam task.
+    /// Keeping this pure also lets integration tests prove that a hat can never be sent to
+    /// Clothes V4, and that corrected outerwear uses the V4 `outer` value rather than `upper_body`.
+    nonisolated static func tryOnTaskBody(
+        category: TryOnCategory,
+        garmentRegion: TryOnGarmentRegion,
+        sourceID: String,
+        referenceID: String,
+        gender: TryOnGender
+    ) -> [String: Any] {
+        var body: [String: Any] = ["src_file_id": sourceID]
+        if category.isJewelry {
+            body["ref_file_ids"] = [referenceID]
+            body["source_info"] = ["name": sourceID]
+            var objectInfo: [String: Any] = ["name": referenceID]
+            if let parameters = category.youCamObjectParameters {
+                objectInfo["parameter"] = parameters
+            }
+            body["object_infos"] = [objectInfo]
+            return body
+        }
+
+        body["ref_file_id"] = referenceID
+        if category == .clothes {
+            body["garment_category"] = garmentRegion.youCamGarmentCategory
+            // Clothes V4 defaults to changing shoes for full/lower-body references. A clothing
+            // rail item must never add another product category unless the user selected shoes.
+            body["change_shoes"] = false
+        } else {
+            body["gender"] = gender.rawValue
+            if category == .shoes {
+                // `random` is the dedicated Shoes API's documented default and only accepted
+                // neutral value. Scene preservation is enforced on the returned pixels below.
+                body["style"] = "random"
+            }
+        }
+        return body
     }
 
     private func deleteFinishedTask(_ taskID: String) async throws {
@@ -1243,8 +1501,10 @@ actor YouCamTryOnService {
 private extension TryOnGarmentRegion {
     var youCamGarmentCategory: String {
         switch self {
-        case .upperBody, .outerwear:
+        case .upperBody:
             "upper_body"
+        case .outerwear:
+            "outer"
         case .lowerBody:
             "lower_body"
         case .fullBody:

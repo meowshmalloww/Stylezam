@@ -23,7 +23,9 @@ enum GarmentDetectionQualityPolicy {
         let normalized = label.lowercased()
         // A raw 78% bag result is still ambiguous; strong second-opinion evidence can lift a
         // genuinely supported result above this gate without exposing an uncalibrated score.
-        let threshold = highRiskLabels.contains(where: normalized.contains) ? 0.82 : 0.72
+        // A Fashionpedia sigmoid is not a calibrated probability. Keep broad silhouettes out
+        // of search and try-on until the detector and the on-device verifier agree very strongly.
+        let threshold = highRiskLabels.contains(where: normalized.contains) ? 0.88 : 0.72
         return confidence < threshold
     }
 

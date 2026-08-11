@@ -789,12 +789,21 @@ struct TryOnView: View {
 
             if !compatibleSelectedItems.isEmpty {
                 Label(
-                    "Create will run exactly \(totalProviderTaskCount) YouCam "
-                        + "\(totalProviderTaskCount == 1 ? "task" : "tasks") for this photo.",
+                    providerTaskSummary,
                     systemImage: "number.circle.fill"
                 )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
+            }
+
+            if !styledGeneratorSelectedItems.isEmpty {
+                Label(
+                    "\(styledGeneratorSelectedItems.map(\.category.title).joined(separator: ", ")) uses a Perfect Corp styled-preview task. Stylezam will keep the result only when your original person, clothing, and background remain unchanged outside the selected item.",
+                    systemImage: "checkmark.shield"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
 
             if !parkedSelectedItems.isEmpty {
@@ -975,7 +984,7 @@ struct TryOnView: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            Text("Every enabled finish is a separate provider task and may use additional YouCam units.")
+            Text("Order: selected pieces, detail enhancement, lighting, then one background action. Every enabled finish is a separate provider task and may use additional YouCam units.")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -1128,6 +1137,24 @@ struct TryOnView: View {
 
     private var totalProviderTaskCount: Int {
         compatibleSelectedItems.count + finishingOptions.enabledTaskCount
+    }
+
+    private var providerTaskSummary: String {
+        let itemCount = compatibleSelectedItems.count
+        let finishCount = finishingOptions.enabledTaskCount
+        var summary = "Create will run exactly \(totalProviderTaskCount) YouCam "
+            + "\(totalProviderTaskCount == 1 ? "task" : "tasks") for this photo: "
+            + "\(itemCount) selected \(itemCount == 1 ? "item" : "items")"
+        if finishCount > 0 {
+            summary += " + \(finishCount) finish \(finishCount == 1 ? "action" : "actions")"
+        }
+        return summary + "."
+    }
+
+    private var styledGeneratorSelectedItems: [TryOnTrayItem] {
+        compatibleSelectedItems.filter {
+            [.bag, .scarf, .shoes, .hat].contains($0.category)
+        }
     }
 
     private var selectionSignature: String {

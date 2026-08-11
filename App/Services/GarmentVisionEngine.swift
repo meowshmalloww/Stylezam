@@ -750,8 +750,16 @@ actor GarmentVisionEngine {
 
     private nonisolated static let clothingClassifiers: Set<String> = [
         "clothing", "apparel", "jean", "jeans", "denim", "pants", "trouser", "trousers", "shorts", "skirt",
-        "dress", "shirt", "blouse", "t-shirt", "sweater", "cardigan", "jacket",
-        "coat", "vest", "suit", "jersey", "sock", "stocking", "scarf", "necktie",
+        "dress", "shirt", "blouse", "t-shirt", "tee shirt", "top", "sweatshirt", "hoodie",
+        "sweater", "cardigan", "jacket", "coat", "vest", "suit", "jersey", "sock",
+        "stocking", "scarf", "necktie",
+    ]
+    private nonisolated static let topClassifiers: Set<String> = [
+        "shirt", "blouse", "t-shirt", "tee shirt", "tee", "top", "jersey", "sweatshirt",
+        "hoodie", "sweater", "cardigan", "vest",
+    ]
+    private nonisolated static let outerwearClassifiers: Set<String> = [
+        "jacket", "coat", "blazer", "parka", "overcoat", "windbreaker", "cape",
     ]
     private nonisolated static let bagClassifiers: Set<String> = [
         "bag", "handbag", "purse", "wallet", "backpack", "back pack", "rucksack",
@@ -803,6 +811,9 @@ actor GarmentVisionEngine {
         let bag = evidence.score(for: bagClassifiers)
         let shoe = evidence.score(for: shoeClassifiers)
         let clothing = evidence.score(for: clothingClassifiers)
+        let top = evidence.score(for: topClassifiers)
+        let outerwear = evidence.score(for: outerwearClassifiers)
+        let detectedLabel = detection.label.lowercased()
         let label: String
         var confidence: Double
         if bag >= 0.10, bag > max(0.06, clothing * 1.15) {
@@ -834,6 +845,21 @@ actor GarmentVisionEngine {
         } else if shoe >= 0.18, detection.label.lowercased().contains("shoe") {
             label = "shoe"
             confidence = Foundation.sqrt(max(0, detection.confidence * shoe))
+        } else if ["jacket", "coat", "cape"].contains(where: detectedLabel.contains),
+                  top >= 0.14,
+                  top > max(0.06, outerwear * 1.30)
+        {
+            // White tees and close-fitting tops are the most damaging outerwear swap in the
+            // physical corpus. Relabel only when Apple's independent classifier clearly favors
+            // a top; otherwise retain the detector label and require confirmation below 88%.
+            label = "top, t-shirt, sweatshirt"
+            confidence = min(
+                0.94,
+                max(
+                    Foundation.sqrt(max(0, detection.confidence * top)),
+                    0.58 + top * 0.42
+                )
+            )
         } else {
             label = detection.label
             confidence = detection.confidence

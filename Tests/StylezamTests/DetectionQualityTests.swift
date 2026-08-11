@@ -22,13 +22,13 @@ final class DetectionQualityTests: XCTestCase {
         XCTAssertTrue(
             GarmentDetectionQualityPolicy.needsReview(
                 label: "jacket",
-                confidence: 0.819
+                confidence: 0.879
             )
         )
         XCTAssertFalse(
             GarmentDetectionQualityPolicy.needsReview(
                 label: "jacket",
-                confidence: 0.82
+                confidence: 0.88
             )
         )
     }

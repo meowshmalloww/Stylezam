@@ -55,14 +55,23 @@ struct DetectionCorrectionView: View {
                             .tracking(0.85)
                             .foregroundStyle(.secondary)
 
+                        correctionButton("T-shirt or top", symbol: "tshirt", category: .clothes)
+                        correctionButton("Shirt or blouse", symbol: "tshirt", category: .clothes)
+                        correctionButton("Jacket or blazer", symbol: "jacket", category: .clothes)
+                        correctionButton("Pants or jeans", symbol: "figure.walk", category: .clothes)
                         correctionButton("Bag", symbol: "handbag", category: .bag)
-                        correctionButton("Jacket", symbol: "tshirt", category: .clothes)
-                        correctionButton("Pants", symbol: "figure.walk", category: .clothes)
-                        correctionButton("Skirt", symbol: "triangle", category: .clothes)
                         correctionButton("Shoes", symbol: "shoe", category: .shoes)
 
                         DisclosureGroup("Another category", isExpanded: $showsMoreCategories) {
                             VStack(spacing: 10) {
+                                correctionButton("Sweater or sweatshirt", symbol: "tshirt.fill", category: .clothes)
+                                correctionButton("Cardigan", symbol: "jacket", category: .clothes)
+                                correctionButton("Coat", symbol: "jacket.fill", category: .clothes)
+                                correctionButton("Vest", symbol: "tshirt", category: .clothes)
+                                correctionButton("Shorts", symbol: "figure.run", category: .clothes)
+                                correctionButton("Skirt", symbol: "triangle", category: .clothes)
+                                correctionButton("Dress or gown", symbol: "figure.dress.line.vertical.figure", category: .clothes)
+                                correctionButton("Jumpsuit or romper", symbol: "figure.stand", category: .clothes)
                                 correctionButton("Other clothing", symbol: "tshirt", category: .clothes)
                                 correctionButton("Scarf", symbol: "wind", category: .scarf)
                                 correctionButton("Hat", symbol: "hat.widebrim", category: .hat)

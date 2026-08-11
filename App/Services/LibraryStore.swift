@@ -727,7 +727,10 @@ final class LibraryStore {
               let data = try? Data(contentsOf: cropURL)
         else { return nil }
         let category = TryOnCategory.infer(category: garment.category, title: garment.title)
-        let region = TryOnGarmentRegion.infer(category: category, title: garment.localLabel)
+        // A human correction intentionally replaces the detector's display label. Use that
+        // corrected title for YouCam's garment region as well; otherwise correcting a white
+        // T-shirt that was detected as a jacket would still send `outer` to Clothes V4.
+        let region = TryOnGarmentRegion.infer(category: category, title: garment.title)
         let referenceData: Data?
         if region == .lowerBody {
             // This is a best-effort candidate for YouCam's worn-garment input.

@@ -1061,7 +1061,7 @@ actor ProductSearchService {
                 {
                     let normalized = message.lowercased()
                     if normalized.contains("billing") {
-                        hint = "This visual-match provider requires Cloud Billing on its Google Cloud project. Local garment scanning, cropping, Library, and Try On are unaffected. No Google request will be sent after Stylezam reaches its local 1,000-unit limit."
+                        hint = "Google requires billing to be linked even for the first 1,000 free Vision units each month. In Google Cloud Console, open the API key's project, link a Billing account, enable Cloud Vision API, then restrict the key to Cloud Vision API and the iOS app com.stylezam.app. This failed request did not affect local detection, crops, Library, or Try On. Tap Search again to use the next ready visual provider. Stylezam stops sending Google requests at its local 1,000-unit limit."
                     } else if normalized.contains("has not been used") || normalized.contains("is disabled") {
                         hint = "Enable Cloud Vision API on the key's Google Cloud project, then wait for the setting to propagate."
                     } else {
