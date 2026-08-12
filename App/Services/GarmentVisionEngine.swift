@@ -112,6 +112,11 @@ actor GarmentVisionEngine {
         enableAdaptiveDetail: Bool = true,
         verifyAllCandidateFamilies: Bool = true
     ) async throws -> GarmentDetectionBatch {
+        // A saved garment needs its segmentation mask, not merely the rectangular detection
+        // box. `includeDiagnosticMasks` is retained for call-site compatibility with the
+        // inspector, but production captures now create the same usable transparent crop.
+        _ = includeDiagnosticMasks
+        let includesSegmentedCrops = includeCrops
         let totalStarted = Self.now
         let decodeStarted = Self.now
         guard let cgImage = Self.normalizedImage(
@@ -122,6 +127,11 @@ actor GarmentVisionEngine {
         }
         let decodeMilliseconds = Self.milliseconds(since: decodeStarted)
         let itemLimit = min(12, max(1, maxItems))
+        // Preserve a small pool of alternates until on-device verification has rejected
+        // non-fashion lookalikes. Previously the top five raw boxes were verified in place;
+        // a pillow, caption overlay, or duplicate class could consume the whole final budget
+        // and hide valid garments lower in a busy live-screen frame.
+        let discoveryLimit = min(12, max(itemLimit + 4, itemLimit * 2))
         let method: GarmentDetectionMethod
         let detections: [RawDetection]
         let modelInputResolution: Int
@@ -141,8 +151,8 @@ actor GarmentVisionEngine {
                 image: cgImage,
                 modelURL: modelURL,
                 manifest: manifest,
-                maxItems: max(itemLimit, 8),
-                includeMasks: includeCrops && includeDiagnosticMasks
+                maxItems: discoveryLimit,
+                includeMasks: includesSegmentedCrops
             )
             let plan = Self.adaptiveInferencePlan(
                 image: cgImage,
@@ -182,8 +192,8 @@ actor GarmentVisionEngine {
                     image: tileImage,
                     modelURL: modelURL,
                     manifest: manifest,
-                    maxItems: max(itemLimit, 8),
-                    includeMasks: includeCrops && includeDiagnosticMasks
+                    maxItems: discoveryLimit,
+                    includeMasks: includesSegmentedCrops
                 )
                 combined.append(
                     contentsOf: tileResult.detections.compactMap {
@@ -197,7 +207,7 @@ actor GarmentVisionEngine {
                 decodingTime += tileResult.outputDecodingMilliseconds
             }
 
-            detections = Self.mergedDetections(combined, maxItems: itemLimit)
+            detections = Self.mergedDetections(combined, maxItems: discoveryLimit)
             modelInputResolution = manifest.inputResolution
             modelLoadMilliseconds = loadTime
             inputPreparationMilliseconds = preparationTime
@@ -221,7 +231,7 @@ actor GarmentVisionEngine {
             let inferenceStarted = Self.now
             detections = try await foregroundDetections(
                 image: cgImage,
-                maxItems: itemLimit
+                maxItems: discoveryLimit
             )
             modelInputResolution = 0
             modelLoadMilliseconds = 0
@@ -238,12 +248,12 @@ actor GarmentVisionEngine {
         let verifiedDetections = try await verifiedDetections(
             detections,
             in: cgImage,
-            maxItems: itemLimit,
+            maxItems: discoveryLimit,
             allowForegroundRecovery: true,
             verifyAllCandidateFamilies: verifyAllCandidateFamilies
         )
         let cropStarted = Self.now
-        let candidates = verifiedDetections.map { detection in
+        let candidates = verifiedDetections.prefix(itemLimit).map { detection in
             autoreleasepool {
                 GarmentCandidate(
                     id: UUID().uuidString,
@@ -253,8 +263,7 @@ actor GarmentVisionEngine {
                     boxCropData: includeCrops
                         ? Self.boundingBoxCrop(image: cgImage, detection: detection)
                         : nil,
-                    cropData: includeCrops
-                        && includeDiagnosticMasks
+                    cropData: includesSegmentedCrops
                         ? Self.segmentedCrop(image: cgImage, detection: detection)
                         : nil
                 )
@@ -609,21 +618,24 @@ actor GarmentVisionEngine {
         guard ProcessInfo.processInfo.thermalState != .critical else { return detections }
 
         var verified: [RawDetection] = []
-        for detection in detections.prefix(maxItems) {
+        for detection in detections {
             guard verifyAllCandidateFamilies
                     || Self.requiresClassificationVerification(detection)
             else {
                 verified.append(detection)
+                if verified.count == maxItems { break }
                 continue
             }
             guard let crop = Self.crop(image: image, to: detection.box),
                   let evidence = classificationEvidenceForVerification(for: crop)
             else {
                 verified.append(detection)
+                if verified.count == maxItems { break }
                 continue
             }
             guard !Self.shouldReject(detection, using: evidence) else { continue }
             verified.append(Self.refined(detection, using: evidence))
+            if verified.count == maxItems { break }
         }
         if !verified.isEmpty || !allowForegroundRecovery { return verified }
 
@@ -1362,6 +1374,22 @@ actor GarmentVisionEngine {
                 )
             }
         }
+        // A full opaque rectangle is not a useful segmented crop. Keep its reliable JPEG box
+        // crop instead; otherwise save a transparent PNG so Library, Search, and Try On do not
+        // inherit surrounding bedding, browser chrome, or unrelated clothing.
+        let totalPixels = max(1, alpha.count)
+        var foregroundPixels = 0
+        var transparentPixels = 0
+        for value in alpha {
+            if value >= 176 { foregroundPixels += 1 }
+            if value <= 32 { transparentPixels += 1 }
+        }
+        let foregroundCoverage = Double(foregroundPixels) / Double(totalPixels)
+        guard foregroundPixels >= max(24, totalPixels / 30),
+              transparentPixels >= max(24, totalPixels / 120),
+              foregroundCoverage < 0.975
+        else { return nil }
+
         guard let provider = CGDataProvider(data: Data(alpha) as CFData),
               let mask = CGImage(
                   maskWidth: targetWidth,

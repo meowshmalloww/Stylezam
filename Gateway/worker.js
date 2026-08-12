@@ -1,7 +1,13 @@
 const FIREWORKS_ORIGIN = "https://api.fireworks.ai";
 const YOUCAM_ORIGIN = "https://yce-api-01.makeupar.com";
 
-const YOUCAM_PATH = /^\/s2s\/v2\.0\/(file\/upload|credit\/feature-cost|task\/[A-Za-z0-9_./-]+)$/;
+// The documented File API is shared by every supported Stylezam category. Keep this explicit
+// rather than forwarding arbitrary upstream paths: the gateway is a credential boundary, not a
+// general Perfect Corp proxy.
+const YOUCAM_FEATURE = "(?:cloth-v4|bag|scarf|shoes|hat|2d-vto/(?:ring|bracelet|earring|watch|necklace)|enhance|lighting|bg-replace|sod|image-to-video/youcam)";
+const YOUCAM_PATH = new RegExp(
+  `^/s2s/v2\\.0/(?:file|credit/feature-cost|task/(?:${YOUCAM_FEATURE}|delete))$`,
+);
 
 export default {
   async fetch(request, env) {

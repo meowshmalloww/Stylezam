@@ -292,11 +292,22 @@ final class LiveScreenCaptureManager: NSObject {
         latestFramePixelHeight = 0
         automaticAnalysisStatus = nil
         lastActivityFeedbackSignature = nil
-        errorMessage = error.localizedDescription
+        errorMessage = Self.actionableCaptureError(error)
         await screenActivityManager.end(
             phase: "Live screen interrupted",
             failed: true
         )
+    }
+
+    private nonisolated static func actionableCaptureError(_ error: Error) -> String {
+        let message = error.localizedDescription
+        let normalized = message.lowercased()
+        if normalized.contains("screen sharing is not available")
+            || normalized.contains("live broadcast")
+        {
+            return "Another app's screen-sharing session is active or was interrupted. Stop any Instagram or Screen Recording broadcast in Control Center, then start Stylezam Live Screen again and select Stylezam's system picker."
+        }
+        return message
     }
 
     fileprivate func acceptFrame(

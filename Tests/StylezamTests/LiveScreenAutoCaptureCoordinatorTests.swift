@@ -25,6 +25,17 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         )
     }
 
+    func testStableFocusedContentPeriodicallyReturnsToFullScreenDiscovery() {
+        XCTAssertEqual(
+            LiveScreenAnalysisPlanner.strategy(
+                contentIsStable: true,
+                stableFrameCount: 3,
+                hasFocus: true
+            ),
+            .adaptive
+        )
+    }
+
     func testStableEmptyContentGetsAdaptiveDetailScan() {
         XCTAssertEqual(
             LiveScreenAnalysisPlanner.strategy(
@@ -316,6 +327,20 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
             }
         let crop = try XCTUnwrap(largestCrop)
         XCTAssertGreaterThan(max(crop.size.width, crop.size.height), 384)
+        let segmentedCrops = detection.candidates
+            .compactMap(\.cropData)
+            .compactMap(UIImage.init(data:))
+        XCTAssertFalse(
+            segmentedCrops.isEmpty,
+            "A saved live-screen capture must materialize at least one segmented garment crop."
+        )
+        XCTAssertTrue(
+            segmentedCrops.contains { image in
+                guard let data = image.pngData() else { return false }
+                return YouCamTryOnService.hasUsefulTransparency(data)
+            },
+            "The saved garment artwork must retain a transparent background when the model mask is usable."
+        )
         XCTAssertLessThanOrEqual(detection.metrics?.totalMilliseconds ?? .infinity, 10_000)
     }
 

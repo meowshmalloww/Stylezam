@@ -1568,7 +1568,7 @@ final class AppModel {
         }
     }
 
-    private func requestLiveScreenPicker() {
+    func requestLiveScreenPicker() {
         #if DEBUG
         let isLiveScreenUITest = ProcessInfo.processInfo.arguments.contains(
             "-stylezam-ui-test-live-screen"
@@ -1580,6 +1580,10 @@ final class AppModel {
             liveScreenNotice = "Sign in with Google before starting Live Screen."
             return
         }
+        // Control Center can deliver the same OpenIntent twice while the application resumes.
+        // Presenting two system pickers is enough to make iOS compete with an existing broadcast
+        // session, so treat the request as idempotent until the first picker is handled.
+        guard !isLiveScreenPickerPending else { return }
         guard ScreenCaptureAvailability.isSDKAvailable else {
             liveScreen.presentSystemPicker()
             liveScreenNotice = liveScreen.errorMessage ?? ScreenCaptureAvailability.summary
@@ -1590,8 +1594,21 @@ final class AppModel {
         liveScreenAutoCapture.reset()
         resetLiveScreenAnalysisState()
         liveScreenNotice = nil
-        isLiveScreenPickerPending = true
-        activatePendingLiveScreenPicker()
+        if liveScreen.isCapturing {
+            liveScreenNotice = "Restarting Live Screen with a new authorized display."
+            isLiveScreenPickerPending = true
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.liveScreen.stopCapture()
+                guard self.isLiveScreenPickerPending,
+                      UIApplication.shared.applicationState == .active
+                else { return }
+                self.activatePendingLiveScreenPicker()
+            }
+        } else {
+            isLiveScreenPickerPending = true
+            activatePendingLiveScreenPicker()
+        }
     }
 
     private func captureFromControl() {

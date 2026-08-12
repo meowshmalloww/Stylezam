@@ -268,6 +268,13 @@ actor YouCamTryOnService {
         self.session = session
     }
 
+    /// Each supported Perfect Corp try-on task creates both source and reference
+    /// file IDs through the documented shared File API before starting its
+    /// category-specific task. Keep this pure so it is testable without credentials.
+    nonisolated static func uploadPath(for _: TryOnCategory) -> String {
+        "/s2s/v2.0/file"
+    }
+
     func validateConnection() async throws {
         let report = try await entitlementReport()
         guard report.features.contains(where: \.isEntitled) else {
@@ -398,7 +405,14 @@ actor YouCamTryOnService {
             await progress(index, totalTasks, "Uploading your photo")
             let sourceID = try await upload(current)
             await progress(index, totalTasks, "Uploading the found piece")
-            let referenceID = try await upload(referenceImages[index])
+            // Library crops retain their alpha channel locally so the user sees the isolated
+            // garment. Perfect Corp's reference-image models are more reliable with the same
+            // garment composited onto a neutral opaque canvas, so flatten only the copy leaving
+            // the phone for this opted-in provider task—not the Library original.
+            let referenceID = try await upload(
+                referenceImages[index],
+                flattenTransparency: true
+            )
             await progress(index, totalTasks, "Starting YouCam")
             let taskID = try await createTask(
                 endpoint: endpoint,
@@ -581,8 +595,14 @@ actor YouCamTryOnService {
         }
     }
 
-    private func upload(_ sourceData: Data) async throws -> String {
-        guard let prepared = preparedUpload(from: sourceData) else {
+    private func upload(
+        _ sourceData: Data,
+        flattenTransparency: Bool = false
+    ) async throws -> String {
+        guard let prepared = preparedUpload(
+            from: sourceData,
+            flattenTransparency: flattenTransparency
+        ) else {
             throw YouCamTryOnError.server("The selected image could not be prepared for try-on.")
         }
         let data = prepared.data
@@ -633,10 +653,14 @@ actor YouCamTryOnService {
                 "file_size": data.count
             ]]
         ]
-        // Perfect Corp's simplified V2 workflow documents one shared file
-        // uploader for clothes, accessories, photo finishing, and video. The
-        // returned file ID is then consumed by the feature-specific task path.
-        let json = try await requestJSON(path: "/s2s/v2.0/file", method: "POST", body: body)
+        // All selected categories start with the same documented File API. Keeping file
+        // creation separate from task routing prevents a selected hat, shoe, bag, scarf, or
+        // garment from being uploaded into an unsupported category-specific namespace.
+        let json = try await requestJSON(
+            path: "/s2s/v2.0/file",
+            method: "POST",
+            body: body
+        )
         guard let file = firstDictionary(named: "files", in: json),
               let fileID = file["file_id"] as? String,
               let uploadRequest = firstDictionary(named: "requests", in: file),
@@ -657,12 +681,19 @@ actor YouCamTryOnService {
         return fileID
     }
 
-    private func preparedUpload(from data: Data) -> (data: Data, fileExtension: String, contentType: String)? {
+    private func preparedUpload(
+        from data: Data,
+        flattenTransparency: Bool = false
+    ) -> (data: Data, fileExtension: String, contentType: String)? {
         guard let image = UIImage(data: data), image.size.width > 0, image.size.height > 0 else { return nil }
         let isPNG = data.starts(with: [0x89, 0x50, 0x4E, 0x47])
         let maxDimension = max(image.size.width, image.size.height)
         let minDimension = min(image.size.width, image.size.height)
-        let needsRendering = !isPNG || minDimension < 512 || maxDimension > 4096 || data.count >= 10_000_000
+        let needsRendering = flattenTransparency
+            || !isPNG
+            || minDimension < 512
+            || maxDimension > 4096
+            || data.count >= 10_000_000
         if !needsRendering { return (data, "png", "image/png") }
 
         let scaleToMinimum = max(1, 512 / minDimension)
@@ -670,7 +701,7 @@ actor YouCamTryOnService {
         let scale = min(scaleToMinimum, scaleToMaximum)
         let drawnSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
         let canvasSize = CGSize(width: max(512, drawnSize.width), height: max(512, drawnSize.height))
-        let preserveTransparency = isPNG && data.count < 10_000_000
+        let preserveTransparency = isPNG && data.count < 10_000_000 && !flattenTransparency
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = !preserveTransparency
@@ -773,10 +804,9 @@ actor YouCamTryOnService {
 
     /// A completed task is not automatically a valid try-on. Perfect Corp's generative bag,
     /// scarf, shoes, and hat tasks may create a styled outfit and background, while Stylezam's
-    /// contract is to apply only the selected piece. Compare protected pixels outside the
-    /// category's legitimate edit area and reject a full-scene rewrite before it reaches Library.
-    /// Clothes V4 is checked too so an upper-body edit cannot silently replace the background,
-    /// face, trousers, or shoes.
+    /// contract is to apply only the selected piece. We deliberately look only for an obvious
+    /// whole-scene replacement here. Earlier versions used a tiny image hash and thresholds
+    /// strict enough to reject normal provider tone, relighting, and compression differences.
     nonisolated static func validateSingleItemScenePreservation(
         source: Data,
         result: Data,
@@ -793,7 +823,7 @@ actor YouCamTryOnService {
 
         let sourceRatio = Double(sourceImage.width) / Double(max(1, sourceImage.height))
         let resultRatio = Double(resultImage.width) / Double(max(1, resultImage.height))
-        guard abs(sourceRatio - resultRatio) <= 0.08 else {
+        guard abs(sourceRatio - resultRatio) <= 0.12 else {
             throw YouCamTryOnError.server(
                 "YouCam changed the photo framing instead of adding only the selected \(category.title.lowercased()). Stylezam rejected that result. Use a clear front facing photo and try again."
             )
@@ -803,13 +833,17 @@ actor YouCamTryOnService {
             category: category,
             garmentRegion: garmentRegion
         )
-        guard let sourceSignature = sceneSignature(for: sourceImage),
-              let resultSignature = sceneSignature(for: resultImage),
-              let protectedDifference = alignedSceneDifference(
+        guard let protectedDifference = alignedSceneDifference(
                   source: sourceImage,
                   result: resultImage,
                   excludedAreas: allowedChanges,
                   alwaysIncludedAreas: faceRects,
+                  minimumSamples: 180
+              ),
+              let borderDifference = alignedSceneDifference(
+                  source: sourceImage,
+                  result: resultImage,
+                  includedAreas: sceneBorderRects,
                   minimumSamples: 180
               )
         else {
@@ -825,20 +859,16 @@ actor YouCamTryOnService {
                 includedAreas: faceRects,
                 minimumSamples: 18
             )
-        let changedBits = (sourceSignature ^ resultSignature).nonzeroBitCount
-        let styledCategory = [.bag, .scarf, .shoes, .hat].contains(category)
-        let maximumDifference = styledCategory ? 0.17 : (category == .clothes ? 0.22 : 0.18)
-        let maximumChangedBits = category == .clothes ? 31 : 26
-        let faceWasRewritten = faceDifference.map { $0 > 0.16 } ?? false
-        guard changedBits <= maximumChangedBits,
-              protectedDifference <= maximumDifference,
-              !faceWasRewritten
+        // A genuine scene replacement changes both the protected person/background pixels and
+        // the outer frame. A valid VTO result can still make modest global changes through
+        // JPEG recompression, relighting, or diffusion denoising, so do not reject it for that.
+        let appearsToReplaceWholeScene = protectedDifference > 0.34 && borderDifference > 0.30
+        let faceWasSubstantiallyRewritten = faceDifference.map { $0 > 0.38 } ?? false
+        guard !appearsToReplaceWholeScene,
+              !faceWasSubstantiallyRewritten
         else {
-            let detail = styledCategory
-                ? "Perfect Corp returned a styled scene instead of preserving your original photo."
-                : "YouCam changed the person, background, or an unselected part of the outfit."
             throw YouCamTryOnError.server(
-                "\(detail) Stylezam rejected that result instead of saving the wrong \(category.title.lowercased()). Try a clear front-facing photo and a tightly cropped product image."
+                "YouCam returned a full scene replacement instead of a focused \(category.title.lowercased()) try-on. Stylezam kept your original photo safe and did not save that result. Try a clear front-facing photo and a tightly cropped product image."
             )
         }
     }
@@ -994,6 +1024,16 @@ actor YouCamTryOnService {
         }
     }
 
+    /// The outer image frame is the least ambiguous evidence that a provider changed a whole
+    /// scene. It intentionally avoids the centre, where a valid garment may occupy most of a
+    /// portrait photo.
+    private nonisolated static let sceneBorderRects: [CGRect] = [
+        CGRect(x: 0, y: 0, width: 1, height: 0.14),
+        CGRect(x: 0, y: 0.86, width: 1, height: 0.14),
+        CGRect(x: 0, y: 0.14, width: 0.12, height: 0.72),
+        CGRect(x: 0.88, y: 0.14, width: 0.12, height: 0.72),
+    ]
+
     nonisolated static func hasUsefulTransparency(_ data: Data) -> Bool {
         guard let image = UIImage(data: data)?.cgImage,
               let raster = rgbaRaster(for: image, width: 32, height: 32)
@@ -1004,29 +1044,6 @@ actor YouCamTryOnService {
         let clear = alphas.filter { $0 <= 32 }.count
         let translucent = alphas.filter { $0 < 248 }.count
         return clear >= 8 && translucent >= 20
-    }
-
-    private nonisolated static func sceneSignature(for image: CGImage) -> UInt64? {
-        let width = 8
-        let height = 8
-        var pixels = [UInt8](repeating: 0, count: width * height)
-        guard let context = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width,
-            space: CGColorSpaceCreateDeviceGray(),
-            bitmapInfo: CGImageAlphaInfo.none.rawValue
-        ) else { return nil }
-        context.interpolationQuality = .medium
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        let average = pixels.reduce(0, { $0 + Int($1) }) / pixels.count
-        var signature: UInt64 = 0
-        for (index, pixel) in pixels.enumerated() where Int(pixel) >= average {
-            signature |= UInt64(1) << UInt64(index)
-        }
-        return signature
     }
 
     private func createTask(
@@ -1159,9 +1176,10 @@ actor YouCamTryOnService {
             body["change_shoes"] = false
         } else {
             body["gender"] = gender.rawValue
-            if category == .shoes {
-                // `random` is the dedicated Shoes API's documented default and only accepted
-                // neutral value. Scene preservation is enforced on the returned pixels below.
+            if [.bag, .scarf, .shoes, .hat].contains(category) {
+                // These category APIs require a style selection. `random` is their documented
+                // neutral/default choice; post-result scene validation still prevents a full
+                // background or person replacement from being saved as a single-item try-on.
                 body["style"] = "random"
             }
         }

@@ -215,7 +215,7 @@ private struct ControlSetupView: View {
 
                 if ScreenCaptureAvailability.isSDKAvailable {
                     Button {
-                        model.liveScreen.presentSystemPicker()
+                        model.requestLiveScreenPicker()
                     } label: {
                         Label(
                             model.liveScreen.isCapturing ? "Change captured screen" : "Choose a screen",

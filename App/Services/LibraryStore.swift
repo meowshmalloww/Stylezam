@@ -117,7 +117,10 @@ final class LibraryStore {
     ) throws -> SavedScan {
         let previousSnapshot = snapshot
         let id = UUID()
-        let imageFilename = "\(id.uuidString).jpg"
+        // Screen scans use the first segmented garment as their Library cover when one is
+        // available. Keep the extension truthful so image consumers preserve transparency.
+        let screenCoverIsSegmented = mode == .screen && detection.candidates.first?.cropData != nil
+        let imageFilename = "\(id.uuidString).\(screenCoverIsSegmented ? "png" : "jpg")"
         var createdURLs: [URL] = []
 
         do {
@@ -127,15 +130,19 @@ final class LibraryStore {
             // Keep only the first confirmed garment crop as the screen scan's Library cover. All
             // detected garments are still written individually below.
             let storedCaptureData = mode == .screen
-                ? detection.candidates.first?.boxCropData ?? imageData
+                ? detection.candidates.first?.cropData
+                    ?? detection.candidates.first?.boxCropData
+                    ?? imageData
                 : imageData
             try storedCaptureData.write(to: captureURL, options: .atomic)
 
             let items = try detection.candidates.map { candidate in
                 var cropFilename: String?
-                let preferredCrop = candidate.boxCropData ?? candidate.cropData
+                // A valid transparent segmentation is the product artwork. The rectangular
+                // crop remains the fallback when a model mask is too weak or covers all pixels.
+                let preferredCrop = candidate.cropData ?? candidate.boxCropData
                 if let cropData = preferredCrop {
-                    let fileExtension = candidate.boxCropData == nil ? "png" : "jpg"
+                    let fileExtension = candidate.cropData != nil ? "png" : "jpg"
                     let filename = "\(id.uuidString)-\(candidate.id).\(fileExtension)"
                     let destination = garmentsURL.appending(path: filename)
                     createdURLs.append(destination)

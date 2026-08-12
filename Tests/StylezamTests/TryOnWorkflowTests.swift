@@ -8,6 +8,11 @@ final class TryOnWorkflowTests: XCTestCase {
         XCTAssertEqual(TryOnCategory.hat.youCamEndpoint, "hat")
         XCTAssertEqual(TryOnCategory.bag.youCamEndpoint, "bag")
         XCTAssertEqual(TryOnCategory.clothes.youCamEndpoint, "cloth-v4")
+        XCTAssertEqual(YouCamTryOnService.uploadPath(for: .hat), "/s2s/v2.0/file")
+        XCTAssertEqual(YouCamTryOnService.uploadPath(for: .shoes), "/s2s/v2.0/file")
+        XCTAssertEqual(YouCamTryOnService.uploadPath(for: .bag), "/s2s/v2.0/file")
+        XCTAssertEqual(YouCamTryOnService.uploadPath(for: .scarf), "/s2s/v2.0/file")
+        XCTAssertEqual(YouCamTryOnService.uploadPath(for: .clothes), "/s2s/v2.0/file")
 
         let hat = YouCamTryOnService.tryOnTaskBody(
             category: .hat,
@@ -19,6 +24,7 @@ final class TryOnWorkflowTests: XCTestCase {
         XCTAssertEqual(hat["src_file_id"] as? String, "person")
         XCTAssertEqual(hat["ref_file_id"] as? String, "hat-reference")
         XCTAssertEqual(hat["gender"] as? String, "male")
+        XCTAssertEqual(hat["style"] as? String, "random")
         XCTAssertNil(hat["garment_category"])
         XCTAssertNil(hat["change_shoes"])
 
@@ -77,6 +83,26 @@ final class TryOnWorkflowTests: XCTestCase {
             try YouCamTryOnService.validateSingleItemScenePreservation(
                 source: source,
                 result: styledScene,
+                category: .hat,
+                garmentRegion: .accessory
+            )
+        )
+    }
+
+    func testTryOnSceneGuardAllowsNormalProviderToneShift() throws {
+        let source = try XCTUnwrap(testImageData(background: .lightGray))
+        let lightlyRelit = try XCTUnwrap(
+            testImageData(
+                background: UIColor(white: 0.78, alpha: 1),
+                editColor: .black,
+                editRect: CGRect(x: 90, y: 14, width: 180, height: 92)
+            )
+        )
+
+        XCTAssertNoThrow(
+            try YouCamTryOnService.validateSingleItemScenePreservation(
+                source: source,
+                result: lightlyRelit,
                 category: .hat,
                 garmentRegion: .accessory
             )

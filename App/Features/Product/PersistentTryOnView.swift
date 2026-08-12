@@ -309,7 +309,7 @@ struct TryOnView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            if photoContext == .outfit {
+            if usesPresentationControl {
                 Picker("Presentation", selection: $gender) {
                     ForEach(TryOnGender.allCases) { value in
                         Text(value.title).tag(value)
@@ -1200,6 +1200,14 @@ struct TryOnView: View {
         compatibleSelectedItems.filter {
             [.bag, .scarf, .shoes, .hat].contains($0.category)
         }
+    }
+
+    /// The accessory try-on endpoints also accept a presentation hint. Keeping
+    /// this control available for those contexts prevents an automatic choice
+    /// from being the only option when a user is trying on a hat, bag, scarf,
+    /// or shoes.
+    private var usesPresentationControl: Bool {
+        photoContext == .outfit || !styledGeneratorSelectedItems.isEmpty
     }
 
     private var selectionSignature: String {

@@ -316,9 +316,10 @@ struct GarmentCandidate: Identifiable, Hashable, Sendable {
     let localLabel: String
     let confidence: Double
     let box: BoundingBoxDTO
-    /// Reliable, unmasked pixels from the detector's bounding box.
+    /// Reliable, unmasked pixels from the detector's bounding box. Used as a
+    /// fallback when segmentation cannot make a usable foreground cutout.
     let boxCropData: Data?
-    /// Experimental transparent segmentation output retained for diagnostics.
+    /// Foreground-only transparent garment artwork used by Library, Search, and Try On.
     let cropData: Data?
 }
 

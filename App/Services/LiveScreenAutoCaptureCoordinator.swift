@@ -14,6 +14,12 @@ enum LiveScreenAnalysisPlanner {
         stableFrameCount: Int,
         hasFocus: Bool
     ) -> LiveScreenAnalysisStrategy {
+        // A focused pass is cheap confirmation for the current item, but a static Reel or
+        // product page can show several pieces. Return to full-screen detail discovery every
+        // third stable sample so the first anchor never hides the rest of the outfit.
+        if contentIsStable, hasFocus, stableFrameCount.isMultiple(of: 3) {
+            return .adaptive
+        }
         if contentIsStable, hasFocus {
             return .focused
         }

@@ -63,7 +63,9 @@ actor GarmentDuplicateGuard {
 
         var accepted: [NovelGarmentCandidate] = []
         for candidate in candidates {
-            guard let crop = candidate.boxCropData ?? candidate.cropData else {
+            // Prefer the actual foreground artwork. This stops nearby clothing and app chrome
+            // from making two otherwise identical garments look unrelated to the repeat guard.
+            guard let crop = candidate.cropData ?? candidate.boxCropData else {
                 accepted.append(
                     NovelGarmentCandidate(
                         candidate: candidate,

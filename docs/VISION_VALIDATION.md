@@ -12,11 +12,12 @@ API key, or network request is involved in these tests.
   and a separate 96×96 mask for each detected item.
 - Stylezam exposes the 27 Fashionpedia item categories (IDs 0–26). The remaining
   19 Fashionpedia part classes are not presented as separate Library items.
-- Each detection produces a reliable unmasked bounding-box crop for Library.
-- When Vision Inspector is open, the model's 96×96 mask also becomes a
-  transparent diagnostic PNG with bilinear sampling and a narrow soft alpha
-  transition. This raw iOS mask is not generated during normal capture or used
-  as the Library thumbnail because device testing exposed incorrect regions.
+- Each detection produces a reliable unmasked bounding-box JPEG fallback for
+  Library.
+- On an accepted still scan, Stylezam also materializes the model mask and uses
+  a transparent foreground PNG for Library, Search, and Try On only when it has
+  meaningful foreground and transparent alpha. An empty or nearly opaque mask
+  falls back to the box crop instead of saving an unusable "cutout."
 - The in-app Vision Inspector shows the source overlay, saved box crop,
   transparent cutout, and black/white alpha mask, then reports class ID, label,
   confidence, normalized and pixel-space boxes, image dimensions, PNG byte
@@ -86,10 +87,11 @@ lower macOS mask IoU because a 96×96 mask has limited boundary resolution. Rare
 such as cape, cardigan, leg warmer, and jumpsuit also have weak recall.
 
 These mask-IoU measurements validate the package on macOS Core ML. The same
-export's iOS mask tensor does not preserve that semantic quality: device output
-can include large incorrect regions even when category and box are correct.
-Stylezam therefore treats the mask as a visible diagnostic artifact and uses the
-box crop as the product-facing result until the model is reconverted or refined.
+export's iOS mask tensor can include large incorrect regions even when category
+and box are correct. The production alpha check rejects empty and fully opaque
+masks, but cannot prove that a remaining mask is semantically correct. A fresh
+physical-device visual check remains required before claiming production-grade
+cutout quality.
 
 ## macOS transparent-crop spot check
 
@@ -119,12 +121,11 @@ then the generated JSON and JPEG crop files were copied back from the app contai
 | `row-0852-image-17958.jpg` | 3 | 101.31 ms | glasses, coat, bag |
 
 All four device runs returned the expected categories and usable boxes. The app
-now persists a clean box crop for every item and does not materialize masks
-during normal capture. Vision Inspector can generate the raw transparent PNG on
-demand; visual inspection showed that it can represent the wrong region on iOS,
-so alpha statistics alone are not a mask-quality test. The second photo also
-demonstrates a real limitation: a low-confidence 0.3720 duplicate belt survives
-the current same-class suppression rule.
+persists a clean box crop for every item, and current scans attempt a transparent
+foreground crop first when its alpha is usable. Vision Inspector can show the
+same raw mask for visual inspection; alpha statistics alone are not a mask-quality
+test. The second photo also demonstrates a real limitation: a low-confidence
+0.3720 duplicate belt survives the current same-class suppression rule.
 
 ### Non-fashion calibration and performance regression
 

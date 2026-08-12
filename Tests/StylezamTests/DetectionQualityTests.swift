@@ -92,6 +92,37 @@ final class DetectionQualityTests: XCTestCase {
         XCTAssertEqual(rejected.reviewState, .rejected)
     }
 
+    @MainActor
+    func testLibraryPrefersTransparentSegmentationOverTheRectangleCrop() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appending(path: "stylezam-segmentation-\(UUID().uuidString)", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+        let store = LibraryStore(rootURL: rootURL)
+        let boxCrop = Data("rectangle-with-background".utf8)
+        let segmentedCrop = Data("transparent-foreground-garment".utf8)
+        let candidate = GarmentCandidate(
+            id: "segmented-candidate",
+            localLabel: "shirt",
+            confidence: 0.94,
+            box: BoundingBoxDTO(x: 0.2, y: 0.1, width: 0.5, height: 0.7),
+            boxCropData: boxCrop,
+            cropData: segmentedCrop
+        )
+
+        let scan = try store.addScan(
+            imageData: Data("source".utf8),
+            origin: .screenCapture,
+            mode: .screen,
+            detection: GarmentDetectionBatch(method: .coreML, candidates: [candidate], metrics: nil)
+        )
+        let item = try XCTUnwrap(scan.items.first)
+        let cropURL = try XCTUnwrap(store.cropURL(for: item))
+
+        XCTAssertEqual(cropURL.pathExtension, "png")
+        XCTAssertEqual(try Data(contentsOf: cropURL), segmentedCrop)
+        XCTAssertEqual(try Data(contentsOf: store.imageURL(for: scan)), segmentedCrop)
+    }
+
     private func makeGarment(label: String, confidence: Double) -> SavedGarment {
         SavedGarment(
             id: UUID().uuidString,
