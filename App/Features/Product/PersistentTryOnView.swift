@@ -226,23 +226,15 @@ struct TryOnView: View {
 
     private var contextControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 10) {
-                Picker(
-                    "Photo type",
-                    selection: Binding(
-                        get: { photoContext },
-                        set: { context in
-                            photoContextIsAutomatic = false
-                            photoContext = context
-                        }
-                    )
-                ) {
-                ForEach(TryOnPhotoContext.allCases) { context in
-                    Text(context.title).tag(context)
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Photo target")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Choose the area you want Stylezam to preserve.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                }
-                .pickerStyle(.segmented)
-
+                Spacer(minLength: 12)
                 Button {
                     photoContextIsAutomatic = true
                     applyAutomaticPhotoContextIfNeeded()
@@ -255,9 +247,62 @@ struct TryOnView: View {
                 .accessibilityLabel("Choose photo type automatically from selected pieces")
             }
 
+            LazyVGrid(
+                columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+                spacing: 8
+            ) {
+                ForEach(TryOnPhotoContext.allCases) { context in
+                    Button {
+                        photoContextIsAutomatic = false
+                        photoContext = context
+                    } label: {
+                        HStack(spacing: 9) {
+                            Image(systemName: context.symbol)
+                                .font(.subheadline.weight(.semibold))
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(context.shortTitle)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(context.supportedPieces)
+                                    .font(.caption2)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 0)
+                            if photoContext == context {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.subheadline)
+                            }
+                        }
+                        .foregroundStyle(
+                            photoContext == context ? StylezamDesign.cobalt : Color.primary
+                        )
+                        .padding(.horizontal, 10)
+                        .frame(maxWidth: .infinity, minHeight: 66, alignment: .leading)
+                        .background(
+                            photoContext == context
+                                ? StylezamDesign.cobalt.opacity(0.11)
+                                : Color.secondary.opacity(0.07),
+                            in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        )
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 15, style: .continuous)
+                                .stroke(
+                                    photoContext == context
+                                        ? StylezamDesign.cobalt.opacity(0.7)
+                                        : Color.primary.opacity(0.08),
+                                    lineWidth: photoContext == context ? 1.25 : 0.75
+                                )
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Use \(context.title) photo for \(context.supportedPieces)")
+                }
+            }
+
             Label(
                 photoContextIsAutomatic
-                    ? "Photo type follows the pieces selected on the rail."
+                    ? "Stylezam chooses the correct photo target from the pieces selected on the rail."
                     : "Photo type is set manually. Tap the wand to use automatic selection.",
                 systemImage: photoContextIsAutomatic ? "sparkles" : "hand.tap"
             )
@@ -1183,7 +1228,9 @@ struct TryOnView: View {
             switch item.category {
             case .ring, .bracelet, .watch:
                 return .handAndWrist
-            case .earring, .necklace:
+            case .hat:
+                return .head
+            case .scarf, .earring, .necklace:
                 return .faceAndNeck
             default:
                 return .outfit
@@ -1199,9 +1246,6 @@ struct TryOnView: View {
     }
 
     private func isCompatibleWithCurrentPhoto(_ item: TryOnTrayItem) -> Bool {
-        if photoContext == .outfit, item.category == .necklace {
-            return true
-        }
         return photoContext.renderCategories.contains(item.category)
     }
 
@@ -1257,6 +1301,7 @@ struct TryOnView: View {
     private var photoNoun: String {
         switch photoContext {
         case .outfit: "outfit"
+        case .head: "hat"
         case .handAndWrist: "hand or wrist"
         case .faceAndNeck: "face and neck"
         }
@@ -1265,6 +1310,7 @@ struct TryOnView: View {
     private var emptyPhotoTitle: String {
         switch photoContext {
         case .outfit: "Take a photo of yourself"
+        case .head: "Take a head photo for a hat"
         case .handAndWrist: "Take a hand or wrist photo"
         case .faceAndNeck: "Take a face and neck photo"
         }
@@ -1273,6 +1319,7 @@ struct TryOnView: View {
     private var photoContextSymbol: String {
         switch photoContext {
         case .outfit: "person.crop.rectangle.badge.plus"
+        case .head: "baseball.cap"
         case .handAndWrist: "hand.raised"
         case .faceAndNeck: "person.crop.square"
         }

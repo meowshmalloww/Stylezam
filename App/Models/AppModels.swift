@@ -149,28 +149,55 @@ enum TryOnGarmentRegion: String, Codable, CaseIterable, Sendable {
 }
 
 enum TryOnPhotoContext: String, Codable, CaseIterable, Identifiable, Sendable {
-    case outfit, handAndWrist, faceAndNeck
+    case outfit, head, faceAndNeck, handAndWrist
 
     var id: String { rawValue }
     var title: String {
         switch self {
         case .outfit: "Outfit"
+        case .head: "Hat"
         case .handAndWrist: "Hand / wrist"
         case .faceAndNeck: "Face / neck"
+        }
+    }
+    var shortTitle: String {
+        switch self {
+        case .outfit: "Outfit"
+        case .head: "Hat"
+        case .faceAndNeck: "Face"
+        case .handAndWrist: "Hand"
+        }
+    }
+    var supportedPieces: String {
+        switch self {
+        case .outfit: "Clothes, bags, and shoes"
+        case .head: "Hats and caps"
+        case .faceAndNeck: "Scarves, earrings, and necklaces"
+        case .handAndWrist: "Rings, bracelets, and watches"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .outfit: "person.crop.rectangle"
+        case .head: "baseball.cap"
+        case .faceAndNeck: "person.crop.square"
+        case .handAndWrist: "hand.raised"
         }
     }
     var guidance: String {
         switch self {
         case .outfit: "One person, front-facing, with the intended clothing area visible"
+        case .head: "A clear, front-facing head photo with hair and forehead visible"
         case .handAndWrist: "A clear hand or wrist close-up without occlusion"
-        case .faceAndNeck: "A clear front-facing face, ears, and neckline"
+        case .faceAndNeck: "A clear front-facing face, ears, shoulders, and neckline"
         }
     }
     var renderCategories: [TryOnCategory] {
         switch self {
-        case .outfit: [.clothes, .bag, .scarf, .shoes, .hat, .necklace]
+        case .outfit: [.clothes, .bag, .shoes]
+        case .head: [.hat]
         case .handAndWrist: [.ring, .bracelet, .watch]
-        case .faceAndNeck: [.hat, .scarf, .earring, .necklace]
+        case .faceAndNeck: [.scarf, .earring, .necklace]
         }
     }
 

@@ -297,6 +297,7 @@ private extension TryOnPhotoContext {
     var captureTitle: String {
         switch self {
         case .outfit: "Keep one person in frame"
+        case .head: "Keep your head and hat area visible"
         case .handAndWrist: "Show the full hand or wrist"
         case .faceAndNeck: "Face forward with ears visible"
         }
@@ -306,10 +307,12 @@ private extension TryOnPhotoContext {
         switch self {
         case .outfit:
             "Stand facing forward. Keep the body area needed for the selected clothing fully visible."
+        case .head:
+            "Face forward in even light. Keep your hairline, forehead, and the full hat area unobstructed."
         case .handAndWrist:
             "Use a clear close-up with no sleeve, hair, or object covering the target area."
         case .faceAndNeck:
-            "Use even light and keep your face, ears, shoulders, and neckline unobstructed."
+            "Use even light and keep your face, ears, shoulders, and neckline unobstructed for scarves, earrings, and necklaces."
         }
     }
 }

@@ -121,7 +121,11 @@ final class TryOnWorkflowTests: XCTestCase {
 
         XCTAssertEqual(
             TryOnPhotoContext.outfit.renderCategories,
-            [.clothes, .bag, .scarf, .shoes, .hat, .necklace]
+            [.clothes, .bag, .shoes]
+        )
+        XCTAssertEqual(
+            TryOnPhotoContext.head.renderCategories,
+            [.hat]
         )
         XCTAssertEqual(
             TryOnPhotoContext.handAndWrist.renderCategories,
@@ -129,7 +133,7 @@ final class TryOnWorkflowTests: XCTestCase {
         )
         XCTAssertEqual(
             TryOnPhotoContext.faceAndNeck.renderCategories,
-            [.hat, .scarf, .earring, .necklace]
+            [.scarf, .earring, .necklace]
         )
         XCTAssertEqual(
             TryOnPhotoContext.faceAndNeck.categories,

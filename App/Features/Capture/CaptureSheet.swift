@@ -70,6 +70,12 @@ struct CaptureSheet: View {
             updateLiveFrames()
         }
         .onChange(of: captureMode) { _, _ in
+            // Live is deliberately hands-free. Entering it restores automatic
+            // saving so a previously paused debug setting cannot turn it back
+            // into a manual camera on a real device.
+            if captureMode == .live {
+                model.settings.liveAutoCaptureEnabled = true
+            }
             previewTask?.cancel()
             isAnalyzingPreview = false
             candidates = []
@@ -153,8 +159,10 @@ struct CaptureSheet: View {
 
     @ViewBuilder
     private var liveStatus: some View {
-        if captureMode == .live, !model.modelPack.isInstalled {
-            Text("Live detection is unavailable. You can still take a photo.")
+        if !model.modelPack.isInstalled {
+            Text(captureMode == .live
+                ? "Live detection is unavailable. You can still take a photo."
+                : "Recognition boxes are unavailable until the on-device model is ready.")
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.white.opacity(0.9))
                 .multilineTextAlignment(.center)
@@ -174,8 +182,12 @@ struct CaptureSheet: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
         }
 
-        if captureMode == .live, model.modelPack.isInstalled {
-            liveGuidance
+        if model.modelPack.isInstalled {
+            if captureMode == .live {
+                liveGuidance
+            } else {
+                photoRecognitionGuidance
+            }
         }
     }
 
@@ -246,9 +258,11 @@ struct CaptureSheet: View {
                 if captureMode == .live {
                     cameraToolButton(
                         icon: model.settings.liveAutoCaptureEnabled
-                            ? "bolt.badge.automatic.fill"
-                            : "bolt.badge.automatic",
-                        label: "Toggle automatic live capture"
+                            ? "pause.fill"
+                            : "play.fill",
+                        label: model.settings.liveAutoCaptureEnabled
+                            ? "Pause automatic live saving"
+                            : "Resume automatic live saving"
                     ) {
                         model.settings.liveAutoCaptureEnabled.toggle()
                     }
@@ -258,21 +272,25 @@ struct CaptureSheet: View {
 
                 Spacer()
 
-                Button {
-                    capture(automatic: false)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .stroke(.white.opacity(0.96), lineWidth: 4)
-                            .frame(width: 82, height: 82)
-                        Circle()
-                            .fill(.white)
-                            .frame(width: 68, height: 68)
+                if captureMode == .live {
+                    liveAutomaticSaveIndicator
+                } else {
+                    Button {
+                        capture(automatic: false)
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .stroke(.white.opacity(0.96), lineWidth: 4)
+                                .frame(width: 82, height: 82)
+                            Circle()
+                                .fill(.white)
+                                .frame(width: 68, height: 68)
+                        }
                     }
+                    .buttonStyle(CameraShutterButtonStyle())
+                    .disabled(!camera.isReady || camera.isCapturingPhoto || model.isAnalyzingCapture)
+                    .accessibilityLabel("Capture recognized fashion photo")
                 }
-                .buttonStyle(CameraShutterButtonStyle())
-                .disabled(!camera.isReady || camera.isCapturingPhoto || model.isAnalyzingCapture)
-                .accessibilityLabel("Capture fashion photo")
 
                 Spacer()
 
@@ -285,6 +303,36 @@ struct CaptureSheet: View {
             }
         }
         .foregroundStyle(.white)
+    }
+
+    /// Live camera never exposes a manual shutter: recognition is temporal and
+    /// the full-quality still is requested only once a box remains stable.
+    private var liveAutomaticSaveIndicator: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .stroke(.white.opacity(0.94), lineWidth: 3)
+                    .frame(width: 82, height: 82)
+                Circle()
+                    .fill(.white.opacity(model.settings.liveAutoCaptureEnabled ? 0.96 : 0.24))
+                    .frame(width: 68, height: 68)
+                Image(systemName: model.settings.liveAutoCaptureEnabled
+                    ? "bolt.badge.automatic.fill"
+                    : "pause.fill")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(model.settings.liveAutoCaptureEnabled ? .black : .white)
+            }
+            Text(model.settings.liveAutoCaptureEnabled ? "AUTO" : "PAUSED")
+                .font(.caption2.weight(.bold))
+                .tracking(0.9)
+        }
+        .frame(width: 94, height: 104)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            model.settings.liveAutoCaptureEnabled
+                ? "Automatic live saving is active"
+                : "Automatic live saving is paused"
+        )
     }
 
     private var zoomControls: some View {
@@ -397,7 +445,11 @@ struct CaptureSheet: View {
             )
         }
         if !model.settings.liveAutoCaptureEnabled {
-            return ("hand.tap", "Manual Live scan", "Boxes update live. Tap the shutter when the view looks right.")
+            return (
+                "pause.circle",
+                "Automatic saving paused",
+                "Recognition boxes still update. Resume when you want Live scans saved automatically."
+            )
         }
         if provisionalCandidates.isEmpty {
             return ("viewfinder", "Aim at a fashion item", "Include the full piece and keep it inside the frame.")
@@ -410,6 +462,51 @@ struct CaptureSheet: View {
             return ("checkmark.circle", "Ready to save", "Hold still. Stylezam will capture this look automatically.")
         }
         return (guidance.symbol, guidance.title, "Keep the detected pieces visible for automatic capture.")
+    }
+
+    private var photoRecognitionGuidance: some View {
+        let title: String
+        let detail: String
+        let symbol: String
+        if provisionalCandidates.isEmpty {
+            title = "Recognition is on"
+            detail = "Aim at a fashion item. A box means Stylezam can recognize it before you take the photo."
+            symbol = "viewfinder"
+        } else if candidates.isEmpty {
+            title = "Confirming the item"
+            detail = "Hold still briefly. Dashed boxes are still being verified on this iPhone."
+            symbol = "scope"
+        } else {
+            let count = candidates.count
+            title = "\(count) piece\(count == 1 ? "" : "s") recognized"
+            detail = "The solid box is ready. Tap the shutter to save this photo and its detected pieces."
+            symbol = "checkmark.circle"
+        }
+
+        return HStack(spacing: 12) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 11)
+        .frame(maxWidth: 390)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 0.5)
+        }
+        .padding(.horizontal, 22)
     }
 
     private var processingNotice: some View {
@@ -470,13 +567,15 @@ struct CaptureSheet: View {
     }
 
     private func capture(automatic: Bool) {
+        // Photo mode is intentionally manual. Live mode reaches this method
+        // only through its temporal auto-save gate.
+        let mode = captureMode
+        guard automatic ? mode == .live : mode == .photo else { return }
         guard captureTask == nil else { return }
         captureTask = Task {
-            if captureMode == .live {
-                camera.setLiveFramesEnabled(false)
-                previewTask?.cancel()
-                isAnalyzingPreview = false
-            }
+            camera.setLiveFramesEnabled(false)
+            previewTask?.cancel()
+            isAnalyzingPreview = false
             defer {
                 captureTask = nil
                 updateLiveFrames()
@@ -499,10 +598,10 @@ struct CaptureSheet: View {
             let scan = await model.processCapture(
                 imageData: data,
                 origin: .camera,
-                mode: captureMode
+                mode: mode
             )
             guard let scan else {
-                if model.captureStatus == "Already in Library" {
+                if mode == .live, model.captureStatus == "Already in Library" {
                     suppressedLiveContentFingerprint = currentLiveContentFingerprint
                     withAnimation(StylezamMotion.quickSpring) {
                         confirmationText = "Already in Library"
@@ -515,7 +614,9 @@ struct CaptureSheet: View {
                 return
             }
             let count = scan.items.count
-            suppressedLiveContentFingerprint = currentLiveContentFingerprint
+            if mode == .live {
+                suppressedLiveContentFingerprint = currentLiveContentFingerprint
+            }
             withAnimation(StylezamMotion.quickSpring) {
                 let prefix = automatic ? "Auto-saved" : "Saved"
                 confirmationText = count == 1
@@ -526,7 +627,7 @@ struct CaptureSheet: View {
             stableFrameCount = 0
             bestFrameData = nil
             bestFrameScore = 0
-            if captureMode == .photo {
+            if mode == .photo {
                 try? await Task.sleep(for: .milliseconds(260))
                 dismiss()
             } else {
@@ -539,46 +640,56 @@ struct CaptureSheet: View {
     }
 
     private func handlePreviewFrame(_ data: Data, aspectRatio: CGFloat) {
-        guard captureMode == .live,
-              model.modelPack.isInstalled,
+        guard model.modelPack.isInstalled,
               !isAnalyzingPreview,
               !model.isAnalyzingCapture
         else { return }
         isAnalyzingPreview = true
         frameAspectRatio = aspectRatio
+        let mode = captureMode
         previewTask = Task {
             defer { isAnalyzingPreview = false }
-            let contentFingerprint = await Task.detached(priority: .utility) {
-                LiveScreenContentFingerprint.make(imageData: data)
-            }.value
-            guard !Task.isCancelled else { return }
-            currentLiveContentFingerprint = contentFingerprint
-            if let contentFingerprint,
-               let suppressed = suppressedLiveContentFingerprint,
-               contentFingerprint.isVisuallySimilar(to: suppressed)
-            {
-                // The accepted still is already saved. Keep the camera fluid without repeatedly
-                // running Core ML or another full duplicate capture on an unchanged view.
-                return
+
+            // Photo mode deliberately gets the same lightweight box preview as
+            // Live mode, but avoids perceptual duplicate work because a user
+            // still chooses exactly when to capture. The heavier duplicate guard
+            // remains exclusive to automatic Live saves.
+            if mode == .live {
+                let contentFingerprint = await Task.detached(priority: .utility) {
+                    LiveScreenContentFingerprint.make(imageData: data)
+                }.value
+                guard !Task.isCancelled else { return }
+                currentLiveContentFingerprint = contentFingerprint
+                if let contentFingerprint,
+                   let suppressed = suppressedLiveContentFingerprint,
+                   contentFingerprint.isVisuallySimilar(to: suppressed)
+                {
+                    // The accepted still is already saved. Keep the camera fluid
+                    // without repeatedly running Core ML on an unchanged view.
+                    return
+                }
+                if suppressedLiveContentFingerprint != nil {
+                    suppressedLiveContentFingerprint = nil
+                    stableFrameCount = 0
+                    stableSignature = ""
+                    bestFrameData = nil
+                    bestFrameScore = 0
+                    livePreviewStabilizer.reset()
+                    liveInferenceGate.reset()
+                }
+                if let contentFingerprint,
+                   !liveInferenceGate.shouldAnalyze(fingerprint: contentFingerprint)
+                {
+                    return
+                }
             }
-            if suppressedLiveContentFingerprint != nil {
-                suppressedLiveContentFingerprint = nil
-                stableFrameCount = 0
-                stableSignature = ""
-                bestFrameData = nil
-                bestFrameScore = 0
-                livePreviewStabilizer.reset()
-                liveInferenceGate.reset()
-            }
-            if let contentFingerprint,
-               !liveInferenceGate.shouldAnalyze(fingerprint: contentFingerprint)
-            {
-                return
-            }
+
             let preview = await model.previewGarments(in: data)
             guard !Task.isCancelled else { return }
             guard let preview else { return }
-            liveInferenceGate.recordResult(hasCandidates: !preview.candidates.isEmpty)
+            if mode == .live {
+                liveInferenceGate.recordResult(hasCandidates: !preview.candidates.isEmpty)
+            }
             provisionalCandidates = preview.candidates
             let stabilizedCandidates = livePreviewStabilizer.update(
                 with: preview.candidates
@@ -592,7 +703,9 @@ struct CaptureSheet: View {
             )
             candidates = stabilizedPreview.candidates
             guidance = stabilizedPreview.guidance
-            assessStability(stabilizedPreview, frameData: data)
+            if mode == .live {
+                assessStability(stabilizedPreview, frameData: data)
+            }
         }
     }
 
@@ -624,7 +737,7 @@ struct CaptureSheet: View {
         guard model.settings.liveAutoCaptureEnabled,
               preview.guidance == .ready,
               stableFrameCount >= 2,
-              bestFrameScore >= 0.46,
+              bestFrameScore >= 0.40,
               Date.now.timeIntervalSince(lastAutomaticCapture) >= 5
         else { return }
         capture(automatic: true)
@@ -632,7 +745,7 @@ struct CaptureSheet: View {
 
     private func updateLiveFrames() {
         camera.setLiveFramesEnabled(
-            captureMode == .live && model.modelPack.isInstalled
+            model.modelPack.isInstalled
         )
     }
 
