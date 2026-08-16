@@ -1,8 +1,42 @@
 import Foundation
+import UIKit
 import XCTest
 @testable import Stylezam
 
 final class DetectionQualityTests: XCTestCase {
+    func testForegroundPNGPreservesGarmentAndClearsBackground() throws {
+        let size = CGSize(width: 12, height: 12)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let source = UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+        let cgImage = try XCTUnwrap(source.cgImage)
+        var alpha = [UInt8](repeating: 0, count: 12 * 12)
+        for y in 3 ..< 9 {
+            for x in 3 ..< 9 {
+                alpha[(y * 12) + x] = 255
+            }
+        }
+
+        let data = try XCTUnwrap(
+            GarmentVisionEngine.foregroundPNG(
+                image: cgImage,
+                alpha: alpha,
+                width: 12,
+                height: 12
+            )
+        )
+        let decoded = try XCTUnwrap(UIImage(data: data)?.cgImage)
+        let pixels = try rgbaBytes(decoded)
+
+        XCTAssertLessThan(pixels[((1 * 12) + 1) * 4 + 3], 10)
+        XCTAssertGreaterThan(pixels[((6 * 12) + 6) * 4 + 3], 245)
+        XCTAssertGreaterThan(pixels[((6 * 12) + 6) * 4 + 2], 120)
+    }
+
     func testHighRiskBagScoreIsNotPresentedAsTrustworthy() {
         let garment = makeGarment(label: "bag, wallet", confidence: 0.78)
 
@@ -140,5 +174,29 @@ final class DetectionQualityTests: XCTestCase {
             details: [],
             visibleText: []
         )
+    }
+
+    private func rgbaBytes(_ image: CGImage) throws -> [UInt8] {
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let rendered = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let baseAddress = bytes.baseAddress,
+                  let context = CGContext(
+                      data: baseAddress,
+                      width: image.width,
+                      height: image.height,
+                      bitsPerComponent: 8,
+                      bytesPerRow: image.width * 4,
+                      space: CGColorSpaceCreateDeviceRGB(),
+                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  )
+            else { return false }
+            context.draw(
+                image,
+                in: CGRect(x: 0, y: 0, width: image.width, height: image.height)
+            )
+            return true
+        }
+        XCTAssertTrue(rendered)
+        return pixels
     }
 }

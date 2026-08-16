@@ -1390,28 +1390,53 @@ actor GarmentVisionEngine {
               foregroundCoverage < 0.975
         else { return nil }
 
-        guard let provider = CGDataProvider(data: Data(alpha) as CFData),
-              let mask = CGImage(
-                  maskWidth: targetWidth,
-                  height: targetHeight,
+        return foregroundPNG(
+            image: cropped,
+            alpha: alpha,
+            width: targetWidth,
+            height: targetHeight
+        )
+    }
+
+    /// Applies a conventional grayscale alpha plane to an image. `CGImage(maskWidth:...)`
+    /// creates a Quartz *image mask*, whose samples are inverted (white masks content out).
+    /// The detector produces normal alpha where white means garment, so using that initializer
+    /// made some saved PNGs preserve the background and erase the clothes. A regular grayscale
+    /// image keeps the detector's alpha semantics intact when used as a clipping mask.
+    nonisolated static func foregroundPNG(
+        image: CGImage,
+        alpha: [UInt8],
+        width: Int,
+        height: Int
+    ) -> Data? {
+        guard width > 0,
+              height > 0,
+              alpha.count == width * height,
+              let provider = CGDataProvider(data: Data(alpha) as CFData),
+              let alphaImage = CGImage(
+                  width: width,
+                  height: height,
                   bitsPerComponent: 8,
                   bitsPerPixel: 8,
-                  bytesPerRow: targetWidth,
+                  bytesPerRow: width,
+                  space: CGColorSpaceCreateDeviceGray(),
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
                   provider: provider,
                   decode: nil,
-                  shouldInterpolate: true
+                  shouldInterpolate: true,
+                  intent: .defaultIntent
               )
         else { return nil }
 
-        let size = CGSize(width: targetWidth, height: targetHeight)
+        let size = CGSize(width: width, height: height)
+        let bounds = CGRect(origin: .zero, size: size)
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
         let rendered = UIGraphicsImageRenderer(size: size, format: format).image { context in
-            let bounds = CGRect(origin: .zero, size: size)
             context.cgContext.saveGState()
-            context.cgContext.clip(to: bounds, mask: mask)
-            UIImage(cgImage: cropped).draw(in: bounds)
+            context.cgContext.clip(to: bounds, mask: alphaImage)
+            UIImage(cgImage: image).draw(in: bounds)
             context.cgContext.restoreGState()
         }
         return rendered.pngData()

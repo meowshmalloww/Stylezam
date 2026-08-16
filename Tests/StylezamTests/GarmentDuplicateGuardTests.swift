@@ -52,6 +52,28 @@ final class GarmentDuplicateGuardTests: XCTestCase {
         XCTAssertEqual(accepted.count, 2)
     }
 
+    func testUnpersistedCandidateDoesNotCreateAPhantomLibraryDuplicate() async throws {
+        let cropURL = try XCTUnwrap(
+            Bundle(for: Self.self).url(forResource: "jacket", withExtension: "jpg")
+        )
+        let crop = try Data(contentsOf: cropURL)
+        let duplicateGuard = GarmentDuplicateGuard()
+
+        let first = await duplicateGuard.novelCandidates(
+            [makeCandidate(id: "interrupted-save", label: "jacket", crop: crop)],
+            history: []
+        )
+        XCTAssertEqual(first.count, 1)
+
+        // Library history is still empty, which simulates a disk write that never completed.
+        // The next real capture must remain eligible instead of showing "Already in Library".
+        let retry = await duplicateGuard.novelCandidates(
+            [makeCandidate(id: "retry", label: "jacket", crop: crop)],
+            history: []
+        )
+        XCTAssertEqual(retry.map(\.candidate.id), ["retry"])
+    }
+
     func testResizedReencodedCropMatchesStoredLibrarySignature() async throws {
         let cropURL = try XCTUnwrap(
             Bundle(for: Self.self).url(forResource: "jacket", withExtension: "jpg")

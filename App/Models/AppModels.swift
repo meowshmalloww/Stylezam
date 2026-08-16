@@ -265,6 +265,52 @@ struct TryOnTrayItem: Identifiable, Hashable, Sendable {
     }
 }
 
+/// Prevents sequential provider tasks from overwriting the same part of an outfit. Stylezam can
+/// deliberately layer a top under outerwear, but it never sends two competing tops, bottoms,
+/// full-body garments, hats, shoes, or copies of the same accessory type in one render.
+enum TryOnSelectionRules {
+    static func conflictMessage(adding item: TryOnTrayItem, to selected: [TryOnTrayItem]) -> String? {
+        selected.lazy
+            .filter { $0.id != item.id }
+            .compactMap { existing in conflictMessage(between: existing, and: item) }
+            .first
+    }
+
+    static func conflictMessage(in items: [TryOnTrayItem]) -> String? {
+        guard items.count > 1 else { return nil }
+        for index in items.indices {
+            for otherIndex in items.indices where otherIndex > index {
+                if let message = conflictMessage(between: items[index], and: items[otherIndex]) {
+                    return message
+                }
+            }
+        }
+        return nil
+    }
+
+    private static func conflictMessage(
+        between first: TryOnTrayItem,
+        and second: TryOnTrayItem
+    ) -> String? {
+        guard first.category == .clothes, second.category == .clothes else {
+            guard first.category == second.category else { return nil }
+            return "Choose one \(second.category.title.lowercased()) for this look. Turn off \(first.title) before selecting \(second.title)."
+        }
+
+        if first.region == .unknown || second.region == .unknown {
+            return "Stylezam cannot safely layer \(first.title) with \(second.title) until both clothing areas are known. Keep one selected or correct the item type."
+        }
+        if first.region == second.region {
+            return "Choose one \(second.region.title.lowercased()) piece for this look. Turn off \(first.title) before selecting \(second.title)."
+        }
+        let regions: Set<TryOnGarmentRegion> = [first.region, second.region]
+        if regions.contains(.fullBody), !regions.contains(.outerwear) {
+            return "A full-body piece cannot be combined with another top or bottom. Keep \(first.title) or \(second.title), not both."
+        }
+        return nil
+    }
+}
+
 struct PendingGarmentSearch: Identifiable, Hashable, Sendable {
     let id: UUID
     let scanID: UUID

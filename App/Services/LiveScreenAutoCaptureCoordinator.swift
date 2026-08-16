@@ -114,8 +114,14 @@ struct LiveScreenAutoCaptureCoordinator: Sendable {
             track = Track(candidate: candidate, consecutiveHits: 1)
         }
 
+        // A very clear product frame may be captured immediately so a playing video does not
+        // have to pause on the exact same frame twice. Ambiguous detections still use the normal
+        // two-frame confirmation path, which protects accuracy and false-positive rejection.
+        let highConfidenceMovingFrame = candidate.confidence >= 0.90
+            && qualityScore >= 0.60
+            && area >= 0.03
         guard let track,
-              track.consecutiveHits >= requiredHits,
+              (track.consecutiveHits >= requiredHits || highConfidenceMovingFrame),
               now.timeIntervalSince(lastAttemptAt) >= attemptCooldown,
               !capturedFingerprints.contains(where: {
                   Self.hammingDistance($0.value, track.candidate.fingerprint) <= 7

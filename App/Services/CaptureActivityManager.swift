@@ -54,13 +54,10 @@ final class CaptureActivityManager {
         visualState: StylezamCaptureActivityVisualState = .detecting
     ) async {
         guard let activity, matches(captureID) else { return }
-        let alert: AlertConfiguration? = visualState == .saved
-            ? AlertConfiguration(
-                title: "Piece saved",
-                body: "Open Stylezam to see the new crop.",
-                sound: .default
-            )
-            : nil
+        // The Live Activity state update refreshes the Dynamic Island by itself. Supplying an
+        // AlertConfiguration requires a sound on this SDK, so omit the alert entirely: completion
+        // remains visible and is acknowledged with an in-app haptic without interrupting videos.
+        let alert: AlertConfiguration? = nil
         await activity.update(
             ActivityContent(
                 state: .init(

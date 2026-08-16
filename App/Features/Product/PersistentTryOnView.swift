@@ -36,8 +36,12 @@ struct TryOnView: View {
     @State private var isRailExpanded = true
     @State private var railTab: PersistentTryOnRailTab = .pieces
     @State private var fitCheckProduct: ProductResultDTO?
+    @State private var isFinishExpanded = false
+    @State private var previewScale: CGFloat = 1
+    @GestureState private var previewMagnification: CGFloat = 1
 
     @State private var isRendering = false
+    @State private var renderProgress = 0.0
     @State private var status = ""
     @State private var errorMessage: String?
     @State private var photoContext: TryOnPhotoContext = .outfit
@@ -122,7 +126,8 @@ struct TryOnView: View {
                             imageData: data,
                             garmentRegion: .infer(category: targetCategory, title: targetCategory.title)
                         )
-                        model.library.addWardrobeItemToTryOnRail(saved, selected: true)
+                        model.library.addWardrobeItemToTryOnRail(saved, selected: false)
+                        setRailItemSelection(saved.id, selected: true)
                     } catch {
                         errorMessage = error.localizedDescription
                     }
@@ -355,6 +360,7 @@ struct TryOnView: View {
                 .onChange(of: selectedPersonPage) { _, page in
                     cancelActiveRender()
                     cancelVideoWork(removeFile: true)
+                    previewScale = 1
                     acceptsUpload = false
                     guard case let .photo(id) = page,
                           let photo = model.library.tryOnPersonPhotos.first(where: { $0.id == id })
@@ -436,8 +442,10 @@ struct TryOnView: View {
                     }
             } else if let result = resultImages[photo.id] {
                 DataImage(data: result, contentMode: .fit)
+                    .scaleEffect(previewScale * previewMagnification)
             } else {
                 LocalFileImage(url: model.library.imageURL(for: photo), contentMode: .fit)
+                    .scaleEffect(previewScale * previewMagnification)
             }
 
             if isGeneratingVideo,
@@ -454,6 +462,25 @@ struct TryOnView: View {
             }
         }
         .clipped()
+        .simultaneousGesture(
+            MagnifyGesture()
+                .updating($previewMagnification) { value, state, _ in
+                    state = value.magnification
+                }
+                .onEnded { value in
+                    previewScale = min(4, max(1, previewScale * value.magnification))
+                }
+        )
+        .onTapGesture(count: 2) {
+            withAnimation(StylezamMotion.quickSpring) { previewScale = 1 }
+        }
+        .onLongPressGesture(minimumDuration: 0.7) {
+            guard let result = resultImages[photo.id],
+                  let jobID = resultJobIDs[photo.id],
+                  !savedJobIDs.contains(jobID)
+            else { return }
+            saveCurrentLook(imageData: result, jobID: jobID, photo: photo)
+        }
     }
 
     private var addPersonPhotoPage: some View {
@@ -624,7 +651,7 @@ struct TryOnView: View {
         return VStack(alignment: .leading, spacing: 9) {
             ZStack(alignment: .topTrailing) {
                 Button {
-                    model.library.setTryOnRailSelection(item.id, isSelected: !item.isSelected)
+                    setRailItemSelection(item.id, selected: !item.isSelected)
                 } label: {
                     DataImage(data: item.imageData)
                         .frame(maxWidth: .infinity)
@@ -671,7 +698,7 @@ struct TryOnView: View {
                     .lineLimit(2)
                 Spacer(minLength: 4)
                 Button {
-                    model.library.setTryOnRailSelection(item.id, isSelected: !item.isSelected)
+                    setRailItemSelection(item.id, selected: !item.isSelected)
                 } label: {
                     Text(item.isSelected ? "On" : "Off")
                         .font(.caption2.weight(.bold))
@@ -890,15 +917,61 @@ struct TryOnView: View {
 
             finishingControls
 
-            Toggle("Allow this try-on upload", isOn: $acceptsUpload)
-                .font(.subheadline)
-                .disabled(
-                    activePhoto == nil
-                        || compatibleSelectedItems.isEmpty
-                        || !selectedItemsMissingYouCamReference.isEmpty
-                        || isRendering
-                        || isGeneratingVideo
+            Button {
+                acceptsUpload.toggle()
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: acceptsUpload ? "checkmark.shield.fill" : "shield")
+                        .font(.title3)
+                        .foregroundStyle(acceptsUpload ? StylezamDesign.cobalt : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(acceptsUpload ? "Upload approved" : "Approve this upload")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Only this photo and the selected pieces are sent to YouCam.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: acceptsUpload ? "checkmark.circle.fill" : "chevron.right")
+                        .foregroundStyle(acceptsUpload ? StylezamDesign.cobalt : .secondary)
+                }
+                .padding(13)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    acceptsUpload ? StylezamDesign.cobalt.opacity(0.08) : Color(uiColor: .secondarySystemBackground),
+                    in: RoundedRectangle(cornerRadius: 15, style: .continuous)
                 )
+                .overlay {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .stroke(acceptsUpload ? StylezamDesign.cobalt.opacity(0.35) : StylezamDesign.hairline)
+                }
+            }
+            .buttonStyle(.plain)
+            .disabled(
+                activePhoto == nil
+                    || compatibleSelectedItems.isEmpty
+                    || !selectedItemsMissingYouCamReference.isEmpty
+                    || selectionConflictMessage != nil
+                    || isRendering
+                    || isGeneratingVideo
+            )
+
+            if isRendering {
+                VStack(alignment: .leading, spacing: 7) {
+                    ProgressView(value: renderProgress, total: 1)
+                        .tint(StylezamDesign.cobalt)
+                    HStack {
+                        Text(status)
+                        Spacer()
+                        Text("\(Int((renderProgress * 100).rounded()))%")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Try-on progress")
+                .accessibilityValue(status)
+            }
 
             Button {
                 startRender()
@@ -911,11 +984,7 @@ struct TryOnView: View {
                                 + "\(totalProviderTaskCount == 1 ? "task" : "tasks")"
                     )
                     Spacer()
-                    if isRendering {
-                        ProgressView().tint(.white)
-                    } else {
-                        Image(systemName: "sparkles")
-                    }
+                    Image(systemName: isRendering ? "hourglass" : "sparkles")
                 }
                 .fontWeight(.semibold)
                 .padding(.horizontal, 18)
@@ -986,52 +1055,63 @@ struct TryOnView: View {
 
     private var finishingControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Finish")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Optional YouCam photo tasks")
-                        .font(.caption)
+            Button {
+                withAnimation(StylezamMotion.quickSpring) { isFinishExpanded.toggle() }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Finish")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Optional YouCam photo tasks")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text("\(finishingOptions.enabledTaskCount) on")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Image(systemName: isFinishExpanded ? "chevron.up" : "chevron.down")
                         .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text("\(finishingOptions.enabledTaskCount) on")
-                    .font(.caption.weight(.semibold))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isFinishExpanded {
+                Toggle("Enhance detail", isOn: $enhancesPhoto)
+                Toggle("Balance lighting", isOn: $improvesLighting)
+                Toggle(
+                    "Remove background",
+                    isOn: Binding(
+                        get: { removesBackground },
+                        set: { enabled in
+                            removesBackground = enabled
+                            if enabled { changesBackground = false }
+                        }
+                    )
+                )
+                Toggle(
+                    "Change background",
+                    isOn: Binding(
+                        get: { changesBackground },
+                        set: { enabled in
+                            changesBackground = enabled
+                            if enabled { removesBackground = false }
+                        }
+                    )
+                )
+
+                if changesBackground {
+                    TextField("Background description", text: $backgroundPrompt, axis: .vertical)
+                        .lineLimit(2...3)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                Text("Order: selected pieces, detail enhancement, lighting, then one background action. Every enabled finish is a separate provider task and may use additional YouCam units.")
+                    .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            Toggle("Enhance detail", isOn: $enhancesPhoto)
-            Toggle("Balance lighting", isOn: $improvesLighting)
-            Toggle(
-                "Remove background",
-                isOn: Binding(
-                    get: { removesBackground },
-                    set: { enabled in
-                        removesBackground = enabled
-                        if enabled { changesBackground = false }
-                    }
-                )
-            )
-            Toggle(
-                "Change background",
-                isOn: Binding(
-                    get: { changesBackground },
-                    set: { enabled in
-                        changesBackground = enabled
-                        if enabled { removesBackground = false }
-                    }
-                )
-            )
-
-            if changesBackground {
-                TextField("Background description", text: $backgroundPrompt, axis: .vertical)
-                    .lineLimit(2...3)
-                    .textFieldStyle(.roundedBorder)
-            }
-
-            Text("Order: selected pieces, detail enhancement, lighting, then one background action. Every enabled finish is a separate provider task and may use additional YouCam units.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
         .toggleStyle(.switch)
         .padding(12)
@@ -1142,6 +1222,7 @@ struct TryOnView: View {
         activePhoto != nil
             && !compatibleSelectedItems.isEmpty
             && selectedItemsMissingYouCamReference.isEmpty
+            && selectionConflictMessage == nil
             && acceptsUpload
             && hasCredential
             && isConnectionVerified
@@ -1153,13 +1234,14 @@ struct TryOnView: View {
         if compatibleSelectedItems.isEmpty {
             return "Selected pieces are parked—choose a compatible photo type"
         }
+        if let selectionConflictMessage { return selectionConflictMessage }
         if let missingReference = selectedItemsMissingYouCamReference.first {
             return "Add a worn-garment photo for \(missingReference.title)"
         }
         if !hasCredential { return "YouCam is not configured in this build" }
         if isCheckingConnection { return "Checking the YouCam connection" }
         if !isConnectionVerified { return "Retry the YouCam connection" }
-        if !acceptsUpload { return "Allow this upload to continue" }
+        if !acceptsUpload { return "Approve this one upload to continue" }
         return "Ready for \(totalProviderTaskCount) YouCam "
             + "\(totalProviderTaskCount == 1 ? "task" : "tasks")"
     }
@@ -1182,6 +1264,10 @@ struct TryOnView: View {
 
     private var totalProviderTaskCount: Int {
         compatibleSelectedItems.count + finishingOptions.enabledTaskCount
+    }
+
+    private var selectionConflictMessage: String? {
+        TryOnSelectionRules.conflictMessage(in: selectedRailItems)
     }
 
     private var providerTaskSummary: String {
@@ -1299,6 +1385,21 @@ struct TryOnView: View {
         return isCompatibleWithCurrentPhoto(item) ? StylezamDesign.cobalt : .orange
     }
 
+    private func setRailItemSelection(_ itemID: UUID, selected: Bool) {
+        guard let item = tray.first(where: { $0.id == itemID }) else { return }
+        if selected,
+           let conflict = TryOnSelectionRules.conflictMessage(
+               adding: item,
+               to: selectedRailItems
+           )
+        {
+            errorMessage = conflict
+            return
+        }
+        model.library.setTryOnRailSelection(itemID, isSelected: selected)
+        errorMessage = nil
+    }
+
     private var photoPositionLabel: String {
         guard let activePhoto,
               let index = contextPhotos.firstIndex(where: { $0.id == activePhoto.id })
@@ -1337,6 +1438,10 @@ struct TryOnView: View {
         guard let activePhoto else { return }
 
         let selected = compatibleSelectedItems
+        if let conflict = TryOnSelectionRules.conflictMessage(in: selectedRailItems) {
+            errorMessage = conflict
+            return
+        }
         guard selectedItemsMissingYouCamReference.isEmpty else {
             errorMessage = "Add a photo that shows each selected lower-body piece worn by one person before creating this look."
             return
@@ -1347,6 +1452,7 @@ struct TryOnView: View {
         resultAppliedItemIDs[activePhoto.id] = nil
         cancelVideoWork(removeFile: true)
         isRendering = true
+        renderProgress = 0
 
         let renderingPhotoID = activePhoto.id
         let personImageURL = model.library.imageURL(for: activePhoto)
@@ -1382,6 +1488,9 @@ struct TryOnView: View {
                 ) { current, total, label in
                     await MainActor.run {
                         status = current == total ? label : "\(label) · \(current + 1)/\(total)"
+                        renderProgress = total > 0
+                            ? min(1, max(0, Double(current) / Double(total)))
+                            : 0
                     }
                 }
                 guard activeRenderID == renderID, !Task.isCancelled else { return }
@@ -1389,6 +1498,7 @@ struct TryOnView: View {
                 resultJobIDs[renderingPhotoID] = output.jobID
                 resultAppliedItemIDs[renderingPhotoID] = Set(selected.map(\.id))
                 resultGenders[renderingPhotoID] = resolvedGender
+                renderProgress = 1
             } catch is CancellationError {
             } catch {
                 if activeRenderID == renderID {
@@ -1595,6 +1705,7 @@ struct TryOnView: View {
         renderTask = nil
         activeRenderID = nil
         isRendering = false
+        renderProgress = 0
     }
 
     private func normalizedData(from item: PhotosPickerItem) async -> Data? {

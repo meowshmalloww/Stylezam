@@ -5,7 +5,7 @@ actor NotificationService {
     func requestAuthorization() async -> Bool {
         do {
             return try await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .badge, .sound]
+                options: [.alert, .badge]
             )
         } catch {
             return false
@@ -32,7 +32,6 @@ actor NotificationService {
                 ? "\(itemCount) pieces were detected on this iPhone and are ready to review."
                 : "\(itemCount) pieces are saved locally."
         }
-        content.sound = .default
         content.userInfo = ["scanID": scanID.uuidString]
         let request = UNNotificationRequest(
             identifier: "stylezam-capture-\(scanID.uuidString)",

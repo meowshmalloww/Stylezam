@@ -2,6 +2,12 @@ import CryptoKit
 import Foundation
 
 actor ProductSearchService {
+    /// Fireworks' edge rejects otherwise valid API requests that do not identify the
+    /// client (Cloudflare error 1010). Keep a stable, non-device-identifying agent on
+    /// every provider request made by this service so chat and shopping do not depend
+    /// on URLSession's platform-specific default headers.
+    nonisolated static let requestUserAgent = "Stylezam/1.0 (iOS; API client)"
+
     private enum ScoreFallback: Equatable {
         case none
         case queryOverlap
@@ -38,6 +44,10 @@ actor ProductSearchService {
         configuration.timeoutIntervalForResource = 12
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
         configuration.urlCache = nil
+        configuration.httpAdditionalHeaders = [
+            "User-Agent": Self.requestUserAgent,
+            "Accept": "application/json",
+        ]
         session = URLSession(configuration: configuration)
     }
 
@@ -140,7 +150,9 @@ actor ProductSearchService {
         let systemPrompt = """
         You are Stylezam AI, a careful, useful fashion shopping assistant. Maintain context across the conversation and reason from the selected garment plus the few Library pieces retrieved on device for this question.
 
-        Be direct and conversational. Explain visible construction, color, silhouette, styling, likely material, care, fit, and shopping terminology when relevant. Clearly distinguish what is visible from what is only likely. Never claim an exact brand, model, material, authenticity, store price, or availability unless it is explicit in the image or supplied conversation. If the user wants products or current prices, explain that Stylezam can perform a live shopping search.
+        Be direct and conversational. Explain visible construction, color, silhouette, styling, likely material, care, and shopping terminology when relevant. Clearly distinguish what is visible from what is only likely. Never claim an exact brand, model, material, authenticity, store price, or availability unless it is explicit in the image or supplied conversation. If the user wants products or current prices, explain that Stylezam can perform a live shopping search.
+
+        Never claim that an item physically fits the user from an image, appearance, or generic size label. Exact fit requires the user's local Fit Profile plus a merchant-published per-size measurement chart. When asked whether something fits, say what can and cannot be known, direct the user to Fit & measurements on the product, and do not ask them to send private body measurements into chat or imply that you can read measurements stored locally.
 
         Library context is private owned-wardrobe context, not live inventory. Mention an owned piece only when relevant and call it "in your Library." Never imply that Bright Data or a shopping provider can browse the private Library.
 

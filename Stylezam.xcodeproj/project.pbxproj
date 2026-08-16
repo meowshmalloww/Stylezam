@@ -36,6 +36,7 @@
 		465B51B6895097D13BAB4175 /* StylezamAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6AF9E7F89731F6C31774463 /* StylezamAppDelegate.swift */; };
 		4AC1CCCDE9F2DC74F3B7C63F /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 23EC7B3710F3524794102889 /* FirebaseAuth */; };
 		4C4F5CD7D712F0FD6E61EA34 /* AccountSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF3733E7C459231377964274 /* AccountSession.swift */; };
+		4C72A0BCC592CB1143E5B0F2 /* TryOnSelectionRulesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58DA267DD356A6E5C6659FB9 /* TryOnSelectionRulesTests.swift */; };
 		4F99A5B4A3E3016D1733BD5E /* StylezamLiveScreenControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F029DC5536934700D19D628 /* StylezamLiveScreenControl.swift */; };
 		5477192D67F401EFEB756C39 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 1CC9BFBA4FFEDCB9103DAC2E /* PrivacyInfo.xcprivacy */; };
 		5AA2C9AEA91628D46170B49F /* WardrobeRetrievalService.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABBAD59CC2916FA9DFB6F0FE /* WardrobeRetrievalService.swift */; };
@@ -186,6 +187,7 @@
 		4ECE1BC8999ED5C2F0CF329C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		4F790B57A92BDB9737A707E7 /* LibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryStore.swift; sourceTree = "<group>"; };
 		5197A2D03D0151B0E2CC0ADE /* FitProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FitProfileStore.swift; sourceTree = "<group>"; };
+		58DA267DD356A6E5C6659FB9 /* TryOnSelectionRulesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TryOnSelectionRulesTests.swift; sourceTree = "<group>"; };
 		5A7BE8538547EE77463CF3D4 /* LiveScreenCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveScreenCaptureManager.swift; sourceTree = "<group>"; };
 		5A974E2CDFE3EF1C8C13377D /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		5CD56358BDF26FC853C97071 /* LibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryView.swift; sourceTree = "<group>"; };
@@ -421,6 +423,7 @@
 				1F9106F71D3B0D6368A66026 /* GarmentDuplicateGuardTests.swift */,
 				04F123A728A74582ED754E71 /* LiveScreenAutoCaptureCoordinatorTests.swift */,
 				A1DDED81A72F8B24DC0099BD /* SettingsStoreTests.swift */,
+				58DA267DD356A6E5C6659FB9 /* TryOnSelectionRulesTests.swift */,
 				D01C25A34319FA94E1CE89CB /* TryOnWorkflowTests.swift */,
 				C649967F95E285EBF35048F2 /* WardrobeRetrievalTests.swift */,
 			);
@@ -790,6 +793,7 @@
 				396BAEAFA3B9381CEFEB02EF /* GarmentDuplicateGuardTests.swift in Sources */,
 				3ABD936440D1C5735034707C /* LiveScreenAutoCaptureCoordinatorTests.swift in Sources */,
 				D18662C6BE90C605A675E0A4 /* SettingsStoreTests.swift in Sources */,
+				4C72A0BCC592CB1143E5B0F2 /* TryOnSelectionRulesTests.swift in Sources */,
 				CE689F73168B7873FC653C97 /* TryOnWorkflowTests.swift in Sources */,
 				EDC40C2B2934E26114F9D623 /* WardrobeRetrievalTests.swift in Sources */,
 			);

@@ -98,6 +98,23 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
         )
     }
 
+    func testExceptionallyClearMovingFrameCanCaptureImmediately() {
+        var coordinator = LiveScreenAutoCaptureCoordinator()
+        let candidate = makeCandidate(
+            confidence: 0.95,
+            box: BoundingBoxDTO(x: 0.15, y: 0.12, width: 0.65, height: 0.72),
+            fingerprint: 0xF0F0_F0F0_F0F0_F0F0
+        )
+
+        XCTAssertTrue(
+            coordinator.shouldCapture(
+                candidate,
+                qualityScore: 0.78,
+                now: Date(timeIntervalSince1970: 1_500)
+            )
+        )
+    }
+
     func testSuccessfulCaptureSuppressesAStationaryDuplicate() {
         var coordinator = LiveScreenAutoCaptureCoordinator()
         let start = Date(timeIntervalSince1970: 2_000)
@@ -381,12 +398,14 @@ final class LiveScreenAutoCaptureCoordinatorTests: XCTestCase {
 
     private func makeCandidate(
         label: String = "jacket",
+        confidence: Double = 0.82,
+        box: BoundingBoxDTO = BoundingBoxDTO(x: 0.2, y: 0.18, width: 0.52, height: 0.58),
         fingerprint: UInt64
     ) -> LiveScreenAutoCaptureCoordinator.Candidate {
         LiveScreenAutoCaptureCoordinator.Candidate(
             label: label,
-            confidence: 0.82,
-            box: BoundingBoxDTO(x: 0.2, y: 0.18, width: 0.52, height: 0.58),
+            confidence: confidence,
+            box: box,
             fingerprint: fingerprint
         )
     }

@@ -29,7 +29,7 @@ final class StylezamAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifica
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .sound]
+        [.banner]
     }
 
     nonisolated func userNotificationCenter(

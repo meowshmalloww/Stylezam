@@ -736,7 +736,10 @@ struct CaptureSheet: View {
         }
         guard model.settings.liveAutoCaptureEnabled,
               preview.guidance == .ready,
-              stableFrameCount >= 2,
+              // LivePreviewStabilizer has already required two matching detector frames before
+              // this method receives a candidate. One additional stabilized observation used to
+              // make automatic capture wait for a third inference with no accuracy benefit.
+              stableFrameCount >= 1,
               bestFrameScore >= 0.40,
               Date.now.timeIntervalSince(lastAutomaticCapture) >= 5
         else { return }

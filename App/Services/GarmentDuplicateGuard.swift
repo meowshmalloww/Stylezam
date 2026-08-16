@@ -42,6 +42,7 @@ actor GarmentDuplicateGuard {
     }
 
     private struct Entry {
+        let sourceID: String?
         let family: String
         let perceptualHash: UInt64?
         let featurePrint: FeatureSignature?
@@ -59,6 +60,17 @@ actor GarmentDuplicateGuard {
         _ candidates: [GarmentCandidate],
         history: [GarmentFingerprintSource]
     ) async -> [NovelGarmentCandidate] {
+        // Only a crop that still exists in Library may suppress a future capture. Accepted
+        // candidates are held as source-less entries while this call removes duplicates within
+        // the same frame, then discarded on the next call unless Library persistence produced a
+        // durable history entry. This prevents a failed disk write from causing the misleading
+        // "Already in Library" state forever.
+        let historyIDs = Set(history.map(\.id))
+        entries.removeAll { entry in
+            guard let sourceID = entry.sourceID else { return true }
+            return !historyIDs.contains(sourceID)
+        }
+        seededKeys.formIntersection(historyIDs)
         await seed(history)
 
         var accepted: [NovelGarmentCandidate] = []
@@ -107,6 +119,7 @@ actor GarmentDuplicateGuard {
             )
             entries.append(
                 Entry(
+                    sourceID: nil,
                     family: family,
                     perceptualHash: hash,
                     featurePrint: feature
@@ -147,6 +160,7 @@ actor GarmentDuplicateGuard {
             guard hash != nil || feature != nil else { continue }
             entries.append(
                 Entry(
+                    sourceID: source.id,
                     family: Self.canonicalFamily(source.label),
                     perceptualHash: hash,
                     featurePrint: feature

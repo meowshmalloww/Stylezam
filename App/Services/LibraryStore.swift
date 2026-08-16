@@ -214,14 +214,19 @@ final class LibraryStore {
     func garmentFingerprintSources(limit: Int = 1_200) -> [GarmentFingerprintSource] {
         var values: [GarmentFingerprintSource] = []
         for scan in snapshot.scans {
-            for item in scan.items {
+            for item in scan.items where item.accepted {
+                // A metadata record without its crop is not a visible Library item and must not
+                // suppress a new capture. This also self-heals older interrupted file writes.
+                guard let itemCropURL = cropURL(for: item),
+                      FileManager.default.fileExists(atPath: itemCropURL.path)
+                else { continue }
                 // New entries seed from their tiny stored signatures without loading large crop
                 // files. Crop bytes are read only once for Library items created before durable
                 // signatures shipped.
                 let needsLegacySignature = item.featurePrintData == nil
                     && item.perceptualHash == nil
                 let data = needsLegacySignature
-                    ? cropURL(for: item).flatMap { try? Data(contentsOf: $0) }
+                    ? try? Data(contentsOf: itemCropURL)
                     : nil
                 guard data != nil || item.featurePrintData != nil || item.perceptualHash != nil else {
                     continue

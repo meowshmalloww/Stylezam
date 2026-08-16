@@ -32,10 +32,11 @@ enum YouCamCredentialStore {
 
 #if DEBUG
     static func importDebugEnvironment() {
-        guard apiKey == nil else { return }
         let environment = ProcessInfo.processInfo.environment
         let value = environment["STYLEZAM_YOUCAM_API_KEY"] ?? environment["YOUCAM_API_KEY"]
         guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        // A developer install must replace an older device-only credential. Keeping the first
+        // imported value forever made a newly provisioned .env key appear broken after reinstall.
         try? save(value)
     }
 #endif
@@ -454,6 +455,12 @@ actor YouCamTryOnService {
                 parameters: ["scale": 1],
                 preserveTransparency: false
             )
+            try Self.validateFinishingSubjectPreservation(
+                source: current,
+                result: output.imageData,
+                operation: "detail enhancement",
+                allowsBackgroundChange: false
+            )
             current = output.imageData
             lastTaskID = output.taskID
             completed += 1
@@ -464,6 +471,12 @@ actor YouCamTryOnService {
                 current,
                 endpoint: "lighting",
                 preserveTransparency: false
+            )
+            try Self.validateFinishingSubjectPreservation(
+                source: current,
+                result: output.imageData,
+                operation: "lighting",
+                allowsBackgroundChange: false
             )
             current = output.imageData
             lastTaskID = output.taskID
@@ -480,6 +493,12 @@ actor YouCamTryOnService {
                 parameters: parameters,
                 preserveTransparency: false
             )
+            try Self.validateFinishingSubjectPreservation(
+                source: current,
+                result: output.imageData,
+                operation: "background change",
+                allowsBackgroundChange: true
+            )
             current = output.imageData
             lastTaskID = output.taskID
             completed += 1
@@ -490,6 +509,12 @@ actor YouCamTryOnService {
                 current,
                 endpoint: "sod",
                 preserveTransparency: true
+            )
+            try Self.validateFinishingSubjectPreservation(
+                source: current,
+                result: output.imageData,
+                operation: "background removal",
+                allowsBackgroundChange: true
             )
             current = output.imageData
             lastTaskID = output.taskID
@@ -871,6 +896,84 @@ actor YouCamTryOnService {
                 "YouCam returned a full scene replacement instead of a focused \(category.title.lowercased()) try-on. Stylezam kept your original photo safe and did not save that result. Try a clear front-facing photo and a tightly cropped product image."
             )
         }
+    }
+
+    /// Optional photo finishes run after the selected pieces and therefore must preserve the
+    /// finished person and outfit. Detail and lighting tasks are also required to preserve the
+    /// scene; background tasks may replace only the background. This guard prevents an otherwise
+    /// successful provider response from becoming a second, unrequested outfit generation.
+    nonisolated static func validateFinishingSubjectPreservation(
+        source: Data,
+        result: Data,
+        operation: String,
+        allowsBackgroundChange: Bool
+    ) throws {
+        guard let sourceImage = normalizedSceneImage(from: source),
+              let resultImage = normalizedSceneImage(from: result)
+        else {
+            throw YouCamTryOnError.server(
+                "Stylezam could not verify the \(operation) result, so it kept the previous try-on instead."
+            )
+        }
+
+        let sourceRatio = Double(sourceImage.width) / Double(max(1, sourceImage.height))
+        let resultRatio = Double(resultImage.width) / Double(max(1, resultImage.height))
+        guard abs(sourceRatio - resultRatio) <= 0.12 else {
+            throw YouCamTryOnError.server(
+                "YouCam changed the photo framing during \(operation). Stylezam rejected that finish and kept the previous try-on safe."
+            )
+        }
+
+        let sourceFaces = detectedFaceRects(in: sourceImage)
+        let resultFaces = detectedFaceRects(in: resultImage)
+        if !sourceFaces.isEmpty {
+            guard !resultFaces.isEmpty,
+                  sourceFaces.contains(where: { sourceFace in
+                      resultFaces.contains { faceIntersectionOverUnion(sourceFace, $0) >= 0.18 }
+                  })
+            else {
+                throw YouCamTryOnError.server(
+                    "YouCam changed or removed the person during \(operation). Stylezam rejected that finish and kept the previous try-on safe."
+                )
+            }
+
+            let faceDifference = alignedSceneDifference(
+                source: sourceImage,
+                result: resultImage,
+                includedAreas: sourceFaces,
+                minimumSamples: 18
+            )
+            guard faceDifference.map({ $0 <= 0.42 }) ?? false else {
+                throw YouCamTryOnError.server(
+                    "YouCam substantially changed the face during \(operation). Stylezam rejected that finish and kept the previous try-on safe."
+                )
+            }
+        }
+
+        if !allowsBackgroundChange {
+            let fullSceneDifference = alignedSceneDifference(
+                source: sourceImage,
+                result: resultImage,
+                alwaysIncludedAreas: sourceFaces,
+                minimumSamples: 180
+            )
+            guard fullSceneDifference.map({ $0 <= 0.24 }) ?? false else {
+                throw YouCamTryOnError.server(
+                    "YouCam replaced the scene or outfit during \(operation). Stylezam rejected that finish and kept the previous try-on safe."
+                )
+            }
+        }
+    }
+
+    private nonisolated static func faceIntersectionOverUnion(
+        _ first: CGRect,
+        _ second: CGRect
+    ) -> CGFloat {
+        let intersection = first.intersection(second)
+        guard !intersection.isNull, !intersection.isEmpty else { return 0 }
+        let intersectionArea = intersection.width * intersection.height
+        let unionArea = first.width * first.height + second.width * second.height - intersectionArea
+        return unionArea > 0 ? intersectionArea / unionArea : 0
     }
 
     private struct SceneRaster {

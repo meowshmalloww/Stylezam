@@ -4,6 +4,13 @@ import XCTest
 @testable import Stylezam
 
 final class TryOnWorkflowTests: XCTestCase {
+    func testProviderRequestsUseStableAppIdentity() {
+        XCTAssertEqual(
+            ProductSearchService.requestUserAgent,
+            "Stylezam/1.0 (iOS; API client)"
+        )
+    }
+
     func testYouCamPayloadRoutesExactCategoryAndOuterwear() {
         XCTAssertEqual(TryOnCategory.hat.youCamEndpoint, "hat")
         XCTAssertEqual(TryOnCategory.bag.youCamEndpoint, "bag")
@@ -125,6 +132,31 @@ final class TryOnWorkflowTests: XCTestCase {
             context.fill(CGRect(x: 110, y: 55, width: 140, height: 390))
         }.pngData()
         XCTAssertTrue(YouCamTryOnService.hasUsefulTransparency(try XCTUnwrap(transparent)))
+    }
+
+    func testNonBackgroundFinishCannotReplaceTheWholeScene() throws {
+        let source = try XCTUnwrap(testImageData(background: .lightGray))
+        let lightlyRelit = try XCTUnwrap(
+            testImageData(background: UIColor(white: 0.78, alpha: 1))
+        )
+        XCTAssertNoThrow(
+            try YouCamTryOnService.validateFinishingSubjectPreservation(
+                source: source,
+                result: lightlyRelit,
+                operation: "lighting",
+                allowsBackgroundChange: false
+            )
+        )
+
+        let replacement = try XCTUnwrap(testImageData(background: .systemPurple))
+        XCTAssertThrowsError(
+            try YouCamTryOnService.validateFinishingSubjectPreservation(
+                source: source,
+                result: replacement,
+                operation: "detail enhancement",
+                allowsBackgroundChange: false
+            )
+        )
     }
 
     func testSpecificAccessoryInferenceAndPhotoContextCompatibility() {
